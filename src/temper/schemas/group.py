@@ -19,7 +19,7 @@ class GroupEntry(BaseModel):
 
     Attributes:
         grouping_strategy (str): The name of the grouping strategy.
-        groups (list[list[str]]): The groups of structure data files.
+        groups (dict[str, list[str]]): The groups of structure data files.
         add_extra_cross_tests (bool): Whether to add extra cross tests.
           If true, beyond testing within each group, data from other groups will also be used for testing,
           and testing results will be reported separately for each group.
@@ -27,9 +27,7 @@ class GroupEntry(BaseModel):
 
     grouping_strategy: str
 
-    groups: list[list[str]] = Field(
-        default_factory=list
-    )
+    groups: dict[str, list[str]]
 
     add_extra_cross_tests: bool = False
 
@@ -37,38 +35,37 @@ class GroupEntry(BaseModel):
     @classmethod
     def validate_groups(
         cls,
-        value: list[list[str]],
-    ) -> list[list[str]]:
+        value: dict[str, list[str]],
+    ) -> dict[str, list[str]]:
 
-        if not isinstance(value, list):
+        if not isinstance(value, dict):
             raise TypeError(
-                "groups must be a list of lists."
+                "groups must be a dict mapping from string to list of lists."
             )
 
-        for i, group in enumerate(value):
+        for name, group in value.items():
+            if not isinstance(name, str):
+                raise TypeError(
+                    f"Group name: {name} must be a string."
+                )
 
             if not isinstance(group, list):
                 raise TypeError(
-                    f"groups[{i}] must be a list."
+                    f"groups[{name}] must be a list."
                 )
 
             for filename in group:
                 if not isinstance(filename, str):
                     raise TypeError(
-                        f"groups[{i}] contains non-string value: "
+                        f"groups[{name}] contains non-string value: "
                         f"{filename}"
                     )
                 filepath = Path(filename)
                 if filepath.suffix != ".extxyz":
                     raise ValueError(
-                        f"groups[{i}] contains invalid file extension: "
-                        f"{filename}. Only .extxyz files are supported."
-                    )
-                if not len(filepath.parts) == 2:
-                    raise ValueError(
-                        f"groups[{i}] contains invalid path: "
-                        f"{filename}. A valid path must have exactly the format:"
-                        f" domain_name/file_name.extxyz"
+                        f"groups[{name}] contains invalid file extension: "
+                        f"{filepath.suffix}."
+                        f" Only .extxyz files are supported."
                     )
 
         return value
@@ -97,14 +94,17 @@ class GroupEntry(BaseModel):
             datadir: str | Path,
             grouping_strategy: str,
             add_extra_cross_tests: bool = False,
+            **grouping_strategy_kwargs
     ):
         if grouping_strategy not in GROUPING_STRATEGIES:
             raise ValueError(
                 f"Unknown grouping strategy: {grouping_strategy}. "
                 f"Available strategies: {GROUPING_STRATEGIES}"
             )
-
-        groups = GROUPING_STRATEGIES[grouping_strategy](datadir)
+        files = list(Path(datadir).glob("*.extxyz"))
+        groups = GROUPING_STRATEGIES[grouping_strategy](
+            files, **grouping_strategy_kwargs
+        )
 
         return cls(
             grouping_strategy=grouping_strategy,
