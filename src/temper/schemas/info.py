@@ -23,7 +23,8 @@ class InfoEntry(BaseModel):
         name (str): Name of the dataset. Default name would be the name of the extxyz file without extension.
         description (str): Description of the dataset.
         source (str): Source of the dataset (organization, author, or where to download).
-        datapath (str): Path to the dataset.
+        domain (str): Domain of the dataset. Must be the same as the name of the folder containing the dataset.
+        filename (str): File name of the dataset.
         first_principle_software (str): First principle software used to generate the dataset.
         first_principles_settings (str): First principle settings used to generate the dataset.
         theory_level (str): Theory level used to generate the dataset.
@@ -41,7 +42,8 @@ class InfoEntry(BaseModel):
     required_fields: ClassVar[List[str]] = [
         "name",
         "source",
-        "datapath",
+        "domain",
+        "filename",
         "system_type",
     ]
     auto_detected_fields: ClassVar[List[str]] = [
@@ -65,7 +67,8 @@ class InfoEntry(BaseModel):
     name: str
     description: str = ""
     source: str
-    datapath: str
+    domain: str
+    filename: str
 
     first_principle_software: str = ""
     first_principles_settings: str = ""
@@ -181,7 +184,8 @@ class InfoEntry(BaseModel):
 
         metadata = dict(
             name=extxyz_path.stem,  # Required, but can be inferred from file name.
-            datapath=str(extxyz_path),  # Required, but can be inferred from file path.
+            domain=extxyz_path.parent.name,  # Required, but can be inferred from file path.
+            filename=extxyz_path.name,  # Required, but can be inferred from file path.
             has_stress=has_stress,
             has_other_properties=has_other_properties,
             num_systems=num_systems,
@@ -257,9 +261,12 @@ def load_info_entries_from_datadir(
             f"Number of data files ({len(datafiles)})"
             f" does not match row of entries in {info_path} ({len(info)})."
         )
+    # Sort datafiles to match the order of entries in info.
+    filenames_in_info = [entry["filename"] for entry in info]
+    datafiles = sorted(datafiles, key=lambda x: filenames_in_info.index(x.name))
 
     # Keep only required and optional fields in info.
-    fields = set(InfoEntry.required_fields + InfoEntry.optional_fields) - {"datapath"}
+    fields = set(InfoEntry.required_fields + InfoEntry.optional_fields) - {"filename"}
     info = [
         {k: v for k, v in entry.items() if k in fields}
         for entry in info
