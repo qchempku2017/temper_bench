@@ -5,15 +5,18 @@ Variables of list type should be set as a string of comma-separated values, such
 """
 import os
 
-# Default data storage directory
+##################################
+# Default values for data storage.
+##################################
 DEFAULT_DATA_DIR = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default experiment storage directory
 DEFAULT_EXP_DIR = os.environ.get("DEFAULT_EXP_DIR", "./experiments")
 # Default name of the info file under each data directory.
 DEFAULT_METADATA_FILE = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
 
-## Default values for creating experiments from extxyz data.
-
+##################################
+# Default values for creating experiments from extxyz data.
+##################################
 # Default ratio of test set size to total dataset size (train + val + test).
 DEFAULT_TEST_RATIO = os.environ.get("DEFAULT_TEST_RATIO", 0.2)
 # Default ratios of training set size to train + val dataset size.

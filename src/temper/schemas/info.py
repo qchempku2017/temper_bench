@@ -2,68 +2,22 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, List, Dict
 from collections import OrderedDict
-import json
 
-from ase import Atoms
 from ase.io import read
 
 from pydantic import BaseModel, Field, model_validator
+from monty.serialization import loadfn
 
 from src.temper.env import DEFAULT_METADATA_FILE
-
-def check_atoms_has_stress(frames: Atoms | list[Atoms]) -> bool:
-    """Check if the frames have energy, forces, and stress correctly loaded.
-
-      Implemented as checking whether the frames have SinglePointCalculators correctly loaded
-    and callable.
-    Args:
-        frames (list[Atoms]): List of ASE Atoms objects.
-    Returns:
-        bool: Whether the frames have stress.
-    Raises:
-        ValueError: If the frames do not have energy or forces.
-    """
-    if isinstance(frames, Atoms):
-        frames = [frames]
-
-    has_stress = True
-
-    for i, atoms in enumerate(frames):
-        try:
-            atoms.get_potential_energy()
-        except Exception as exc:
-            raise ValueError(
-                f"Frame {i} in extxyz is missing energy. "
-                "Please fix the extxyz file."
-            ) from exc
-
-        try:
-            atoms.get_forces()
-        except Exception as exc:
-            raise ValueError(
-                f"Frame {i} in extxyz is missing forces. "
-                "Please fix the extxyz file."
-            ) from exc
-
-        try:
-            atoms.get_stress()
-        except Exception:
-            has_stress = False
-
-    if not has_stress:
-        warnings.warn(
-            "Stress information is missing in one or more frames. "
-            "The dataset may not be suitable for stress-dependent benchmarks.",
-            UserWarning,
-        )
-
-    return has_stress
+from src.temper.schemas.utils import check_atoms_has_stress, check_atoms_have_other_properties
 
 
-class MetadataEntry(BaseModel):
-    """Metadata entry for a dataset in extxyz file format.
+class InfoEntry(BaseModel):
+    """Info entry for a dataset in extxyz file format.
+
+    Corresponds to the `info` section in the `metadata.json` for each data domain.
 
     Attributes:
         name (str): Name of the dataset. Default name would be the name of the extxyz file without extension.
@@ -84,22 +38,22 @@ class MetadataEntry(BaseModel):
         additional_info (str): Additional information about the dataset.
     """
     # Class variables.
-    required_fields: ClassVar[list[str]] = [
+    required_fields: ClassVar[List[str]] = [
         "name",
         "source",
         "datapath",
         "system_type",
     ]
-    auto_detected_fields: ClassVar[list[str]] = [
+    auto_detected_fields: ClassVar[List[str]] = [
         "num_systems",
         "num_frames_per_system",
         "num_atoms_per_system",
         "formulas",
         "has_stress",
-    ]
-    optional_fields: ClassVar[list[str]] = [
-        "description",
         "has_other_properties",
+    ]
+    optional_fields: ClassVar[List[str]] = [
+        "description",
         "additional_info",
         "theory_level",
         "first_principle_software",
@@ -117,16 +71,16 @@ class MetadataEntry(BaseModel):
     first_principles_settings: str = ""
     theory_level: str = ""
 
-    system_type: list[str]
-    structure_generation_method: list[str] = Field(default_factory=list)
+    system_type: List[str]
+    structure_generation_method: List[str] = Field(default_factory=list)
 
     has_stress: bool = False
-    has_other_properties: list[str] = Field(default_factory=list)
+    has_other_properties: List[str] = Field(default_factory=list)
 
     num_systems: int = 0
-    num_frames_per_system: list[int] = Field(default_factory=list)
-    num_atoms_per_system: list[int] = Field(default_factory=list)
-    formulas: list[str] = Field(default_factory=list)
+    num_frames_per_system: List[int] = Field(default_factory=list)
+    num_atoms_per_system: List[int] = Field(default_factory=list)
+    formulas: List[str] = Field(default_factory=list)
 
     additional_info: str = ""
 
@@ -163,16 +117,16 @@ class MetadataEntry(BaseModel):
         cls,
         extxyz_path: str | Path,
         **kwargs: Any,
-    ) -> "MetadataEntry":
+    ) -> "InfoEntry":
         """Constructs metadata automatically from an extxyz file.
 
-        Args:
-            extxyz_path:
-                Path to extxyz file.
-
-            kwargs:
-                User-provided metadata fields, e.g.
-                name, source, theory_level, etc.
+        Parameters
+        ----------
+        extxyz_path : str | Path
+            Path to the extxyz file.
+        **kwargs : Any
+            Additional keyword arguments to pass to the constructor.
+            Including necessary and optional fields beyond automatically detected ones.
         """
 
         extxyz_path = Path(extxyz_path)
@@ -223,12 +177,13 @@ class MetadataEntry(BaseModel):
 
         # Detect properties
         has_stress = check_atoms_has_stress(frames)
+        has_other_properties = check_atoms_have_other_properties(frames)
 
-        datapath = f"{extxyz_path.parent.name}/{extxyz_path.name}"
         metadata = dict(
-            name=extxyz_path.stem,
-            datapath=datapath,
+            name=extxyz_path.stem,  # Required, but can be inferred from file name.
+            datapath=str(extxyz_path),  # Required, but can be inferred from file path.
             has_stress=has_stress,
+            has_other_properties=has_other_properties,
             num_systems=num_systems,
             num_frames_per_system=num_frames_per_system,
             num_atoms_per_system=num_atoms_per_system,
@@ -256,42 +211,45 @@ class MetadataEntry(BaseModel):
     @classmethod
     def from_dict(
         cls,
-        data: dict[str, Any],
-    ) -> "MetadataEntry":
+        data: Dict[str, Any],
+    ) -> "InfoEntry":
         """
         Restore from dictionary generated by as_dict().
         """
         return cls.model_validate(data)
 
 
-def load_metadata_entries_from_datadir(
+def load_info_entries_from_datadir(
     datadir: str | Path,
     metadata_file_name: str = DEFAULT_METADATA_FILE
-) -> list[MetadataEntry]:
+) -> List[InfoEntry]:
     """
     Load all metadata entries from a data-hosting directory.
-    Args:
-        datadir (str | Path): path to data-hosting directory. Should contain
-            a metadata file named `info_file_name`, as well as structure data
-            files in extxyz format.
-        metadata_file_name (str): name of metadata file. Defaults to "metadata.json"
-            under datadir.
-            This file should contain a list of dicts, each corresponding to a
-            structure data file under the data-hosting directory. And each dict must
-            contain required keys by MetadataEntry, including `name`, `source`
-            and `system_type`. `datapath` not required as it will be automatically
-            detected when intializing metadata entry from data file.
-            Other optinal fields can be found in MetadataEntry.optinal_fields.
-            Should not contain any field in MetadataEntry.auto_detected_fields as
-            they are supposed to be automatically detected.
-    Returns:
-        MetadataEntry: metadata entry.
+
+    Parameters
+    --------
+    datadir : str | Path
+        The path to data-hosting directory. Should contain a metadata file named
+        `info_file_name`, as well as structure data files in extxyz format.
+    metadata_file_name : str, optional
+        Name of metadata file. Defaults to "metadata.json" under datadir.
+        Must contain `info` as a top-level key.
+        For file structure, see README.md for details.
+
+    Returns
+    -------
+    List[InfoEntry]
+        List of InfoEntry objects.
+
+    Raises
+    ------
+    ValueError
+        If number of data files does not match number of entries in metadata file.
     """
     datadir = Path(datadir)
     info_path = datadir / metadata_file_name
 
-    with open(info_path, "r") as f:
-        info = json.load(f)["info"]
+    info = loadfn(info_path)["info"]
 
     datafiles = list(datadir.glob("*.extxyz"))
     if len(datafiles) != len(info):
@@ -301,13 +259,13 @@ def load_metadata_entries_from_datadir(
         )
 
     # Keep only required and optional fields in info.
-    fields = set(MetadataEntry.required_fields + MetadataEntry.optional_fields) - {"datapath"}
+    fields = set(InfoEntry.required_fields + InfoEntry.optional_fields) - {"datapath"}
     info = [
         {k: v for k, v in entry.items() if k in fields}
         for entry in info
     ]
 
     return [
-        MetadataEntry.from_extxyz(datafile, **entry)
+        InfoEntry.from_extxyz(datafile, **entry)
         for datafile, entry in zip(datafiles, info)
     ]

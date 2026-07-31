@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 from collections import defaultdict
 
+
 # property: (attempt_regex, group_name_format)
 DEFAULT_REGEX_AND_GROUP_NAMES = {
     "temperature": (
