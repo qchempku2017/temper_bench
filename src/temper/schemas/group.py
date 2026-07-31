@@ -8,7 +8,7 @@ from ase.io import read
 from monty.serialization import loadfn
 from pydantic import BaseModel, field_validator
 
-from src.temper.env import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
+from src.temper.utils.env import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 from src.temper.utils.grouping import GROUPING_STRATEGIES
 
 
