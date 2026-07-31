@@ -24,7 +24,8 @@ class GroupEntry(BaseModel):
 
     Attributes:
         grouping_strategy (str): The name of the grouping strategy.
-        groups (Dict[str, List[str]]): The groups of structure data files.
+        groups (Dict[str, List[str]]): The groups of structure data files. Each group is a list of file paths,
+          corresponding to all structure data that will be merged to create a dataset for train-val-test.
         add_extra_cross_tests (bool): Whether to add extra cross tests.
           If true, beyond testing within each group, data from other groups will also be used for testing,
           and testing results will be reported separately for each group.
@@ -140,20 +141,20 @@ class GroupEntry(BaseModel):
             add_extra_cross_tests=add_extra_cross_tests,
         )
 
-    def load_atoms_in_group(self) -> Dict[str, List[Atoms]]:
+    def load_atoms_in_group(self) -> Dict[str, Dict[str, List[Atoms]]]:
         """Load the atoms in each group.
 
         Returns
         --------
-        Dict[str, List[Atoms]]
-            A dictionary mapping group names to lists of ASE Atoms objects.
+        Dict[str, Dict[str, List[Atoms]]]
+            A two-layer nested dictionary mapping group names to filenames,
+             then file names to lists of atoms.
         """
         atoms_groups = {}
         for group_name, group in self.groups.items():
-            atoms_groups[group_name] = []
-            for i, filename in enumerate(group):
-                atoms = read(filename, index=":")
-                atoms_groups[group_name].extend(atoms)
+            atoms_groups[group_name] = {}
+            for filename in group:
+                atoms_groups[group_name][filename]: List[Atoms] = read(filename, index=":")
         return atoms_groups
 
 
@@ -161,7 +162,7 @@ def load_grouped_data_from_domain(
         domain_name: str,
         data_dir: Union[str, Path] = DEFAULT_DATA_DIR,
         metadata_file: str = DEFAULT_METADATA_FILE,
-) -> Dict[str, Dict[str, List[Atoms]]]:
+) -> Dict[str, Dict[str, Dict[str, List[Atoms]]]]:
     """Load data from domain_name folder in data_dir by groups specified in groups.json.
 
     Parameters
@@ -175,9 +176,24 @@ def load_grouped_data_from_domain(
 
     Returns
     -------
-    Dict[str, Dict[str, List[Atoms]]]
-        Dictionary mapping grouping strategies to grouped atoms, each group
-         stored as a dictionary mapping group names to lists of atoms.
+    Dict[str, Dict[str, Dict[str, List[Atoms]]]]
+        A three-layer nested dictionary mapping grouping strategies to group names,
+        then group names to filenames, then each file names to a list of atoms.
+        Example:
+        {
+            "by_strategy1": {
+                "group1": {
+                    "file1.extxyz": [Atoms, Atoms, ...],
+                    "file2.extxyz": [Atoms, Atoms, ...],
+                    ...
+                },
+                "group2": {
+                    "file3.extxyz": [Atoms, Atoms, ...],
+                    "file4.extxyz": [Atoms, Atoms, ...],
+                    ...
+                } ...
+            }
+        }
     """
     domain_path = Path(data_dir) / domain_name
 
@@ -194,7 +210,7 @@ def load_grouped_data_from_domain(
     }
 
     # Load atoms.
-    grouped_atoms: Dict[str, dict[str, list[Atoms]]] = {
+    grouped_atoms: Dict[str, Dict[str, Dict[str, List[Atoms]]]] = {
         key : val.load_atoms_in_group(domain_path)
         for key, val in group_entries
     }
