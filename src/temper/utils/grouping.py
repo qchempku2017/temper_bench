@@ -5,10 +5,12 @@ into a dataset that will further be split into train, validation and test sets.
 
 Allowed grouping strategies, including:
 - group_by_every_file: Each file is a group of its own.
-- group_by_regex: Group files by regex matching.
-- group_by_property: Group files by properties extracted from the file name.
 - group_as_specified: Group files as specified by the user.
 - group_all: Group all files into one group named "all".
+- group_by_regex: Group files by regex matching.
+- group_by_property: Group files by properties extracted from the file name.
+- group_by_neb_location: Group files by the location of the NEB image on reaction coordinates
+   as indicated by increasing indices.
 
 When using `group_by_regex` or `group_by_property`, the file names must follow certain naming conventions,
  this module determines which files belong to the same group by matching file names with regexes.
@@ -74,6 +76,45 @@ def group_by_every_file(files: List[str]) -> Dict[str, List[str]]:
             )
         result[key] = [file]
     return result
+
+
+def group_as_specified(
+        files: List[str],  # pylint: disable=unused-argument
+        groups: Dict[str, List[str]],
+) -> Dict[str, List[str]]:
+    """Group files as specified in a dictionary.
+
+    Parameters
+    ----------
+    files : List[str]
+        List of filenames. Only placeholder for consistency with other grouping strategies.
+    groups : Dict[str, List[str]]
+        Mapping from group names to filenames.
+
+    Returns
+    -------
+    Dict[str, List[str]]
+        Mapping from group names to filenames.
+    """
+    return groups
+
+
+def group_all(
+        files: List[str],
+) -> Dict[str, List[str]]:
+    """Group all files into the same group.
+
+    Parameters
+    ----------
+    files : List[str]
+        List of filenames.
+
+    Returns
+    -------
+    Dict[str, List[str]]
+        Mapping from group names to filenames.
+    """
+    return {"all": files}
 
 
 def group_by_regex(
@@ -260,43 +301,159 @@ def group_by_property(
         return groups
 
 
-def group_as_specified(
-        files: List[str],  # pylint: disable=unused-argument
-        groups: Dict[str, List[str]],
-) -> Dict[str, List[str]]:
-    """Group files as specified in a dictionary.
-
-    Parameters
-    ----------
-    files : List[str]
-        List of filenames. Only placeholder for consistency with other grouping strategies.
-    groups : Dict[str, List[str]]
-        Mapping from group names to filenames.
-
-    Returns
-    -------
-    Dict[str, List[str]]
-        Mapping from group names to filenames.
-    """
-    return groups
-
-
-def group_all(
+def group_by_neb_location(
         files: List[str],
+        strict: bool = True,
 ) -> Dict[str, List[str]]:
-    """Group all files into the same group.
-    
+    """
+    Group NEB files according to their location along reaction coordinates.
+
+    Files are classified into three groups:
+
+    - ``endpoint``:
+        Initial and final structures of each NEB path.
+
+    - ``midpoint``:
+        The image located at the center of each NEB path.
+
+    - ``intermediate``:
+        Other images between endpoints and midpoint.
+
+    The NEB image index is extracted from filename patterns:
+
+        <reaction>_fp_00.extxyz
+        <reaction>_loc_03.extxyz
+        <reaction>_location_05.extxyz
+        <reaction>_neb_06.extxyz
+
+    The location prefix matching is case-insensitive. Supported prefixes:
+
+        fp, loc, location, neb
+
+    For each reaction path, the minimum and maximum image indices are
+    treated as endpoints. The midpoint is determined from the average of
+    the two endpoint indices.
+
     Parameters
     ----------
     files : List[str]
         List of filenames.
 
+        Example:
+
+            [
+                "110_N2_N-N_fp_00.extxyz",
+                "110_N2_N-N_fp_01.extxyz",
+                "110_N2_N-N_fp_03.extxyz",
+                "110_N2_N-N_fp_05.extxyz",
+            ]
+
+    strict : bool, default=True
+        If True, raise an error if any file does not contain a valid
+        NEB location index.
+
     Returns
     -------
     Dict[str, List[str]]
-        Mapping from group names to filenames.
+        Mapping from location categories to filenames.
+
+        Example:
+
+            {
+                "endpoint": [
+                    "110_N2_N-N_fp_00.extxyz",
+                    "110_N2_N-N_fp_05.extxyz",
+                ],
+
+                "midpoint": [
+                    "110_N2_N-N_fp_03.extxyz",
+                ],
+
+                "intermediate": [
+                    "110_N2_N-N_fp_01.extxyz",
+                    "110_N2_N-N_fp_02.extxyz",
+                    "110_N2_N-N_fp_04.extxyz",
+                ],
+            }
+
+    Raises
+    ------
+    ValueError
+        If strict=True and some files do not contain valid NEB locations.
+
+    Notes
+    -----
+    The midpoint is determined separately for each reaction path.
+
+    Therefore, different NEB lengths are supported:
+
+        fp_00 ... fp_05
+            midpoint -> fp_02/fp_03 region, the one with smaller index taken, i.e., fp_02.
+
+        fp_00 ... fp_06
+            midpoint -> fp_03
+
+        fp_00 ... fp_07
+            midpoint -> fp_03/fp_04 region, the one with smaller index taken, i.e., fp_02.
     """
-    return {"all": files}
+
+    location_pattern = re.compile(
+        r"^(.*)_(?:fp|loc|location|neb)_(\d+).*",
+        flags=re.IGNORECASE,
+    )
+
+    # First collect files belonging to the same reaction.
+    reactions: defaultdict[str, List[tuple[int, str]]] = defaultdict(list)
+
+    unmatched = []
+
+    for filename in files:
+        match = location_pattern.match(filename)
+
+        if match is None:
+            unmatched.append(filename)
+            continue
+
+        reaction = match.group(1)
+        index = int(match.group(2))
+
+        reactions[reaction].append((index, filename))
+
+    if strict and unmatched:
+        raise ValueError(
+            "The following files do not contain valid NEB locations:\n"
+            + "\n".join(unmatched)
+        )
+
+    groups: defaultdict[str, List[str]] = defaultdict(list)
+
+    for frames in reactions.values():
+
+        indices = [idx for idx, _ in frames]
+
+        min_idx = min(indices)
+        max_idx = max(indices)
+
+        midpoint = (min_idx + max_idx) / 2
+
+        # Select closest image to midpoint.
+        midpoint_idx = min(
+            indices,
+            key=lambda idx: abs(idx - midpoint)
+        )
+
+        for idx, filename in frames:
+
+            if idx == min_idx or idx == max_idx:
+                groups["endpoint"].append(filename)
+
+            elif idx == midpoint_idx:
+                groups["midpoint"].append(filename)
+
+            else:
+                groups["intermediate"].append(filename)
+
+    return dict(groups)
 
 
 
@@ -304,9 +461,10 @@ def group_all(
 # and return a dict mapping group names to lists of files.
 GROUPING_STRATEGIES: Dict[str, Callable] = {
     "by_every_file": group_by_every_file,
-    "by_regex": group_by_regex,
-    "by_property": group_by_property,
     "as_specified": group_as_specified,
     "all": group_all,
+    "by_regex": group_by_regex,
+    "by_property": group_by_property,
+    "group_by_neb_location": group_by_neb_location,
 }
 
