@@ -8,6 +8,7 @@ Allowed grouping strategies, including:
 - group_by_regex: Group files by regex matching.
 - group_by_property: Group files by properties extracted from the file name.
 - group_as_specified: Group files as specified by the user.
+- group_all: Group all files into one group named "all".
 
 When using `group_by_regex` or `group_by_property`, the file names must follow certain naming conventions,
  this module determines which files belong to the same group by matching file names with regexes.
@@ -24,7 +25,7 @@ Therefore, for default grouping strategies to work, the file names must follow c
 5. If the required file name format does not match the default naming conventions,
     you need to use function `group_by_regex` with custom regex and group_name_format`.
 """
-from typing import Callable, Dict, Pattern, Optional
+from typing import Callable, Dict, Pattern, Optional, List
 import re
 from pathlib import Path
 from collections import defaultdict
@@ -62,7 +63,7 @@ DEFAULT_REGEX_AND_GROUP_NAMES = {
 }
 
 
-def group_by_every_file(files: list[str]) -> Dict[str, list[str]]:
+def group_by_every_file(files: List[str]) -> Dict[str, List[str]]:
     """Each file is a group of its own."""
     result = {}
     for file in files:
@@ -76,11 +77,11 @@ def group_by_every_file(files: list[str]) -> Dict[str, list[str]]:
 
 
 def group_by_regex(
-    files: list[str],
+    files: List[str],
     regex: str | Pattern[str],
     group_name: Optional[str] = None,
     strict: bool = True,
-) -> dict[str, list[str]]:
+) -> Dict[str, List[str]]:
     """
     Group filenames according to regex-matched groups and generate
     human-readable group names.
@@ -90,7 +91,7 @@ def group_by_regex(
 
     Parameters
     ----------
-    files : list[str]
+    files : List[str]
         List of filenames.
 
         Example:
@@ -135,7 +136,7 @@ def group_by_regex(
 
     Returns
     -------
-    dict[str, list[str]]
+    Dict[str, List[str]]
         Mapping from group names to filenames.
 
         Example:
@@ -180,7 +181,7 @@ def group_by_regex(
 
     pattern = re.compile(regex) if isinstance(regex, str) else regex
 
-    groups: defaultdict[str, list[str]] = defaultdict(list)
+    groups: defaultdict[str, List[str]] = defaultdict(list)
     unmatched = []
 
     for filename in files:
@@ -211,15 +212,15 @@ def group_by_regex(
 
 
 def group_by_property(
-        files: list[str],
+        files: List[str],
         grouping_property: str,
         strict: bool = True,
-) -> dict[str, list[str]]:
+) -> Dict[str, List[str]]:
     """Group files by a single property using regex match of filenames.
 
     Parameters
     ----------
-    files : list[str]
+    files : List[str]
         List of filenames.
     grouping_property : str
         Property to group by. Corresponding regexes and group name formats can be found in
@@ -229,7 +230,7 @@ def group_by_property(
 
     Returns
     -------
-    dict[str, list[str]]
+    Dict[str, List[str]]
         Mapping from group names to filenames.
 
     Raises
@@ -260,33 +261,52 @@ def group_by_property(
 
 
 def group_as_specified(
-        files: list[str],  # pylint: disable=unused-argument
-        groups: dict[str, list[str]],
-) -> dict[str, list[str]]:
+        files: List[str],  # pylint: disable=unused-argument
+        groups: Dict[str, List[str]],
+) -> Dict[str, List[str]]:
     """Group files as specified in a dictionary.
 
     Parameters
     ----------
-    files : list[str]
+    files : List[str]
         List of filenames. Only placeholder for consistency with other grouping strategies.
-    groups : dict[str, list[str]]
+    groups : Dict[str, List[str]]
         Mapping from group names to filenames.
 
     Returns
     -------
-    dict[str, list[str]]
+    Dict[str, List[str]]
         Mapping from group names to filenames.
     """
     return groups
 
 
+def group_all(
+        files: List[str],
+) -> Dict[str, List[str]]:
+    """Group all files into the same group.
+    
+    Parameters
+    ----------
+    files : List[str]
+        List of filenames.
+
+    Returns
+    -------
+    Dict[str, List[str]]
+        Mapping from group names to filenames.
+    """
+    return {"all": files}
+
+
 
 # All the grouping strategy functions should only take in a list of files (and necessary kwargs)
 # and return a dict mapping group names to lists of files.
-GROUPING_STRATEGIES: dict[str, Callable] = {
+GROUPING_STRATEGIES: Dict[str, Callable] = {
     "by_every_file": group_by_every_file,
     "by_regex": group_by_regex,
     "by_property": group_by_property,
     "as_specified": group_as_specified,
+    "all": group_all,
 }
 
