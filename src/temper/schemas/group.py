@@ -23,7 +23,8 @@ class GroupEntry(BaseModel):
     }
 
     Attributes:
-        grouping_strategy (str): The name of the grouping strategy.
+        grouping_strategy (str): The name of the grouping strategy. See available strategies in
+          src.temper.utils.grouping.GROUPING_STRATEGIES.
         groups (Dict[str, List[str]]): The groups of structure data files. Each group is a list of file paths,
           corresponding to all structure data that will be merged to create a dataset for train-val-test.
         add_extra_cross_tests (bool): Whether to add extra cross tests.
