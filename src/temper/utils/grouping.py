@@ -7,6 +7,7 @@ Allowed grouping strategies, including:
 - group_by_every_file: Each file is a group of its own.
 - group_by_regex: Group files by regex matching.
 - group_by_property: Group files by properties extracted from the file name.
+- group_as_specified: Group files as specified by the user.
 
 When using `group_by_regex` or `group_by_property`, the file names must follow certain naming conventions,
  this module determines which files belong to the same group by matching file names with regexes.
