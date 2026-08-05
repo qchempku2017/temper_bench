@@ -9,8 +9,9 @@ Allowed grouping strategies, including:
 - group_all: Group all files into one group named "all".
 - group_by_regex: Group files by regex matching.
 - group_by_property: Group files by properties extracted from the file name.
-- group_by_neb_location: Group files by the location of the NEB image on reaction coordinates
-   as indicated by increasing indices.
+- group_by_neb_generalization: Group files by the location of the NEB image on reaction coordinates
+   as indicated by increasing indices. End and midpoints are grouped together, while other points
+   are divided into another group.
 
 When using `group_by_regex` or `group_by_property`, the file names must follow certain naming conventions,
  this module determines which files belong to the same group by matching file names with regexes.
