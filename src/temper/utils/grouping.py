@@ -88,15 +88,29 @@ def group_as_specified(
     Parameters
     ----------
     files : List[str]
-        List of filenames. Only placeholder for consistency with other grouping strategies.
+        List of filenames.
     groups : Dict[str, List[str]]
-        Mapping from group names to filenames.
+        Mapping from group names to filenames. The filenames must be a subset of `files`.
 
     Returns
     -------
     Dict[str, List[str]]
         Mapping from group names to filenames.
+
+    Raises
+    -------
+    ValueError
+        If a file in `groups` is not in `files`.
     """
+    # Safety: check whether all file names appearing in groups are also in files.
+    # Good practice to ensure consistency.
+    files_set = set(files)
+    for group_name, group_files in groups.items():
+        for file in group_files:
+            if file not in files_set:
+                raise ValueError(
+                    f"File {file} in group {group_name} not found in files."
+                )
     return groups
 
 
