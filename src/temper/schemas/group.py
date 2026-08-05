@@ -30,6 +30,13 @@ class GroupEntry(BaseModel):
         add_extra_cross_tests (bool): Whether to add extra cross tests.
           If true, beyond testing within each group, data from other groups will also be used for testing,
           and testing results will be reported separately for each group.
+        specify_cross_tests (Dict[str, List[str]] | None):
+          If not None, will add cross tests for the specified groups instead of all groups on all other groups.
+          The keys are the names of the groups that the model trained with whom should be tested, and the values
+          are the names of the groups to be used as additional testing data.
+          Only effective when add_extra_cross_tests is False, otherwise will automatically use all other groups
+          to test the models trained with the current group.
+          Default to None.
     """
 
     grouping_strategy: str
@@ -37,6 +44,8 @@ class GroupEntry(BaseModel):
     groups: Dict[str, List[str]]
 
     add_extra_cross_tests: bool = False
+
+    specify_cross_tests: Dict[str, List[str]] | None = None
 
     @field_validator("groups")
     @classmethod
@@ -101,6 +110,7 @@ class GroupEntry(BaseModel):
             datadir: str | Path,
             grouping_strategy: str,
             add_extra_cross_tests: bool = False,
+            specify_cross_tests: Dict[str, List[str]] | None = None,
             **grouping_strategy_kwargs
     ) -> "GroupEntry":
         """Create GroupEntry from a directory of structure data files.
@@ -113,6 +123,9 @@ class GroupEntry(BaseModel):
             The name of the grouping strategy.
         add_extra_cross_tests : bool, optional
             Whether to add extra cross tests. Defaults to False.
+        specify_cross_tests: Dict[str, List[str]], optional
+            Specify the cross tests to be added. Only effective when
+            `add_extra_cross_tests` is False. Defaults to None.
         **grouping_strategy_kwargs
             Additional keyword arguments for the grouping strategy function.
             See grouping.py for details.
@@ -140,6 +153,7 @@ class GroupEntry(BaseModel):
             grouping_strategy=grouping_strategy,
             groups=groups,
             add_extra_cross_tests=add_extra_cross_tests,
+            specify_cross_tests=specify_cross_tests,
         )
 
     def load_atoms_in_group(self) -> Dict[str, Dict[str, List[Atoms]]]:
