@@ -39,6 +39,7 @@ Uploaded data should follow a specific structure and comply with the following r
     "name": "dataset_name",
     "description": "dataset_description",
     "source": "data_set_source_or_author",
+    "filename": "dataset_filename.extxyz",
     "first_principle_software": "VASP/Abacus/quantum_expresso/CP2K/etc",
     "first_principles_settings": "Input settings for the first-principles software, such as INCAR for VASP",
     "theory_level": "PBE/PBESol/PBE+U/SCAN/etc",
@@ -65,7 +66,9 @@ Uploaded data should follow a specific structure and comply with the following r
    See [dpdata documentation](https://docs.deepmodeling.com/projects/dpdata/en/stable/index.html) for more details.
    - A `name` for each extxyz file is recommended, though optional. If not provided, the name will be
    set to the corresponding extxyz file name stem.
-   - The `source` and `system_type` field is required.
+   - The `source` and `system_type` field is required. `filename` is also required. Even though it can be
+   inferred from the file name, it is still required to be explicitly specified so that order in the `info`
+   section can be preserved when loading corresponding extxyz files.
    - All other fields are optional, but recommended to be filled in as much as possible.
 
 5. The `groupings` section should have the following structure:

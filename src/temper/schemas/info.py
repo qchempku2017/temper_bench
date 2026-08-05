@@ -42,7 +42,7 @@ class InfoEntry(BaseModel):
     required_fields: ClassVar[List[str]] = [
         "name",
         "source",
-        "domain",
+        "domain",  # Required, but often inferred from the folder name rather than provided.
         "filename",
         "system_type",
     ]
