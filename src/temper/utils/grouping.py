@@ -258,6 +258,26 @@ def group_by_property(
         return groups
 
 
+def group_as_specified(
+        files: list[str],  # pylint: disable=unused-argument
+        groups: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """Group files as specified in a dictionary.
+
+    Parameters
+    ----------
+    files : list[str]
+        List of filenames. Only placeholder for consistency with other grouping strategies.
+    groups : dict[str, list[str]]
+        Mapping from group names to filenames.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping from group names to filenames.
+    """
+    return groups
+
 
 
 # All the grouping strategy functions should only take in a list of files (and necessary kwargs)
@@ -266,5 +286,6 @@ GROUPING_STRATEGIES: dict[str, Callable] = {
     "by_every_file": group_by_every_file,
     "by_regex": group_by_regex,
     "by_property": group_by_property,
+    "as_specified": group_as_specified,
 }
 
