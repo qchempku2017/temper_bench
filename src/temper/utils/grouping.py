@@ -465,6 +465,6 @@ GROUPING_STRATEGIES: Dict[str, Callable] = {
     "all": group_all,
     "by_regex": group_by_regex,
     "by_property": group_by_property,
-    "group_by_neb_location": group_by_neb_location,
+    "by_neb_location": group_by_neb_location,
 }
 
