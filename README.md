@@ -87,3 +87,9 @@ Uploaded data should follow a specific structure and comply with the following r
 For each grouping strategy's keyword arguments, please refer to the documentation of the corresponding
 grouping strategy in the `grouping_strategies` module, then replace sections like `other_kwargs1` into
 the corresponding keyword arguments required.
+
+When `add_extra_cross_tests` is set to `true`, the grouping strategy will test the model fine-tuned on each
+data group on every other data groups. When it is set to `false`, by default, the fine-tuned model will only
+be tested on the test set split from the same data group. However, if in the meantime, the `specify_cross_tests`
+is set when `add_extra_cross_tests=False`, then cross tests will be performed on the specified data groups
+(see src/temper/schemas/group.py for details).
