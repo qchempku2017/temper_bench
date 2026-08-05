@@ -301,20 +301,17 @@ def group_by_property(
         return groups
 
 
-def group_by_neb_location(
+def group_by_neb_generalization(
         files: List[str],
         strict: bool = True,
 ) -> Dict[str, List[str]]:
-    """
-    Group NEB files according to their location along reaction coordinates.
+    """Group NEB files according to their location along reaction coordinates.
 
-    Files are classified into three groups:
+    Files are classified into two groups:
 
-    - ``endpoint``:
-        Initial and final structures of each NEB path.
-
-    - ``midpoint``:
-        The image located at the center of each NEB path.
+    - ``endpoints_and_midpoint``:
+        Initial and final structures of each NEB path, along with the image
+         located at the center of each NEB path, judged by index of the image.
 
     - ``intermediate``:
         Other images between endpoints and midpoint.
@@ -333,6 +330,9 @@ def group_by_neb_location(
     For each reaction path, the minimum and maximum image indices are
     treated as endpoints. The midpoint is determined from the average of
     the two endpoint indices.
+
+    This will test generalization to the entire NEB path when training only
+    on a portion of critical frames along the path.
 
     Parameters
     ----------
@@ -360,12 +360,9 @@ def group_by_neb_location(
         Example:
 
             {
-                "endpoint": [
+                "endpoints_and_midpoint": [
                     "110_N2_N-N_fp_00.extxyz",
                     "110_N2_N-N_fp_05.extxyz",
-                ],
-
-                "midpoint": [
                     "110_N2_N-N_fp_03.extxyz",
                 ],
 
@@ -394,11 +391,11 @@ def group_by_neb_location(
             midpoint -> fp_03
 
         fp_00 ... fp_07
-            midpoint -> fp_03/fp_04 region, the one with smaller index taken, i.e., fp_02.
+            midpoint -> fp_03/fp_04 region, the one with smaller index taken, i.e., fp_03.
     """
 
     location_pattern = re.compile(
-        r"^(.*)_(?:fp|loc|location|neb)_(\d+).*",
+        r"^(.*?)_(?:fp|loc|location|neb)_(\d+)(?:\D.*)?$",  # Non-greedy match.
         flags=re.IGNORECASE,
     )
 
@@ -429,7 +426,7 @@ def group_by_neb_location(
 
     for frames in reactions.values():
 
-        indices = [idx for idx, _ in frames]
+        indices = sorted(idx for idx, _ in frames)
 
         min_idx = min(indices)
         max_idx = max(indices)
@@ -444,11 +441,12 @@ def group_by_neb_location(
 
         for idx, filename in frames:
 
-            if idx == min_idx or idx == max_idx:
-                groups["endpoint"].append(filename)
-
-            elif idx == midpoint_idx:
-                groups["midpoint"].append(filename)
+            if (
+                    idx == min_idx
+                    or idx == max_idx
+                    or idx == midpoint_idx
+            ):
+                groups["endpoints_and_midpoint"].append(filename)
 
             else:
                 groups["intermediate"].append(filename)
@@ -465,6 +463,6 @@ GROUPING_STRATEGIES: Dict[str, Callable] = {
     "all": group_all,
     "by_regex": group_by_regex,
     "by_property": group_by_property,
-    "by_neb_location": group_by_neb_location,
+    "by_neb_generalization": group_by_neb_generalization,
 }
 
