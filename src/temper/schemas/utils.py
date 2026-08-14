@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import List
 
 from ase import Atoms
@@ -110,3 +111,57 @@ def check_atoms_have_other_properties(
         other_properties &= _get_other_properties(atoms)
 
     return sorted(list(other_properties))
+
+
+def validate_relative_extxyz_path(path: str) -> str:
+    """Validate that a path is a relative extxyz path without directory traversal.
+
+    Used to validate persisted source filenames. The path must be relative
+    (not absolute, no drive/root), must not contain ``..`` traversal segments,
+    and must end with the ``.extxyz`` suffix. Subdirectories (e.g.
+    ``subdir/file.extxyz``) are allowed as long as they are relative.
+
+    Parameters
+    ----------
+    path : str
+        The source filename to validate.
+
+    Returns
+    -------
+    str
+        The validated path, unchanged.
+
+    Raises
+    ------
+    TypeError
+        If ``path`` is not a string.
+    ValueError
+        If ``path`` is absolute, contains traversal, or does not end with
+        ``.extxyz``.
+    """
+    if not isinstance(path, str):
+        raise TypeError(
+            f"path must be a str, got {type(path).__name__}."
+        )
+
+    filepath = Path(path)
+
+    # Reject absolute paths. On Windows a leading-root path such as
+    # "/a.extxyz" is drive-relative (is_absolute() is False) but is still
+    # rooted, so a non-empty ``root`` is rejected as well.
+    if filepath.is_absolute() or filepath.root:
+        raise ValueError(
+            f"Source filename must be relative, got absolute path: {path}."
+        )
+
+    if ".." in filepath.parts:
+        raise ValueError(
+            f"Source filename must not contain directory traversal, got: {path}."
+        )
+
+    if filepath.suffix != ".extxyz":
+        raise ValueError(
+            f"Source filename must have the '.extxyz' extension, got: {path}."
+        )
+
+    return path
