@@ -29,7 +29,7 @@ It **always returns a list** containing one `SplitDataSchema` per requested meth
 
 ```python
 from src.temper.experiments import split_data_group
-from src.temper.schemas import QuestsSplitConfig
+from temper.splitting import QuestsAdapterConfig
 
 schemas = split_data_group(
     frames_by_filename={"a.extxyz": [0, 1, 2], "b.extxyz": [0, 1, 2]},
@@ -39,7 +39,7 @@ schemas = split_data_group(
     group_name="all",
     split_seed=7,
     train_val_split_method=["random", "quests"],
-    quests_config=QuestsSplitConfig(),
+    quests_config=QuestsAdapterConfig(),
     test_ratio=0.2,
     requested_train_sizes=[0.25, 0.5, 1.0],  # ratios of the train+validation pool
     random_seed=3,

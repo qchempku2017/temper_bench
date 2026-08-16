@@ -69,7 +69,7 @@ The `groupings` section has this structure:
 ]
 ```
 
-Replace placeholder fields such as `other_kwarg1` with the keyword arguments required by the selected strategy. The available strategy schemas are defined in [`src/temper/schemas/group.py`](../src/temper/schemas/group.py), and grouping behavior is implemented in [`src/temper/utils/grouping.py`](../src/temper/utils/grouping.py).
+Replace placeholder fields such as `other_kwarg1` with the keyword arguments required by the selected strategy. The available strategy schemas are defined in [`src/temper/schemas/group.py`](../src/temper/schemas/group.py), and grouping behavior is implemented in [`src/temper/utils/grouping.py`](../src/temper/grouping/strategies.py).
 
 ### Cross-test behavior
 

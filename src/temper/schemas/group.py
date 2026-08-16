@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Dict, List
 
-from ase import Atoms
-from ase.io import read
-from monty.serialization import loadfn
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
 
-from src.temper.utils.env import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
-from src.temper.utils.grouping import GROUPING_STRATEGIES
+from src.temper.utils.env import DEFAULT_METADATA_FILE
+from src.temper.grouping.strategies import GROUPING_STRATEGIES
+from src.temper.schemas.split import FrameReference
+from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
 
 
-class GroupEntry(BaseModel):
-    """Definition of a single grouping strategy in groups.json.
+class GroupedDomain(JsonIOModel):
+    """Storage of a data domain that has been grouped into multiple groups by a strategy.
 
     Each GroupEntry corresponds to one dictionary entry:
     {
@@ -22,10 +22,14 @@ class GroupEntry(BaseModel):
         "add_extra_cross_tests": true/false
     }
 
+    This is the recommended top-level API to access domain data.
+
     Attributes:
+        domain (str): The name of the data domain that the grouping strategy is applied to.
+        info_entries (List[InfoEntry]): The information entries of all files under the data domain.
         grouping_strategy (str): The name of the grouping strategy. See available strategies in
           src.temper.utils.grouping.GROUPING_STRATEGIES.
-        groups (Dict[str, List[str]]): The groups of structure data files. Each group is a list of file paths,
+        groups (Dict[str, List[str]]): The groups of structure data files. Each group is a list of file names,
           corresponding to all structure data that will be merged to create a dataset for train-val-test.
         add_extra_cross_tests (bool): Whether to add extra cross tests.
           If true, beyond testing within each group, data from other groups will also be used for testing,
@@ -38,6 +42,9 @@ class GroupEntry(BaseModel):
           to test the models trained with the current group.
           Default to None.
     """
+    domain: str
+
+    info_entries: List[InfoEntry]
 
     grouping_strategy: str
 
@@ -86,24 +93,6 @@ class GroupEntry(BaseModel):
 
         return value
 
-    def as_dict(self) -> Dict[str, Any]:
-        """
-        Convert to a plain dictionary.
-
-        Compatible with monty.serialization.dumpfn.
-        """
-        return self.model_dump()
-
-    @classmethod
-    def from_dict(
-        cls,
-        data: Dict[str, Any],
-    ) -> "GroupEntry":
-        """
-        Construct from dictionary.
-        """
-        return cls.model_validate(data)
-
     @classmethod
     def from_datadir_with_strategy(
             cls,
@@ -111,14 +100,16 @@ class GroupEntry(BaseModel):
             grouping_strategy: str,
             add_extra_cross_tests: bool = False,
             specify_cross_tests: Dict[str, List[str]] | None = None,
+            metadata_file_name: str = DEFAULT_METADATA_FILE,
+            info_entries: List[InfoEntry] | None = None,
             **grouping_strategy_kwargs
-    ) -> "GroupEntry":
+    ) -> "GroupedDomain":
         """Create GroupEntry from a directory of structure data files.
 
         Parameters
         -----------
         datadir : str | Path
-            The directory containing the structure data files.
+            The directory containing the structure data files in the domain.
         grouping_strategy : str
             The name of the grouping strategy.
         add_extra_cross_tests : bool, optional
@@ -126,13 +117,20 @@ class GroupEntry(BaseModel):
         specify_cross_tests: Dict[str, List[str]], optional
             Specify the cross tests to be added. Only effective when
             `add_extra_cross_tests` is False. Defaults to None.
+        metadata_file_name: str, optional
+            The name of the metadata file. Defaults to `DEFAULT_METADATA_FILE`.
+            See src.temper.utils.env.
+        info_entries: str, optional
+            Pre-loaded info entries. If not provided, the info entries will be
+            loaded from the metadata file. Defaults to None.
+            Recommended to use if you have one available because it is faster.
         **grouping_strategy_kwargs
             Additional keyword arguments for the grouping strategy function.
-            See grouping.py for details.
+            See strategies.py for details.
 
         Returns
         --------
-        GroupEntry
+        GroupedDomain
 
         Raises
         --------
@@ -144,90 +142,49 @@ class GroupEntry(BaseModel):
                 f"Unknown grouping strategy: {grouping_strategy}. "
                 f"Available strategies: {GROUPING_STRATEGIES}"
             )
-        files = list(Path(datadir).glob("*.extxyz"))
+        datadir = Path(datadir)
+        domain = datadir.name
+        if info_entries is None:
+            info_entries = load_info_entries_from_datadir(
+                datadir,
+                metadata_file_name=metadata_file_name,
+            )
+        files = [entry.filename for entry in info_entries]
         groups = GROUPING_STRATEGIES[grouping_strategy](
             files, **grouping_strategy_kwargs
         )
 
         return cls(
+            domain=domain,
+            info_entries=info_entries,
             grouping_strategy=grouping_strategy,
             groups=groups,
             add_extra_cross_tests=add_extra_cross_tests,
             specify_cross_tests=specify_cross_tests,
         )
 
-    def load_atoms_in_group(self) -> Dict[str, Dict[str, List[Atoms]]]:
-        """Load the atoms in each group.
+    def load_frame_references_in_groups(self) -> Dict[str, List[FrameReference]]:
+        """Load the frames in the form of FrameReference objects in each group.
 
         Returns
         --------
-        Dict[str, Dict[str, List[Atoms]]]
-            A two-layer nested dictionary mapping group names to filenames,
-             then file names to lists of atoms.
+        Dict[str, List[FrameReference]]
+            Mapping group names to lists of FrameReference objects.
         """
-        atoms_groups = {}
+        frame_references = {}
+        all_file_names = [entry.filename for entry in self.info_entries]
         for group_name, group in self.groups.items():
-            atoms_groups[group_name] = {}
             for filename in group:
-                atoms_groups[group_name][filename]: List[Atoms] = read(filename, index=":")
-        return atoms_groups
+                # Get the info entry for the file from self.info_entries.
+                info_entry = self.info_entries[all_file_names.index(filename)]
+                n_frames_in_file = sum(info_entry.num_frames_per_system)
+                frame_references[filename] = [
+                    FrameReference(
+                        domain=self.domain,
+                        filename=filename,
+                        frame_index=ii,
+                    ) for ii in range(n_frames_in_file)
+                ]
+        return frame_references
 
 
-def load_grouped_data_from_domain(
-        domain_name: str,
-        data_dir: Union[str, Path] = DEFAULT_DATA_DIR,
-        metadata_file: str = DEFAULT_METADATA_FILE,
-) -> Dict[str, Dict[str, Dict[str, List[Atoms]]]]:
-    """Load data from domain_name folder in data_dir by groups specified in groups.json.
-
-    Parameters
-    ----------
-    domain_name: str
-        Name of the domain to load data from.
-    data_dir: str | Path
-        The path to the directory containing the data.
-    metadata_file: str
-        Name of the metadata file. Default is DEFAULT_METADATA_FILE.
-
-    Returns
-    -------
-    Dict[str, Dict[str, Dict[str, List[Atoms]]]]
-        A three-layer nested dictionary mapping grouping strategies to group names,
-        then group names to filenames, then each file names to a list of atoms.
-        Example:
-        {
-            "by_strategy1": {
-                "group1": {
-                    "file1.extxyz": [Atoms, Atoms, ...],
-                    "file2.extxyz": [Atoms, Atoms, ...],
-                    ...
-                },
-                "group2": {
-                    "file3.extxyz": [Atoms, Atoms, ...],
-                    "file4.extxyz": [Atoms, Atoms, ...],
-                    ...
-                } ...
-            }
-        }
-    """
-    domain_path = Path(data_dir) / domain_name
-
-    metadata = loadfn(domain_path / metadata_file)
-    grouping_strategies_and_kwargs = metadata["groupings"]
-
-    # Build group entries.
-    group_entries: Dict[str, GroupEntry] = {
-        kwargs["grouping_strategy"]: GroupEntry.from_datadir_with_strategy(
-            domain_path,
-            **kwargs
-        )
-        for kwargs in grouping_strategies_and_kwargs
-    }
-
-    # Load atoms.
-    grouped_atoms: Dict[str, Dict[str, Dict[str, List[Atoms]]]] = {
-        key : val.load_atoms_in_group(domain_path)
-        for key, val in group_entries
-    }
-
-    return grouped_atoms

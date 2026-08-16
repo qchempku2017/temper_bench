@@ -2,26 +2,21 @@
 
 Exports the data-grouping, dataset-information, and dataset-splitting schemas.
 """
-from src.temper.schemas.group import GroupEntry
-from src.temper.schemas.info import InfoEntry
+from src.temper.schemas.group import GroupedDomain
 from src.temper.schemas.split import (
     EntropyProfile,
     EntropyProfilePoint,
     FrameReference,
-    QuestsSplitConfig,
-    SplitDataSchema,
-    SplitSchema,
+    SplitGroup,
     TrainValSplitTrajectory,
 )
+
 
 __all__ = [
     "EntropyProfile",
     "EntropyProfilePoint",
     "FrameReference",
-    "GroupEntry",
-    "InfoEntry",
-    "QuestsSplitConfig",
-    "SplitDataSchema",
-    "SplitSchema",
+    "GroupedDomain",
+    "SplitGroup",
     "TrainValSplitTrajectory",
 ]

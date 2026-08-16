@@ -6,3 +6,4 @@ pydantic >= 2.0.0
 # (torch), which is intentionally NOT a default dependency.
 quests==2026.2.22
 numpy == 2.5.2
+numba

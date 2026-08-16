@@ -1,4 +1,4 @@
-"""Grouping strategies used for splitting datas in a datadir into groups.
+"""Grouping strategies used for grouping datas in a datadir into groups.
 
 Structure data from files belonging to the same group will be merged together
 into a dataset that will further be split into train, validation and test sets.

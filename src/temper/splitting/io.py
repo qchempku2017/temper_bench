@@ -42,7 +42,7 @@ from typing import Dict, List, Tuple
 from ase import Atoms
 from ase.io import read, write
 
-from src.temper.schemas.split import FrameReference, SplitDataSchema
+from src.temper.schemas.split import FrameReference, SplitGroup
 from src.temper.utils.env import DEFAULT_DATA_DIR
 
 #: Dataset roles accepted in export filenames.
@@ -78,7 +78,7 @@ def _sanitize_component(value: str) -> str:
     )
     return sanitized if sanitized else "unnamed"
 
-class SourceResolver:
+class FrameReferenceResolver:
     """Resolve frame references to source extxyz files and cache their frames as List of ase.Atoms.
 
     Binds a single source root_path directory and provides two services:
@@ -101,6 +101,8 @@ class SourceResolver:
         root_path : Path | str
             Source root_path directory that contains one subdirectory per domain.
             Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+            For the resolver cache to be effective, must always treat root_path
+            with `.expanduser().resolve()` before inputting here.
 
         Raises
         ------
@@ -224,7 +226,7 @@ class SourceResolver:
 
 def _load_frames_with_resolver(
     references: List[FrameReference],
-    resolver: SourceResolver,
+    resolver: FrameReferenceResolver,
 ) -> List[Atoms]:
     """Reconstruct frames for ordered references using a shared resolver.
 
@@ -237,7 +239,7 @@ def _load_frames_with_resolver(
     ----------
     references : List[FrameReference]
         Ordered frame references to reconstruct.
-    resolver : SourceResolver
+    resolver : FrameReferenceResolver
         The resolver providing safe path resolution and per-file caching.
 
     Returns
@@ -272,7 +274,8 @@ def _load_frames_with_resolver(
 def load_frames_from_references(
     references: List[FrameReference],
     root_path: Path | str = DEFAULT_DATA_DIR,
-) -> List[Atoms]:
+    resolver: FrameReferenceResolver | None = None,
+) -> Tuple[List[Atoms], FrameReferenceResolver]:
     """Reconstruct independent labeled frames for ordered references.
 
     Each reference is resolved to its source extxyz file under ``root_path`` (see
@@ -289,11 +292,16 @@ def load_frames_from_references(
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.
         Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+    resolver: FrameReferenceResolver | None
+        Optional resolver to use instead of the default. Allows for
+        shared cache reuse. Will not reuse if not provided or its
+        ``root_path`` attribute does not match the provided ``root_path``.
 
     Returns
     -------
-    list[Atoms]
-        Independent labeled frames in reference order.
+    Tuple[list[Atoms], FrameReferenceResolver]
+        Independent labeled frames in reference order, and the resolver used to
+        reconstruct them.
 
     Raises
     ------
@@ -307,29 +315,37 @@ def load_frames_from_references(
         If a referenced frame has no energy or forces labels, or if a resolved
         path would escape the configured root_path/domain.
     """
-    resolver = SourceResolver(root_path)
-    return _load_frames_with_resolver(references, resolver)
+    root_path = Path(root_path).expanduser().resolve()
+    if resolver is None or resolver.root_path != root_path:
+        resolver = FrameReferenceResolver(root_path)
+    return _load_frames_with_resolver(references, resolver), resolver
 
 def load_frames_test(
-    schema: SplitDataSchema,
+    schema: SplitGroup,
     root_path: Path | str = DEFAULT_DATA_DIR,
-) -> List[Atoms]:
+    resolver: FrameReferenceResolver | None = None,
+) -> Tuple[List[Atoms], FrameReferenceResolver]:
     """Reconstruct the labeled test set of a split schema.
 
     Parameters
     ----------
-    schema : SplitDataSchema
+    schema : SplitGroup
         The persisted split result whose
         :attr:`~SplitDataSchema.test_set` is reconstructed.
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.
         Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+    resolver: FrameReferenceResolver | None
+        Optional resolver to use instead of the default. Allows for
+        shared cache reuse. Will not reuse if not provided or its
+        ``root_path`` attribute does not match the provided ``root_path``.
 
     Returns
     -------
-    list[Atoms]
-        Independent labeled test frames in schema order.
+    Tuple[list[Atoms], FrameReferenceResolver]
+        Independent labeled test frames in schema order, and the resolver used to
+        reconstruct them.
 
     Raises
     ------
@@ -342,14 +358,17 @@ def load_frames_test(
     ValueError
         If a referenced frame has no energy or forces labels.
     """
-    resolver = SourceResolver(root_path)
-    return _load_frames_with_resolver(schema.test_set, resolver)
+    root_path = Path(root_path).expanduser().resolve()
+    if resolver is None or resolver.root_path != root_path:
+        resolver = FrameReferenceResolver(root_path)
+    return _load_frames_with_resolver(schema.test_set, resolver), resolver
 
 def load_frames_train_validation(
-    schema: SplitDataSchema,
+    schema: SplitGroup,
     requested_size_index: int,
     root_path: Path | str = DEFAULT_DATA_DIR,
-) -> Tuple[List[Atoms], List[Atoms]]:
+    resolver: FrameReferenceResolver | None = None,
+) -> Tuple[List[Atoms], List[Atoms], FrameReferenceResolver]:
     """Reconstruct the training and validation sets at a requested size.
 
     The training set is the prefix of the trajectory's
@@ -361,7 +380,7 @@ def load_frames_train_validation(
 
     Parameters
     ----------
-    schema : SplitDataSchema
+    schema : SplitGroup
         The persisted split result.
     requested_size_index : int
         Index among the trajectory's requested training sizes.
@@ -369,12 +388,17 @@ def load_frames_train_validation(
         Source root_path directory beneath which each reference's
         ``domain / filename`` resolves.
         Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+    resolver: FrameReferenceResolver | None
+        Optional resolver to use instead of the default. Allows for
+        shared cache reuse. Will not reuse if not provided or its
+        ``root_path`` attribute does not match the provided ``root_path``.
 
     Returns
     -------
-    tuple[list[Atoms], list[Atoms]]
+    tuple[list[Atoms], list[Atoms], FrameReferenceResolver]
         ``(train, validation)`` labeled frames; frames may alias the resolver's
-        cached source objects and must be treated as read-only.
+        cached source objects and must be treated as read-only; followed by
+        the resolver used to reconstruct them.
 
     Raises
     ------
@@ -391,10 +415,12 @@ def load_frames_train_validation(
     trajectory = schema.train_val_split_trajectory
     train_references = trajectory.get_train_set(requested_size_index)
     validation_references = trajectory.get_val_set(requested_size_index)
-    resolver = SourceResolver(root_path)
+    root_path = Path(root_path).expanduser().resolve()
+    if resolver is None or resolver.root_path != root_path:
+        resolver = FrameReferenceResolver(root_path)
     train = _load_frames_with_resolver(train_references, resolver)
     validation = _load_frames_with_resolver(validation_references, resolver)
-    return train, validation
+    return train, validation, resolver
 
 ######
 # Utilities to export files.
@@ -408,6 +434,7 @@ def build_export_filename(
     method: str,
     role: str,
     structure_count: int,
+    repeat_id: int,
 ) -> str:
     """Build the deterministic, safe filename for an exported extxyz file.
 
@@ -436,6 +463,8 @@ def build_export_filename(
         Dataset role, one of ``"train"``, ``"validation"``, ``"test"``.
     structure_count : int
         Number of structures the file contains.
+    repeat_id: int
+        The id among repeated splits.
 
     Returns
     -------
@@ -465,9 +494,11 @@ def build_export_filename(
             _sanitize_component(method),
             role,
             f"n{structure_count}",
+            f"repeat{repeat_id}"
         ]
     )
     return f"{stem}.extxyz"
+
 
 def _write_extxyz_atomic(
     dest_path: Path | str,
@@ -496,6 +527,7 @@ def _write_extxyz_atomic(
         if tmp_path.exists():
             tmp_path.unlink()
 
+
 def write_single_dataset_to_extxyz(
     atoms_list: List[Atoms],
     *,
@@ -504,6 +536,7 @@ def write_single_dataset_to_extxyz(
     grouping_strategy: str | None,
     method: str,
     role: str,
+    repeat_id: int,
     output_dir: Path | str,
 ) -> Path:
     """Write a labeled frame list to one deterministic extxyz file.
@@ -525,6 +558,8 @@ def write_single_dataset_to_extxyz(
         Splitting method name (filename identity).
     role : str
         Dataset role (filename identity), ``'train'``, ``'validation'`` or ``'test'``.
+    repeat_id: int
+        Index among repeated splits for the same group.
     output_dir : Path | str
         Output directory; created if missing. Existing generated artifacts are
         replaced atomically.
@@ -551,24 +586,30 @@ def write_single_dataset_to_extxyz(
         method=method,
         role=role,
         structure_count=len(atoms_list),
+        repeat_id=repeat_id
     )
     target = Path(output_dir) / filename
     _write_extxyz_atomic(target, atoms_list)
     return target
 
-def write_all_sets_in_split_schema_to_extxyz(
-    schema: SplitDataSchema,
+
+def write_all_sets_in_split_group_to_extxyz(
+    split_group: SplitGroup,
     output_dir: Path | str,
     root_path: Path | str = DEFAULT_DATA_DIR,
-    *,
     write_validation: bool = False,
-) -> Dict[str, List[Path]]:
+    write_extra_tests: bool = True,
+    all_split_groups: List[SplitGroup] | None = None,
+    resolver: FrameReferenceResolver | None = None,
+) -> Tuple[Dict[str, List[Path]], FrameReferenceResolver]:
     """Export training and testing sets, optionally including validation sets.
+
+    Extra testing sets from other groups will also be written if required.
 
     Parameters
     ----------
-    schema : SplitDataSchema
-        The split schema to export.
+    split_group : SplitGroup
+        The split group to export.
     output_dir : Path | str
         Output directory; created if missing. Existing generated artifacts are
         replaced atomically.
@@ -581,59 +622,120 @@ def write_all_sets_in_split_schema_to_extxyz(
         Defaults to ``False``. The returned mapping always contains a
         ``"validation"`` key; it is empty when validation export is disabled
         or every validation set is empty.
+    write_extra_tests : bool, optional
+        Whether to export extra testing sets from other groups. Defaults to
+        ``True``. All extra tests are written to the ``"extra_tests"`` subfolder
+        under ``output_dir``.
+    all_split_groups : list[SplitGroup], optional
+        All split groups in the same domain. Required if ``write_extra_tests``
+        is ``True``. Used to retrieve data of extra tests from.
+    resolver: FrameReferenceResolver | None
+        Optional resolver to use instead of the default. Allows for
+        shared cache reuse. Will not reuse if not provided or its
+        ``root_path`` attribute does not match the provided ``root_path``.
 
     Returns
     -------
-    dict[str, List[Path]]
+    dict[str, List[Path]], FrameReferenceResolver
         A mapping from dataset roles to the written file paths. Training and
         test paths are always included; validation paths are included only
-        when ``write_validation=True``.
+        when ``write_validation=True``. Then returns the resolver used to load
+        the frames, whose internal cache might be reused to save loading time.
+
+    Raises
+    ------
+    ValueError
+        If ``write_extra_tests`` is ``True`` but ``all_split_groups`` is
+        ``None``.
     """
+    # Safeguard to ensure cache reuse in resolver.
+    root_path = Path(root_path).expanduser().resolve()
+    output_dir = Path(output_dir)
+
+    if write_extra_tests and (all_split_groups is None):
+        raise ValueError(
+            "all_split_groups must be provided if write_extra_tests is True."
+        )
+
     written_files = {
         "train": [],
         "validation": [],
         "test": [],
     }
     # Write training sets and optionally validation sets.
-    for i in range(len(schema.train_val_split_trajectory.requested_train_sizes)):
-        atoms_train, atoms_val = load_frames_train_validation(schema, i, root_path)
+    for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
+        atoms_train, atoms_val, resolver = load_frames_train_validation(
+            split_group, i, root_path=root_path, resolver=resolver
+        )
         written_files["train"].append(write_single_dataset_to_extxyz(
             atoms_list=atoms_train,
-            domain=schema.domain,
-            group_name=schema.group_name,
-            grouping_strategy=schema.grouping_strategy,
-            method=schema.train_val_split_trajectory.method,
+            domain=split_group.domain,
+            group_name=split_group.group_name,
+            grouping_strategy=split_group.grouping_strategy,
+            method=split_group.train_val_split_trajectory.method,
             role="train",
+            repeat_id=split_group.repeat_id,
             output_dir=output_dir,
         ))
         if write_validation and atoms_val:
             written_files["validation"].append(write_single_dataset_to_extxyz(
                 atoms_list=atoms_val,
-                domain=schema.domain,
-                group_name=schema.group_name,
-                grouping_strategy=schema.grouping_strategy,
-                method=schema.train_val_split_trajectory.method,
+                domain=split_group.domain,
+                group_name=split_group.group_name,
+                grouping_strategy=split_group.grouping_strategy,
+                method=split_group.train_val_split_trajectory.method,
                 role="validation",
+                repeat_id=split_group.repeat_id,
                 output_dir=output_dir,
             ))
-    # Write the testing set.
+    # Write the testing set of the current group.
+    atoms_test, resolver = load_frames_test(
+        split_group, root_path, resolver=resolver
+    )
     written_files["test"].append(write_single_dataset_to_extxyz(
-        atoms_list=load_frames_test(schema, root_path),
-        domain=schema.domain,
-        group_name=schema.group_name,
-        grouping_strategy=schema.grouping_strategy,
-        method=schema.train_val_split_trajectory.method,
+        atoms_list=atoms_test,
+        domain=split_group.domain,
+        group_name=split_group.group_name,
+        grouping_strategy=split_group.grouping_strategy,
+        method=split_group.train_val_split_trajectory.method,
         role="test",
+        repeat_id=split_group.repeat_id,
         output_dir=output_dir,
     ))
-    return written_files
+    # Write extra tests.
+    if write_extra_tests:
+        # Find groups by matching domain, grouping strategy, group name and repeat_id.
+        all_split_groups = []
+        for other_group in all_split_groups:
+            if (
+                other_group.domain == split_group.domain
+                and other_group.grouping_strategy == split_group.grouping_strategy
+                and other_group.group_name in split_group.extra_tested_groups
+                and other_group.repeat_id == split_group.repeat_id
+            ):
+                atoms_test, resolver = load_frames_test(
+                    other_group, root_path, resolver=resolver
+                )
+                written_files["test"].append(write_single_dataset_to_extxyz(
+                    atoms_list=atoms_test,
+                    domain=other_group.domain,
+                    group_name=other_group.group_name,
+                    grouping_strategy=other_group.grouping_strategy,
+                    method=other_group.train_val_split_trajectory.method,
+                    role="test",
+                    repeat_id=other_group.repeat_id,
+                    output_dir=output_dir / "extra_tests",
+                ))
+    return written_files, resolver
+
+
 
 __all__ = [
-    "SourceResolver",
+    "FrameReferenceResolver",
     "build_export_filename",
     "load_frames_from_references",
     "load_frames_test",
     "load_frames_train_validation",
     "write_single_dataset_to_extxyz",
-    "write_all_sets_in_split_schema_to_extxyz",
+    "write_all_sets_in_split_group_to_extxyz",
 ]

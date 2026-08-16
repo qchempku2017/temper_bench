@@ -102,7 +102,7 @@ DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.j
 # Default ratio of test set size to total dataset size (train + val + test).
 DEFAULT_TEST_RATIO: float = _env_float("DEFAULT_TEST_RATIO", 0.2)
 # Default ratios of training set size to train + val dataset size.
-_DEFAULT_TRAIN_RATIOS: list[float] = [0.1, 0.2, 0.4, 0.6, 0.8, 0.95]
+_DEFAULT_TRAIN_RATIOS: list[float] = [0.1, 0.2, 0.4, 0.6, 0.8, 0.9]
 _raw_train_ratios = os.environ.get("DEFAULT_TRAIN_RATIOS")
 if _raw_train_ratios is None or not _raw_train_ratios.strip():
     DEFAULT_TRAIN_RATIOS: list[float] = _DEFAULT_TRAIN_RATIOS
@@ -118,18 +118,17 @@ DEFAULT_MAX_N_TRAIN: int = _env_int("DEFAULT_MAX_N_TRAIN", 3000)
 # Default maximum number of test data points. If maximum test set exceeds this,
 #  the test set ratio will be scaled down proportionally.
 #  Cross test sets will also not exceed this size.
-# TODO: this is not yet effective. Should implement this.
-DEFAULT_MAX_N_TEST: int = _env_int("DEFAULT_MAX_N_TEST", 1000)
+DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 
 __all__ = [
     "DEFAULT_DATA_DIR",
     "DEFAULT_EXP_DIR",
-    "DEFAULT_MAX_N_TEST",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_TEST_RATIO",
     "DEFAULT_TRAIN_RATIOS",
+    "DEFAULT_SPLIT_REPEATS",
     "_env_float",
     "_env_int",
 ]
