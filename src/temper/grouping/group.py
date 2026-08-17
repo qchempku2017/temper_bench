@@ -12,29 +12,32 @@ from temper.schemas import GroupedDomain
 from temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 
 
-def load_grouped_domains_from_domain_name(
+def partition_domain_groups(
         domain_name: str,
-        data_dir: Union[str, Path] = DEFAULT_DATA_DIR,
+        root_path: Union[str, Path] = DEFAULT_DATA_DIR,
         metadata_file_name: str = DEFAULT_METADATA_FILE,
 ) -> List[GroupedDomain]:
-    """Load data from domain_name folder in data_dir by groups specified in groups.json.
+    """Load data from a domain folder and partition data into groups.
+
+    Will use grouping strategies specified in groups.json.
 
     Parameters
     ----------
     domain_name: str
         Name of the domain to load data from.
-    data_dir: str | Path
-        The path to the directory containing the data.
+    root_path: str | Path
+        The path to the directory containing the data. Defaults to ``DEFAULT_DATA_DIR``.
+        See ``src.temper.utils.defaults`` for more information.
     metadata_file_name: str
         Name of the metadata file. Default is DEFAULT_METADATA_FILE.
 
     Returns
     -------
     List[GroupedDomain]:
-        All group names with the corresponding GroupEntry objects constructed
-        from the domain folder.
+        A list of grouped domains, each represents a collection of groups partitioned
+        using one of the grouping strategies defined in the metadata file.
     """
-    domain_path = Path(data_dir) / domain_name
+    domain_path = (Path(root_path) / domain_name).resolve()
 
     metadata = loadfn(domain_path / metadata_file_name)
     grouping_strategies_and_kwargs = metadata["groupings"]

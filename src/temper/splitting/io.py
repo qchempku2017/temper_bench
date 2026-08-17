@@ -539,9 +539,8 @@ def _write_atoms_list_to_extxyz(
             tmp_path.unlink()
 
 
-def write_single_dataset_to_extxyz(
+def write_atoms_list_to_extxyz(
     atoms_list: List[Atoms],
-    *,
     domain: str,
     group_name: str,
     grouping_strategy: str | None,
@@ -683,7 +682,7 @@ def write_all_sets_in_split_group_to_extxyz(
         atoms_train, atoms_val, resolver = load_frames_train_validation(
             split_group, i, root_path=root_path, resolver=resolver
         )
-        written_files["train"].append(write_single_dataset_to_extxyz(
+        written_files["train"].append(write_atoms_list_to_extxyz(
             atoms_list=atoms_train,
             domain=split_group.domain,
             group_name=split_group.group_name,
@@ -694,7 +693,7 @@ def write_all_sets_in_split_group_to_extxyz(
             output_dir=output_dir,
         ))
         if write_validation and atoms_val:
-            written_files["validation"].append(write_single_dataset_to_extxyz(
+            written_files["validation"].append(write_atoms_list_to_extxyz(
                 atoms_list=atoms_val,
                 domain=split_group.domain,
                 group_name=split_group.group_name,
@@ -708,7 +707,7 @@ def write_all_sets_in_split_group_to_extxyz(
     atoms_test, resolver = load_frames_test(
         split_group, root_path, resolver=resolver
     )
-    written_files["test"].append(write_single_dataset_to_extxyz(
+    written_files["test"].append(write_atoms_list_to_extxyz(
         atoms_list=atoms_test,
         domain=split_group.domain,
         group_name=split_group.group_name,
@@ -732,7 +731,7 @@ def write_all_sets_in_split_group_to_extxyz(
                 atoms_test, resolver = load_frames_test(
                     other_group, root_path, resolver=resolver
                 )
-                written_files["test"].append(write_single_dataset_to_extxyz(
+                written_files["test"].append(write_atoms_list_to_extxyz(
                     atoms_list=atoms_test,
                     domain=other_group.domain,
                     group_name=other_group.group_name,
@@ -752,6 +751,6 @@ __all__ = [
     "load_frames_from_references",
     "load_frames_test",
     "load_frames_train_validation",
-    "write_single_dataset_to_extxyz",
+    "write_atoms_list_to_extxyz",
     "write_all_sets_in_split_group_to_extxyz",
 ]
