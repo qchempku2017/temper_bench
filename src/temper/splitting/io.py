@@ -1,37 +1,4 @@
-"""Reconstruct split datasets and export them as deterministic extxyz files.
-
-Persisted split data (see :class:`src.temper.schemas.split.SplitDataSchema`)
-stores frame references — ``(domain, relative extxyz source filename,
-nonnegative frame index)`` — rather than structures. This module resolves those
-references to labeled ``ase.Atoms`` frames, reconstructs the train, validation,
-and test datasets, and writes the resulting datasets to extxyz files.
-
-Source paths and caching
-------------------------
-:class:`SourceResolver` resolves each reference using the path
-``root_path / domain / filename``. Resolution includes guards against escaping
-both the configured root and the domain directory. Source files are cached per
-resolver, so each file is read at most once during that resolver's lifetime.
-The returned ``Atoms`` objects and their ``SinglePointCalculator`` instances
-may alias cached frames; callers must therefore treat returned frames and
-calculators as read-only. Reconstruction validates that energy and forces are
-available, while preserving stress and other metadata read from extxyz.
-
-Reconstruction and export
--------------------------
-:func:`load_frames_from_references` loads an ordered collection of referenced
-frames. :func:`load_frames_test` reconstructs the test set, and
-:func:`load_frames_train_validation` reconstructs the training and validation
-sets. :func:`build_export_filename` produces the deterministic generated-file
-name. :func:`write_single_dataset_to_extxyz` writes a nonempty role dataset to
-that filename and atomically replaces an existing generated file.
-
-:func:`write_all_sets_in_split_schema_to_extxyz` writes every training
-checkpoint and test set. Validation exports are opt-in via the keyword-only
-argument ``write_validation=False``; when enabled, nonempty validation datasets
-are exported as well. Its returned mapping always contains ``train``,
-``validation``, and ``test`` lists.
-"""
+"""Resolves persisted frame references to source extxyz data, reconstructs split datasets, and exports them deterministically."""
 from __future__ import annotations
 
 import os

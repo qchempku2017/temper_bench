@@ -1,111 +1,101 @@
 # Data splitting
 
-[Back to the project overview](../README.md) · [Data format and grouping](data-format.md) · [Roadmap](roadmap.md)
+[Back to the project overview](../README.md) · [Data format and grouping](raw-data-format.md) · [Roadmap](roadmap.md)
 
-The `temper` splitter turns a grouped data group into train, validation, and test sets. Split results are persisted as reference-only `SplitDataSchema` objects: they store only `(domain, relative extxyz source filename, nonnegative frame index)`, never structures or descriptors. There is no persisted `schema_version` or top-level `trainval_pool` field.
+TEMPER splits a [`GroupedDomain`](../src/temper/schemas/group.py:15) into reference-based [`SplitGroup`](../src/temper/schemas/split.py:318) results. The implementation has no CLI: use the Python API below.
 
-See [`src/temper/schemas/split.py`](../src/temper/schemas/split.py) for the schema definitions.
-
-## Schemas and inventory
-
-- `FrameReference` is one persisted reference to a structure frame.
-- `TrainValSplitTrajectory` is the ordered trajectory for one method, either `random` or `quests`. Its complete train/validation inventory consists of ordered `selected_frames` followed by ordered `additional_trainval_frames`. Prefixes of `selected_frames` define nested training sets at `requested_train_sizes`. A trajectory may also contain an `EntropyProfile`.
-- `SplitDataSchema` is the persisted result for one splitting method. It has exactly one singular `train_val_split_trajectory`, plus the reference-only `test_set` and split provenance.
-- `EntropyProfile` and `EntropyProfilePoint` contain QUESTS maximum-entropy evaluation data: cumulative entropy and information gain at each requested size.
-- `QuestsSplitConfig` contains typed QUESTS descriptor, entropy, and device configuration and is stored as schema provenance in `quests_config`.
-- `SplitSchema` is the legacy configuration-oriented schema retained for backward compatibility.
-
-## High-level API
-
-The entry point is `split_data_group` in [`src/temper/experiments.py`](../src/temper/experiments.py). It:
-
-1. accepts a group's per-file frame indices and aligned `ase.Atoms` structures;
-2. verifies structure ordering against generated `FrameReference` objects;
-3. performs the initial train+validation versus test partition, which is always random;
-4. normalizes requested training sizes; and
-5. evaluates each selected splitting method.
-
-It **always returns a list** containing one `SplitDataSchema` per requested method, including a one-element list when only one method is requested.
+## Public workflow
 
 ```python
-from src.temper.experiments import split_data_group
-from temper.splitting import QuestsAdapterConfig
-
-schemas = split_data_group(
-    frames_by_filename={"a.extxyz": [0, 1, 2], "b.extxyz": [0, 1, 2]},
-    structures_by_filename={"a.extxyz": atoms_a, "b.extxyz": atoms_b},
-    domain="sse_llzo",
-    grouping_strategy="all",
-    group_name="all",
-    split_seed=7,
-    train_val_split_method=["random", "quests"],
-    quests_config=QuestsAdapterConfig(),
-    test_ratio=0.2,
-    requested_train_sizes=[0.25, 0.5, 1.0],  # ratios of the train+validation pool
-    random_seed=3,
+from temper.grouping import partition_domain_groups
+from temper.splitting import (
+    QuestsAdapterConfig,
+    split_grouped_domain,
+    write_all_sets_in_split_group_to_extxyz,
 )
-random_schema, quests_schema = schemas
+from src.temper.splitting.split import SplitConfig
+
+# Load one GroupedDomain for each grouping specification in metadata.json.
+grouped_domains = partition_domain_groups("sse_llzo", root_path="./data")
+
+config = SplitConfig(
+    root_path="./data",
+    split_repeats=3,
+    trainval_test_split_seeds=[11, 12, 13],
+    train_val_split_seeds=[21, 22, 23],
+    train_val_split_method="quests",
+    quests_adapter_config=QuestsAdapterConfig(device="cpu"),
+)
+
+split_groups = split_grouped_domain(grouped_domains[0], config)
+
+# Extra tests are enabled by default for this exporter, so provide all results.
+training_units, resolver = write_all_sets_in_split_group_to_extxyz(
+    split_groups[0],
+    root_path="./data",
+    output_path="./train_units",
+    all_split_groups=split_groups,
+)
 ```
 
-### Method selection and sizing
+[`partition_domain_groups`](../src/temper/grouping/group.py:15) reads the domain metadata and produces one grouped domain per grouping definition. [`split_grouped_domain`](../src/temper/splitting/split.py:237) splits **every group** in its input for **every repeat**, returning a flat `list[SplitGroup]`. A [`SplitConfig`](../src/temper/splitting/split.py:128) selects one train/validation method per call: `random` or `quests`.
 
-- `train_val_split_method` is an explicit sequence containing `random`, `quests`, or both, for example `['random', 'quests']`. The result list follows this order. Each result has one trajectory, not a collection of trajectories.
-- The test set is controlled by `test_ratio`, whose default is `DEFAULT_TEST_RATIO`, or by `test_size`.
-- `requested_train_sizes` values are ratios of the train+validation pool when `as_ratio=True`, the default, or exact integer counts when `as_ratio=False`.
-- `max_train_size`, whose default is `DEFAULT_MAX_N_TRAIN`, caps training sizes. When necessary, requested ratios are scaled down proportionally. Defaults are defined in [`src/temper/utils/env.py`](../src/temper/utils/defaults.py).
-- `random_seed` is required when `random` is selected. The train+validation versus test partition always uses `split_seed`.
+## Split configuration and defaults
 
-## Train and validation semantics
+`SplitConfig` accepts:
 
-1. The train+validation versus test partition is always random and uses `split_seed`.
-2. The complete train/validation inventory is ordered as `selected_frames + additional_trainval_frames`.
-3. At checkpoint index `i`, the training set is the prefix of `selected_frames` whose length is `requested_train_sizes[i]`.
-4. Validation is the remaining selected suffix followed by every additional frame: `selected_frames[requested_train_sizes[i]:] + additional_trainval_frames`. This preserves inventory order and makes additional frames available at every checkpoint.
-5. `random` and `quests` use the same train+validation pool and requested sizes. The random trajectory's entropy profile is evaluated with the same QUESTS objective used for QUESTS selection.
+- `root_path`: source data root, defaulting to `DEFAULT_DATA_DIR`;
+- `split_repeats`: number of repeats;
+- `trainval_test_split_seeds`: one seed per repeat for the random train+validation/test partition;
+- `train_val_split_seeds`: one seed per repeat for train/validation selection;
+- `test_ratio`: fraction of each group held out for its own test set;
+- `requested_train_ratios`: nested training sizes as fractions of the train+validation pool;
+- `max_train_size`: cap on the largest requested training set;
+- `train_val_split_method`: `random` or `quests`; and
+- `quests_adapter_config`: a [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:39).
 
-`TrainValSplitTrajectory.get_train_set(i)` and `TrainValSplitTrajectory.get_val_set(i)` take a **checkpoint index** into `requested_train_sizes`. The IO APIs use this same index directly; they neither dispatch by method nor accept a training-size value.
+Defaults are defined in [`src/temper/utils/defaults.py`](../src/temper/utils/defaults.py): the default data root is `./data`, metadata filename is `metadata.json`, test ratio is `0.2`, training ratios are `[0.1, 0.2, 0.4, 0.6, 0.8, 0.9]`, maximum training size is `3000`, and repeat count is `3`. Environment variables with the corresponding default names are read when that module is imported.
 
-## QUESTS backend
+When `SplitConfig()` is constructed without explicitly passing seed lists, its current default factories create empty lists. Provide seed lists with exactly `split_repeats` nonnegative integers for a usable, reproducible configuration. Passing `None` explicitly instead generates random seed values during configuration validation.
 
-QUESTS is substantially faster on a GPU, so a CUDA-capable GPU is recommended. The maximum-information-entropy method uses `quests==2026.2.22`. Torch and CUDA support are optional rather than requirements for a CPU-only installation.
+## What each split does
 
-`QuestsSplitConfig.device` defaults to `auto`:
+For each repeat and each group, the implementation:
 
-- `auto` chooses the GPU route when torch is installed and CUDA is usable, otherwise it safely falls back to CPU.
-- `cpu` forces CPU operation without importing or initializing CUDA or torch.
-- `gpu` requires an available CUDA device and fails when one is unavailable. This route requires the optional `quests[gpu]` extra, or an equivalent torch installation, and usable CUDA.
+1. builds the group's ordered [`FrameReference`](../src/temper/schemas/split.py:34) pool;
+2. randomly chooses `round(pool_size * test_ratio)` references for the group's test set using the corresponding `trainval_test_split_seeds` value;
+3. computes QUESTS descriptors for the whole group;
+4. selects the requested nested training prefixes from the remaining train+validation pool with the configured `random` or `quests` selector; and
+5. returns a [`SplitGroup`](../src/temper/schemas/split.py:318) containing the test references, one [`TrainValSplitTrajectory`](../src/temper/schemas/split.py:174), provenance, and any assigned extra test groups.
 
-Backend modules are loaded lazily. CPU splitting does not import torch, and GPU modules are imported only when the GPU route is selected. A persisted `device='auto'` value records a policy, not the backend that created the split; the actual backend depends on torch and CUDA availability at runtime.
+The test ratio must produce at least one test frame and at least one train+validation frame. Requested ratios are converted to integer sizes and reduced proportionally if their largest size would exceed `max_train_size`.
 
-Other `QuestsSplitConfig` fields control:
-
-- descriptor parameters: `descriptor_k`, `descriptor_cutoff`, and `descriptor_dtype`;
-- entropy parameters: `entropy_bandwidth`, `entropy_batch_size`, and `entropy_tolerance`; and
-- optional process-wide `numba_threads` control for CPU kernels.
+At checkpoint index `i`, [`TrainValSplitTrajectory.get_train_set`](../src/temper/schemas/split.py:275) returns the prefix of `selected_frames` with `requested_train_sizes[i]` references. [`TrainValSplitTrajectory.get_val_set`](../src/temper/schemas/split.py:293) returns the remaining selected suffix followed by `additional_trainval_frames`. The trajectory therefore stores the entire train+validation inventory by reference, while its training sets are nested prefixes.
 
 ## Persistence and reconstruction
 
-Persistence stores only frame references; source structures and descriptors are never embedded. A `SplitDataSchema` contains one singular `train_val_split_trajectory`, not a top-level train/validation pool or list of trajectories.
+[`SplitGroup`](../src/temper/schemas/split.py:318), [`SplitConfig`](../src/temper/splitting/split.py:128), and the other JSON models inherit JSON save/load helpers from [`JsonIOModel`](../src/temper/schemas/base.py:1). A split result persists references, not `ase.Atoms` objects or computed descriptors.
 
-[`src/temper/splitting/io.py`](../src/temper/splitting/io.py) reconstructs references into ordered, labeled `ase.Atoms` frames from `root_path / domain / filename`:
+A [`FrameReferenceResolver`](../src/temper/splitting/io.py:87) resolves each reference as `root_path / domain / filename`, protects against traversal outside that location, reads each source file at most once per resolver lifetime, and validates energy and forces. Treat frames returned through its cache as read-only.
 
-- `SourceResolver(root_path=DEFAULT_DATA_DIR)` binds the source tree and caches source files.
-- `load_frames_from_references(references, root_path)` reconstructs ordered labeled frames.
-- `load_frames_test(schema, root_path)` reconstructs the test set.
-- `load_frames_train_validation(schema, requested_size_index, root_path)` returns `(train, validation)` for a checkpoint index into `requested_train_sizes`.
+The lower-level reconstruction helpers are [`load_frames_from_references`](../src/temper/splitting/io.py:283), [`load_frames_test`](../src/temper/splitting/io.py:335), and [`load_frames_train_validation`](../src/temper/splitting/io.py:379). They preserve reference order and return both reconstructed frames and the resolver used.
 
 ## Export
 
-- `build_export_filename(...)` creates deterministic names of the form `<domain>__<strategy>__<group>__<method>__<role>__n<count>.extxyz`.
-- `write_single_dataset_to_extxyz(...)` writes one non-empty labeled set.
-- `write_all_sets_in_split_schema_to_extxyz(schema, output_dir, root_path, *, write_validation=False)` writes every training checkpoint and the test set.
+[`write_all_sets_in_split_group_to_extxyz`](../src/temper/splitting/io.py:608) reconstructs and writes every requested training checkpoint plus the group's own test set. It returns a list of [`TrainingUnit`](../src/temper/schemas/train_unit.py:9) records and the reusable resolver.
 
-The `write_validation` argument is keyword-only and defaults to `False`. Validation export is therefore opt-in: pass `write_validation=True` to write validation checkpoints, and empty validation sets are skipped rather than written. On each call, generated files atomically replace prior artifacts.
+- Exported names are deterministic and include domain, grouping strategy, group, method, role, frame count, and repeat ID.
+- Writes atomically replace existing generated files in `output_path`.
+- `write_validation=False` by default; set it to `True` to write non-empty validation datasets.
+- `write_extra_tests=True` by default. In that mode, `all_split_groups` is required so the exporter can find and write the test sets of groups named in `extra_tested_groups`.
+- Extra test files are recorded alongside the ordinary test file in each returned `TrainingUnit`; they are not added to `SplitGroup.test_set` itself.
 
-## Reproducibility
+## QUESTS backend
 
-A split is fully reproducible given the same source inventory order, split and random seeds, requested training sizes, and `QuestsSplitConfig`. QUESTS selection is deterministic: it is greedy, resolves ties by pool order, and stores no seed.
+QUESTS is a required dependency of this project and provides descriptor and entropy calculations for both supported selection paths. [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:39) controls descriptor settings, entropy settings, CPU thread count, and backend routing.
 
-## Related documentation
+Its `device` option is `auto` by default. `cpu` keeps execution on the CPU and does not initialize torch or CUDA. `gpu` requires a usable CUDA device and torch; `auto` uses GPU when available and otherwise falls back to CPU. GPU support is optional and is not installed by the base requirements. The configuration is stored as split provenance.
 
-The source inventory and grouping metadata consumed by this workflow are described in [Data format and grouping](data-format.md). Planned project-level capabilities are listed in the [Roadmap](roadmap.md).
+## Cross-test assignments
+
+Each split result records `extra_tested_groups`. If the input grouped domain has `specify_cross_tests`, the splitter uses that explicit mapping regardless of `add_extra_cross_tests`, after removing each source group's self-reference and deduplicating its targets. Otherwise, when `add_extra_cross_tests` is `True`, every group is assigned every other group as an extra test group; when it is `False`, no extra cross tests are assigned. The automatically generated other-group target ordering is not guaranteed because it is derived from sets. Extra group datasets remain separate from `SplitGroup.test_set` and are reconstructed for export through `extra_tested_groups`. See [Data format and grouping](raw-data-format.md#implemented-cross-test-behavior) for the metadata details.

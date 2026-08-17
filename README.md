@@ -1,27 +1,24 @@
 # TEMPER benchmark
 
-TEMPER is a systematic benchmark of the fine-tuning capabilities of machine-learned force-field architectures (MLFFs).
+TEMPER provides the implemented data-preparation layer for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, organizes each domain into groups, creates reproducible train/validation/test splits, and exports referenced frames back to `extxyz` files.
 
-## Benchmark workflow
+## What is implemented
 
-A complete benchmark has three stages:
+The current public workflow is Python API based:
 
-1. **Data splitting** — generate shared training, validation, and test datasets that are reused for every MLFF.
-2. **Training and validation** — compose Bohrium jobs that train MLFFs on the training datasets and validate them on the test datasets.
-3. **Metrics** — calculate evaluation metrics from the test results.
+1. Prepare a domain directory containing labeled `extxyz` files and a `metadata.json` file.
+2. Call [`partition_domain_groups`](src/temper/grouping/group.py:15) to load the metadata and produce one grouped domain per configured grouping strategy.
+3. Call [`split_grouped_domain`](src/temper/splitting/split.py:237) with a [`SplitConfig`](src/temper/splitting/split.py:128) to split every group for every configured repeat.
+4. Persist split models with their JSON helpers, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py:87) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py:608).
 
-## Major concepts
+Split records store frame references rather than embedded structures or descriptors. A [`FrameReference`](src/temper/schemas/split.py:34) identifies one source frame by domain, relative `extxyz` filename, and zero-based frame index. This keeps the split compact and lets it be reconstructed from the original data tree.
 
-Input data is organized into domain directories containing labeled `extxyz` files and a `metadata.json` inventory. Metadata records dataset provenance and defines grouping strategies, including optional cross-group tests.
+## Current scope
 
-For each grouped data group, TEMPER first creates a shared random train+validation versus test partition. It then produces nested training checkpoints with random selection, QUESTS maximum-information-entropy selection, or both. Persisted split schemas contain frame references and provenance rather than embedded structures or descriptors, enabling deterministic reconstruction and export from the original source tree.
-
-## Saving and loading schemas
-
-All schemas in src/temper/schemas supports saving and loading to/from JSON files via `save_json` and `load_json` methods.`
+Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, and `extxyz` export are implemented. The split entry point in [`src/temper/entrypoints/split.py`](src/temper/entrypoints/split.py) is only a TODO stub: there is no command-line interface. Training jobs, benchmark execution, result uploading, and metrics are not implemented features.
 
 ## Documentation
 
-- [Data format and grouping](docs/data-format.md) — domain layout, `extxyz` requirements, metadata fields, dpdata conventions, grouping strategies, and cross-test behavior.
-- [Data splitting](docs/data-splitting.md) — schemas, API, train/validation semantics, QUESTS configuration, persistence, reconstruction, export, and reproducibility.
-- [Roadmap](docs/roadmap.md) — planned upload, repository, UI, and visualization capabilities.
+- [Data format and grouping](docs/raw-data-format.md) — required domain layout and metadata, inventory autodetection, grouping strategies, and cross-test behavior.
+- [Data splitting](docs/data-splitting.md) — split configuration, result schemas, Python API, QUESTS configuration, reference-based reconstruction, and export.
+- [Roadmap](docs/roadmap.md) — clearly marked planned capabilities.

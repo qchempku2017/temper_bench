@@ -1,3 +1,5 @@
+"""Defines the schema for a data domain partitioned into file groups. It also builds the schema from domain metadata and grouping strategies."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -174,17 +176,18 @@ class GroupedDomain(JsonIOModel):
         frame_references = {}
         all_file_names = [entry.filename for entry in self.info_entries]
         for group_name, group in self.groups.items():
+            frame_references[group_name] = []
             for filename in group:
                 # Get the info entry for the file from self.info_entries.
                 info_entry = self.info_entries[all_file_names.index(filename)]
                 n_frames_in_file = sum(info_entry.num_frames_per_system)
-                frame_references[filename] = [
+                frame_references[group_name].extend([
                     FrameReference(
                         domain=self.domain,
                         filename=filename,
                         frame_index=ii,
                     ) for ii in range(n_frames_in_file)
-                ]
+                ])
         return frame_references
 
 

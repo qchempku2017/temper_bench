@@ -1,11 +1,4 @@
-"""QUESTS maximum-information-entropy splitting for MLFF datasets.
-
-Selects training set from trainval set, but does not split trainval and test.
-
-At each step, from a pool of candidate structures, the top-`K` structures
-that maximizes information entropy gain are selected,
-where `K` is the number of structures to select in a step.
-"""
+"""Selects nested training-frame sets from a train-validation pool. It provides random and QUESTS-based maximum-information-gain selection with entropy profiles."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -18,8 +11,9 @@ from src.temper.schemas.split import (
     EntropyProfilePoint,
     EntropyProfile,
 )
-from src.temper.splitting import QuestsDescriptorsStorage, QuestsAdapter
-from src.temper.splitting.quests_adapter import compute_information_gain_per_candidate_frame
+from src.temper.splitting.quests_adapter import (
+    QuestsDescriptorsStorage, QuestsAdapter, compute_information_gain_per_candidate_frame
+)
 from src.temper.splitting.utils import get_requested_train_sizes_from_ratios
 
 from src.temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN

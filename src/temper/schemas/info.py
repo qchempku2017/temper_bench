@@ -1,3 +1,5 @@
+"""Defines and loads dataset-metadata entries for extxyz files in a domain. The schema validates required metadata and detects structure properties from source files."""
+
 from __future__ import annotations
 
 import warnings

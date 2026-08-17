@@ -1,15 +1,4 @@
-"""Load and type-convert system environment variables as defaults.
-
-Environment variables are read once at module import time. String-valued
-variables (directories, filenames) are used verbatim; numeric variables are
-converted to the documented Python type (``float`` for ratios, ``int`` for
-counts) and reject unparseable values with a clear error.
-
-List-valued variables are set as a string of comma-separated values, for
-example::
-
-    DEFAULT_TRAIN_RATIOS = "0.1, 0.2, 0.3, 0.4, 0.5"
-"""
+"""Defines default file-system locations and splitting parameters used across TemPER. Values are read from environment variables at import time when provided."""
 from __future__ import annotations
 
 import os

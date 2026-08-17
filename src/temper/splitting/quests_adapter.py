@@ -1,7 +1,4 @@
-"""Implements adapter to QUESTS.
-
-Allows computing local atomic descriptors, entropies and information gains.
-"""
+"""Adapts the QUESTS backend to compute per-atom descriptors, entropy, and information gain. It validates persisted configuration and manages lazy CPU or GPU backend access."""
 from __future__ import annotations
 
 from dataclasses import dataclass

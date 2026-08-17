@@ -1,27 +1,8 @@
-"""Schema foundation for MLFF dataset splitting.
-
-Defines the persisted, reference-only models used to represent the result of
-splitting a data group into train/validation/test sets. Only references
-(domain, relative extxyz source filename, and nonnegative frame index) are
-stored; structures and descriptors are never stored.
-
-This module contains:
-
-- ``SplitSchema``: the legacy configuration-oriented schema, preserved for
-  backward compatibility.
-- ``FrameReference``: a single persisted reference to a structure frame.
-- ``EntropyProfilePoint`` / ``EntropyProfile``: QUESTS maximum-entropy
-  evaluation data associated with a trajectory.
-- ``TrainValSplitTrajectory``: a train/validation trajectory (method ``"random"``
-  or ``"quests"``) whose ordered selected-frame list, together with ordered
-  additional train/validation frames, defines nested train/validation sets.
-- ``SplitDataSchema``: the persisted reference-only result of splitting a data
-  group, with one singular train/validation trajectory.
-"""
+"""Defines persisted schemas for frame references and train, validation, and test splits. These models store references and split metadata, not atomic structures or descriptors."""
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Literal, Tuple, ClassVar
+from typing import List, Literal, Tuple, ClassVar
 
 from pydantic import field_validator, model_validator, Field
 

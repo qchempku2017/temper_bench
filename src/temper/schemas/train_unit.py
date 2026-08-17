@@ -1,3 +1,5 @@
+"""Defines the schema for a written training unit and the extxyz train, validation, and test files it references."""
+
 from typing import List
 from pathlib import Path
 from pydantic import model_validator, ConfigDict, Field

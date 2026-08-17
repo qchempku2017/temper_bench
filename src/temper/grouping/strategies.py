@@ -1,33 +1,4 @@
-"""Grouping strategies used for grouping datas in a datadir into groups.
-
-Structure data from files belonging to the same group will be merged together
-into a dataset that will further be split into train, validation and test sets.
-
-Allowed grouping strategies, including:
-- group_by_every_file: Each file is a group of its own.
-- group_as_specified: Group files as specified by the user.
-- group_all: Group all files into one group named "all".
-- group_by_regex: Group files by regex matching.
-- group_by_property: Group files by properties extracted from the file name.
-- group_by_neb_generalization: Group files by the location of the NEB image on reaction coordinates
-   as indicated by increasing indices. End and midpoints are grouped together, while other points
-   are divided into another group.
-
-When using `group_by_regex` or `group_by_property`, the file names must follow certain naming conventions,
- this module determines which files belong to the same group by matching file names with regexes.
-
-Therefore, for default grouping strategies to work, the file names must follow certain naming conventions:
-1. The file must be extxyz format with the exact extension ".extxyz".
-2. The file name must be parts separated by "_", and only with underscore.
-3. The file name must contain the property to be grouped by, followed by the value of the property. The property
-   and the values must be separated by "_". Only properties "u_specification" and "mag_specification" can be
-   specified by "u" and "no_u", "mag" and "no_mag" values only without the property name.
-4. Property names and values must follow conventions specified in DEFAULT_REGEX_AND_GROUP_NAMES. Supported default
-   properties include:
-    temperature, pressure, composition_1d_numerical, composition_string, u_specification, mag_specification.
-5. If the required file name format does not match the default naming conventions,
-    you need to use function `group_by_regex` with custom regex and group_name_format`.
-"""
+"""Implements filename-based strategies that partition domain dataset files into groups. Strategies can group files directly, by regex or naming properties, or by NEB position."""
 from typing import Callable, Dict, Pattern, Optional, List
 import re
 from pathlib import Path

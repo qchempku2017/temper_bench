@@ -1,1 +1,1 @@
-"""Entry points called by the main CLI."""
+"""Package for TemPER command-line entry points."""

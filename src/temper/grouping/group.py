@@ -1,4 +1,4 @@
-"""Utility functions for loading data from files inside a domain and grouping them."""
+"""Loads a domain metadata and builds grouped-domain objects using its configured grouping strategies."""
 
 
 from __future__ import annotations

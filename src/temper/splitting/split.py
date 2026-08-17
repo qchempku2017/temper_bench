@@ -1,8 +1,4 @@
-"""Implementation of data group splitting.
-
-Converts a `GroupedDomain` into a series of `SplitGroup` objects, each of which
-contains an independent train-val-test splitting trajectory record.
-"""
+"""Splits each group of a grouped domain into repeatable train, validation, and test records. It configures the initial test partition and subsequent training-frame selection."""
 from __future__ import annotations
 
 from typing import List, Tuple, Dict, Literal, Any
@@ -16,7 +12,7 @@ from pydantic import Field, ConfigDict, model_validator
 from src.temper.schemas.split import SplitGroup, TrainValSplitTrajectory
 from src.temper.schemas.group import GroupedDomain
 from src.temper.utils.defaults import DEFAULT_SPLIT_REPEATS
-from src.temper.schemas import FrameReference
+from src.temper.schemas.split import FrameReference
 from src.temper.utils.defaults import DEFAULT_TEST_RATIO, DEFAULT_MAX_N_TRAIN, DEFAULT_TRAIN_RATIOS
 
 from src.temper.splitting.io import FrameReferenceResolver, load_frames_from_references
@@ -296,10 +292,12 @@ def split_grouped_domain(
                 set(group_extra_tests[group_name]) - {group_name}
             )
     else:
-        all_group_names = set(grouped_domain.groups.keys())
-        for group_name in all_group_names:
-            other_group_names = all_group_names - {group_name}
-            group_extra_tests[group_name] = list(other_group_names)
+        # Add extra cross tests only if requested.
+        if grouped_domain.add_extra_cross_tests:
+            all_group_names = set(grouped_domain.groups.keys())
+            for group_name in all_group_names:
+                other_group_names = all_group_names - {group_name}
+                group_extra_tests[group_name] = list(other_group_names)
 
     # Determine selector class.
     selector_cls = selector_class_factory(selection_method=config.train_val_split_method)
@@ -335,7 +333,7 @@ def split_grouped_domain(
                 grouping_strategy=grouped_domain.grouping_strategy,
                 group_name=group_name,
                 test_set=test_set,
-                extra_tested_groups=group_extra_tests[group_name],
+                extra_tested_groups=group_extra_tests.get(group_name, []),
                 test_ratio=config.test_ratio,
                 trainval_test_split_seed=config.trainval_test_split_seeds[repeat_id],
                 train_val_split_trajectory=trajectory,

@@ -1,3 +1,5 @@
+"""Helpers for validating ASE structure properties and safe extxyz source paths used by schemas."""
+
 from __future__ import annotations
 
 import warnings
@@ -91,14 +93,14 @@ def check_atoms_have_other_properties(
     if len(frames) == 0:
         return []
 
-    def _get_other_properties(atoms: Atoms) -> set[str]:
+    def _get_other_properties(a: Atoms) -> set[str]:
         """Collect non-standard property keys from a single Atoms object."""
         props: set[str] = set()
-        for key in atoms.info.keys():
+        for key in a.info.keys():
             if key not in ["energy", "forces", "stress", "virial"]:
                 props.add(key)
-        if atoms.calc is not None:
-            for key in atoms.calc.results.keys():
+        if a.calc is not None:
+            for key in a.calc.results.keys():
                 if key not in ["energy", "forces", "stress", "virial"]:
                     props.add(key)
         return props

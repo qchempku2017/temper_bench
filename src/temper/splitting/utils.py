@@ -1,20 +1,4 @@
-"""Shared deterministic reference and splitting logic for MLFF dataset splitting.
-
-This module provides the common building blocks shared by all splitting
-methods ("random" now, "quests" later):
-
-- :func:`get_references_from_frames`: deterministic construction of frame
-  references from per-file frame indices.
-- :func:`partition_trainval_test`: initial seeded train+validation vs test
-  partition (always random), with explicit size/ratio semantics and documented
-  rounding.
-- :func:`normalize_requested_train_sizes`: normalization of requested training
-  sizes, including ratio-to-count conversion.
-
-All randomness here is local to :func:`partition_trainval_test` (a
-``numpy.random.default_rng(seed)`` generator); global NumPy state is never
-touched.
-"""
+"""Provides shared helpers for converting requested training ratios into valid frame counts. The counts are sorted and scaled when needed to respect the maximum training size."""
 from __future__ import annotations
 
 from typing import List
