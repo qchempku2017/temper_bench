@@ -9,7 +9,7 @@ from typing import Union, List
 from monty.serialization import loadfn
 
 from temper.schemas import GroupedDomain
-from temper.utils.env import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
+from temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 
 
 def load_grouped_domains_from_domain_name(

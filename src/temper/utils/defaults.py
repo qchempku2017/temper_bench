@@ -1,4 +1,4 @@
-"""Load and type-convert system environment variables.
+"""Load and type-convert system environment variables as defaults.
 
 Environment variables are read once at module import time. String-valued
 variables (directories, filenames) are used verbatim; numeric variables are
@@ -92,9 +92,13 @@ def _env_int(name: str, default: int) -> int:
 ##################################
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default experiment storage directory
-DEFAULT_EXP_DIR: str = os.environ.get("DEFAULT_EXP_DIR", "./experiments")
+DEFAULT_SPLIT_DATA_DIR: str = os.environ.get("DEFAULT_SPLIT_DATA_DIR", "./split_data")
 # Default name of the info file under each data directory.
 DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
+# Default name of the folder to put extra test files under the main folder when exporting a split group.
+DEFAULT_EXTRA_TEST_FOLDER_NAME: str = os.environ.get(
+    "DEFAULT_EXTRA_TEST_FOLDER_NAME", "extra_tests"
+)
 
 ##################################
 # Default values for creating experiments from extxyz data.
@@ -123,7 +127,9 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 __all__ = [
     "DEFAULT_DATA_DIR",
-    "DEFAULT_EXP_DIR",
+    "DEFAULT_SPLIT_DATA_DIR",
+    "DEFAULT_EXTRA_TEST_FOLDER_NAME",
+    "DEFAULT_METADATA_FILE",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_TEST_RATIO",

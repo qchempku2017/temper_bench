@@ -52,7 +52,7 @@ random_schema, quests_schema = schemas
 - `train_val_split_method` is an explicit sequence containing `random`, `quests`, or both, for example `['random', 'quests']`. The result list follows this order. Each result has one trajectory, not a collection of trajectories.
 - The test set is controlled by `test_ratio`, whose default is `DEFAULT_TEST_RATIO`, or by `test_size`.
 - `requested_train_sizes` values are ratios of the train+validation pool when `as_ratio=True`, the default, or exact integer counts when `as_ratio=False`.
-- `max_train_size`, whose default is `DEFAULT_MAX_N_TRAIN`, caps training sizes. When necessary, requested ratios are scaled down proportionally. Defaults are defined in [`src/temper/utils/env.py`](../src/temper/utils/env.py).
+- `max_train_size`, whose default is `DEFAULT_MAX_N_TRAIN`, caps training sizes. When necessary, requested ratios are scaled down proportionally. Defaults are defined in [`src/temper/utils/env.py`](../src/temper/utils/defaults.py).
 - `random_seed` is required when `random` is selected. The train+validation versus test partition always uses `split_seed`.
 
 ## Train and validation semantics

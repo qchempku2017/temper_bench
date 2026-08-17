@@ -43,7 +43,12 @@ from ase import Atoms
 from ase.io import read, write
 
 from src.temper.schemas.split import FrameReference, SplitGroup
-from src.temper.utils.env import DEFAULT_DATA_DIR
+from src.temper.utils.defaults import (
+    DEFAULT_EXTRA_TEST_FOLDER_NAME,
+    DEFAULT_SPLIT_DATA_DIR,
+    DEFAULT_DATA_DIR,
+)
+
 
 #: Dataset roles accepted in export filenames.
 _ROLES: Tuple[str, ...] = ("train", "validation", "test")
@@ -78,6 +83,7 @@ def _sanitize_component(value: str) -> str:
     )
     return sanitized if sanitized else "unnamed"
 
+
 class FrameReferenceResolver:
     """Resolve frame references to source extxyz files and cache their frames as List of ase.Atoms.
 
@@ -93,16 +99,17 @@ class FrameReferenceResolver:
       same in-memory frame list.
     """
 
-    def __init__(self, root_path: Path | str = DEFAULT_DATA_DIR) -> None:
+    def __init__(self, root_path: Path | str) -> None:
         """Bind and validate a source root_path directory.
 
         Parameters
         ----------
         root_path : Path | str
             Source root_path directory that contains one subdirectory per domain.
-            Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
-            For the resolver cache to be effective, must always treat root_path
-            with `.expanduser().resolve()` before inputting here.
+            Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
+            We recommend expanding user and resolving the path before passing its
+            value in.
+            Always expanded and resolved by this constructor.
 
         Raises
         ------
@@ -224,6 +231,7 @@ class FrameReferenceResolver:
 
         return self._cache[resolved]
 
+
 def _load_frames_with_resolver(
     references: List[FrameReference],
     resolver: FrameReferenceResolver,
@@ -271,9 +279,10 @@ def _load_frames_with_resolver(
         frames.append(raw)
     return frames
 
+
 def load_frames_from_references(
     references: List[FrameReference],
-    root_path: Path | str = DEFAULT_DATA_DIR,
+    root_path: Path | str,
     resolver: FrameReferenceResolver | None = None,
 ) -> Tuple[List[Atoms], FrameReferenceResolver]:
     """Reconstruct independent labeled frames for ordered references.
@@ -291,7 +300,6 @@ def load_frames_from_references(
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
@@ -320,9 +328,10 @@ def load_frames_from_references(
         resolver = FrameReferenceResolver(root_path)
     return _load_frames_with_resolver(references, resolver), resolver
 
+
 def load_frames_test(
     schema: SplitGroup,
-    root_path: Path | str = DEFAULT_DATA_DIR,
+    root_path: Path | str,
     resolver: FrameReferenceResolver | None = None,
 ) -> Tuple[List[Atoms], FrameReferenceResolver]:
     """Reconstruct the labeled test set of a split schema.
@@ -335,11 +344,11 @@ def load_frames_test(
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``.
+        ``root_path`` attribute does not match the provided ``root_path``
+        after expanduser and resolve.
 
     Returns
     -------
@@ -363,10 +372,11 @@ def load_frames_test(
         resolver = FrameReferenceResolver(root_path)
     return _load_frames_with_resolver(schema.test_set, resolver), resolver
 
+
 def load_frames_train_validation(
     schema: SplitGroup,
     requested_size_index: int,
-    root_path: Path | str = DEFAULT_DATA_DIR,
+    root_path: Path | str,
     resolver: FrameReferenceResolver | None = None,
 ) -> Tuple[List[Atoms], List[Atoms], FrameReferenceResolver]:
     """Reconstruct the training and validation sets at a requested size.
@@ -387,11 +397,12 @@ def load_frames_train_validation(
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` resolves.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``.
+        ``root_path`` attribute does not match the provided ``root_path``
+        after expanduser and resolve.
 
     Returns
     -------
@@ -500,7 +511,7 @@ def build_export_filename(
     return f"{stem}.extxyz"
 
 
-def _write_extxyz_atomic(
+def _write_atoms_list_to_extxyz(
     dest_path: Path | str,
     atoms_list: List[Atoms],
 ) -> None:
@@ -589,16 +600,17 @@ def write_single_dataset_to_extxyz(
         repeat_id=repeat_id
     )
     target = Path(output_dir) / filename
-    _write_extxyz_atomic(target, atoms_list)
+    _write_atoms_list_to_extxyz(target, atoms_list)
     return target
 
 
 def write_all_sets_in_split_group_to_extxyz(
     split_group: SplitGroup,
-    output_dir: Path | str,
     root_path: Path | str = DEFAULT_DATA_DIR,
+    output_dir: Path | str = DEFAULT_SPLIT_DATA_DIR,
     write_validation: bool = False,
     write_extra_tests: bool = True,
+    extra_tests_folder : str = DEFAULT_EXTRA_TEST_FOLDER_NAME,
     all_split_groups: List[SplitGroup] | None = None,
     resolver: FrameReferenceResolver | None = None,
 ) -> Tuple[Dict[str, List[Path]], FrameReferenceResolver]:
@@ -610,13 +622,13 @@ def write_all_sets_in_split_group_to_extxyz(
     ----------
     split_group : SplitGroup
         The split group to export.
-    output_dir : Path | str
-        Output directory; created if missing. Existing generated artifacts are
-        replaced atomically.
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` resolves.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.env.
+        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
+    output_dir : Path | str
+        Output directory; created if missing. Existing generated artifacts are
+        replaced atomically.
     write_validation : bool, optional
         Whether to export non-empty validation sets at every checkpoint.
         Defaults to ``False``. The returned mapping always contains a
@@ -626,13 +638,18 @@ def write_all_sets_in_split_group_to_extxyz(
         Whether to export extra testing sets from other groups. Defaults to
         ``True``. All extra tests are written to the ``"extra_tests"`` subfolder
         under ``output_dir``.
+    extra_tests_folder : str, optional
+        Name of the folder to write extra tests to. Will be put directly under
+        ``output_dir``. Defaults to ``DEFAULT_EXTRA_TEST_FOLDER_NAME``.
+        See src.temper.utils.defaults.
     all_split_groups : list[SplitGroup], optional
         All split groups in the same domain. Required if ``write_extra_tests``
         is ``True``. Used to retrieve data of extra tests from.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``.
+        ``root_path`` attribute does not match the provided ``root_path``
+        after expanduser and resolve.
 
     Returns
     -------
@@ -648,9 +665,8 @@ def write_all_sets_in_split_group_to_extxyz(
         If ``write_extra_tests`` is ``True`` but ``all_split_groups`` is
         ``None``.
     """
-    # Safeguard to ensure cache reuse in resolver.
     root_path = Path(root_path).expanduser().resolve()
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir).expanduser().resolve()
 
     if write_extra_tests and (all_split_groups is None):
         raise ValueError(
@@ -724,7 +740,7 @@ def write_all_sets_in_split_group_to_extxyz(
                     method=other_group.train_val_split_trajectory.method,
                     role="test",
                     repeat_id=other_group.repeat_id,
-                    output_dir=output_dir / "extra_tests",
+                    output_dir=output_dir / extra_tests_folder,
                 ))
     return written_files, resolver
 

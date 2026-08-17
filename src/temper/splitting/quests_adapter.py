@@ -10,7 +10,11 @@ from typing import Tuple, List, Literal, Any
 import math
 
 import numpy as np
+import multiprocessing as mp
 from ase import Atoms
+from pydantic import ConfigDict, field_validator, Field, model_validator
+
+from src.temper.schemas.base import JsonIOModel
 
 
 class QuestsUnavailableError(RuntimeError):
@@ -32,8 +36,7 @@ class QuestsNumericalError(RuntimeError):
     """
 
 
-@dataclass(frozen=True)
-class QuestsAdapterConfig:
+class QuestsAdapterConfig(JsonIOModel):
     """Typed configuration for the QUESTS adapter.
 
     Persists every descriptor, entropy, device, and reproducibility parameter
@@ -74,90 +77,83 @@ class QuestsAdapterConfig:
             will use half of the available CPU threads (maximum 8). The results are
             deterministic regardless of this value.
     """
+    model_config = ConfigDict(frozen=True)
 
-    descriptor_k: int = 32
-    descriptor_cutoff: float = 5.0
+    descriptor_k: int = Field(default=32, ge=2)
+    descriptor_cutoff: float = Field(default=5.0, gt=0)
     descriptor_dtype: Literal["float32", "float64"] = "float32"
-    compute_descriptor_chunk_size: int = 200
-    entropy_bandwidth: float = 0.015
-    entropy_batch_size: int = 20000
+    compute_descriptor_chunk_size: int = Field(default=200, gt=0)
+    entropy_bandwidth: float = Field(default=0.015, gt=0)
+    entropy_batch_size: int = Field(default=20000, gt=0)
+
     device: Literal["cpu", "gpu", "auto"] = "auto"
     gpu_device: str | None = None
-    numba_threads: int | None = None
 
+    # Supplying default_factory is necessary even if applied field_validator before,
+    # otherwise QuestsAdapterConfig will always require keyword argument numba_threads
+    # to initialize.
+    numba_threads: int = Field(
+        default_factory=lambda: min(
+            8,
+            max(1, mp.cpu_count() // 2),
+        ),
+        ge=1,
+        le=8,
+    )
 
-    def __post_init__(self):
-        """Validate the configuration."""
-        self._validate_descriptor_k()
-        self._validate_descriptor_cutoff()
-        self._validate_entropy_bandwidth()
-        self._validate_entropy_batch_size()
-        self._validate_numba_threads()
-        self._validate_device_consistency()
+    @field_validator(
+        "descriptor_cutoff",
+        "entropy_bandwidth",
+    )
+    @classmethod
+    def validate_finite_float(
+        cls,
+        value: float,
+    ) -> float:
+        if not math.isfinite(value):
+            raise ValueError(f"value must be finite, got {value}.")
+        return value
 
-    def _validate_descriptor_k(self):
-        """Reject descriptor neighbor counts below 2."""
-        if self.descriptor_k < 2:
-            raise ValueError(f"descriptor_k must be at least 2, got {self.descriptor_k}.")
-
-    def _validate_descriptor_cutoff(self):
-        """Reject non-finite or non-positive descriptor cutoffs."""
-        if not math.isfinite(self.descriptor_cutoff) or self.descriptor_cutoff <= 0:
-            raise ValueError(
-                f"descriptor_cutoff must be finite and positive, got {self.descriptor_cutoff}."
+    @field_validator("numba_threads", mode="before")
+    @classmethod
+    def clip_numba_threads(
+        cls,
+        value: int | None,
+    ) -> int:
+        if value is None:
+            return min(
+                8,
+                max(1, mp.cpu_count() // 2),
             )
 
-    def _validate_descritor_chunk(self):
-        """Reject non-positive descriptor chunk sizes."""
-        if self.compute_descriptor_chunk_size <= 0:
+        if value < 1:
             raise ValueError(
-                f"compute_descriptor_chunk_size must be positive, got {self.compute_descriptor_chunk_size}."
+                f"numba_threads must be positive when set, got {value}."
             )
 
-    def _validate_entropy_bandwidth(self):
-        """Reject non-finite or non-positive entropy bandwidths."""
-        if not math.isfinite(self.entropy_bandwidth) or self.entropy_bandwidth <= 0:
+        return min(8, value)
+
+    @field_validator("gpu_device")
+    @classmethod
+    def validate_gpu_device(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is not None and not value.strip():
             raise ValueError(
-                f"entropy_bandwidth must be finite and positive, got {self.entropy_bandwidth}."
+                "gpu_device must be a non-empty device string when set."
             )
+        return value
 
-    def _validate_entropy_batch_size(self):
-        """Reject non-positive entropy batch sizes."""
-        if self.entropy_batch_size <= 0:
-            raise ValueError(
-                f"entropy_batch_size must be positive, got {self.entropy_batch_size}."
-            )
-
-    def _validate_numba_threads(self):
-        """Reject non-positive numba thread counts."""
-        if self.numba_threads is not None and self.numba_threads < 1:
-            raise ValueError(
-                f"numba_threads must be positive when set, got {self.numba_threads}."
-            )
-        import multiprocessing as mp
-
-        # Use half of available CPU threads by default, but no more than 8 threads.
-        default_numba_threads = max(1, mp.cpu_count() // 2)
-        numba_threads = self.numba_threads if self.numba_threads is not None else default_numba_threads
-        # Clip number of threads to 8.
-        numba_threads = min(8, numba_threads)
-        # Trick to set attribute in __post_init__ for frozen dataclass.
-        object.__setattr__(self, "numba_threads", numba_threads)
-
-
-    def _validate_device_consistency(self):
-        """Validate that ``gpu_device`` is consistent with ``device``."""
-        if self.device not in ["gpu", "cpu", "auto"]:
-            raise ValueError(f"device must be 'gpu', 'cpu', or 'auto', got {self.device}.")
+    @model_validator(mode="after")
+    def validate_device_consistency(self) -> "QuestsAdapterConfig":
         if self.device == "cpu" and self.gpu_device is not None:
             raise ValueError(
                 "gpu_device must be None when device == 'cpu'; "
                 "the CPU route never initializes CUDA."
             )
-        if self.gpu_device is not None and not self.gpu_device.strip():
-            raise ValueError(
-                "gpu_device must be a non-empty device string when set."
-            )
+
+        return self
 
 
 @dataclass(frozen=True, eq=False)

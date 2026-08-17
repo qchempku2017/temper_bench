@@ -22,7 +22,7 @@ from src.temper.splitting import QuestsDescriptorsStorage, QuestsAdapter
 from src.temper.splitting.quests_adapter import compute_information_gain_per_candidate_frame
 from src.temper.splitting.utils import get_requested_train_sizes_from_ratios
 
-from src.temper.utils.env import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
+from src.temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
 
 
 class BaseIndicesSelector(ABC):
@@ -57,7 +57,7 @@ class BaseIndicesSelector(ABC):
             List of requested training ratios, by default None.
         max_train_size : int, optional
             Maximum number of training frames, by default DEFAULT_MAX_N_TRAIN.
-            See src.temper.utils.env.DEFAULT_MAX_N_TRAIN.
+            See src.temper.utils.defaults.
         seed : int | None, optional
             Random seed, by default None.
         num_selected_per_step : int | None, optional

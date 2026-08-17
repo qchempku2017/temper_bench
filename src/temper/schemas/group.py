@@ -5,7 +5,7 @@ from typing import Dict, List
 
 from pydantic import field_validator
 
-from src.temper.utils.env import DEFAULT_METADATA_FILE
+from src.temper.utils.defaults import DEFAULT_METADATA_FILE
 from src.temper.grouping.strategies import GROUPING_STRATEGIES
 from src.temper.schemas.split import FrameReference
 from src.temper.schemas.base import JsonIOModel
@@ -119,7 +119,7 @@ class GroupedDomain(JsonIOModel):
             `add_extra_cross_tests` is False. Defaults to None.
         metadata_file_name: str, optional
             The name of the metadata file. Defaults to `DEFAULT_METADATA_FILE`.
-            See src.temper.utils.env.
+            See src.temper.utils.defaults.
         info_entries: str, optional
             Pre-loaded info entries. If not provided, the info entries will be
             loaded from the metadata file. Defaults to None.
