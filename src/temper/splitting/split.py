@@ -290,6 +290,11 @@ def split_grouped_domain(
     group_extra_tests: Dict[str, List[str]] = {}
     if grouped_domain.specify_cross_tests is not None:
         group_extra_tests = grouped_domain.specify_cross_tests
+        # Deduplicate.
+        for group_name in group_extra_tests:
+            group_extra_tests[group_name] = list(
+                set(group_extra_tests[group_name]) - {group_name}
+            )
     else:
         all_group_names = set(grouped_domain.groups.keys())
         for group_name in all_group_names:

@@ -91,8 +91,8 @@ def _env_int(name: str, default: int) -> int:
 # Default values for data storage.
 ##################################
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
-# Default experiment storage directory
-DEFAULT_SPLIT_DATA_DIR: str = os.environ.get("DEFAULT_SPLIT_DATA_DIR", "./split_data")
+# Default storage directory for training units.
+DEFAULT_TRAIN_UNITS_DIR: str = os.environ.get("DEFAULT_TRAIN_UNITS_DIR", "./train_units")
 # Default name of the info file under each data directory.
 DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
 # Default name of the folder to put extra test files under the main folder when exporting a split group.
@@ -127,7 +127,7 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 __all__ = [
     "DEFAULT_DATA_DIR",
-    "DEFAULT_SPLIT_DATA_DIR",
+    "DEFAULT_TRAIN_UNITS_DIR",
     "DEFAULT_EXTRA_TEST_FOLDER_NAME",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_MAX_N_TRAIN",

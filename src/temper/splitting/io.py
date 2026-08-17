@@ -43,9 +43,9 @@ from ase import Atoms
 from ase.io import read, write
 
 from src.temper.schemas.split import FrameReference, SplitGroup
+from src.temper.schemas.train_unit import TrainingUnit
 from src.temper.utils.defaults import (
-    DEFAULT_EXTRA_TEST_FOLDER_NAME,
-    DEFAULT_SPLIT_DATA_DIR,
+    DEFAULT_TRAIN_UNITS_DIR,
     DEFAULT_DATA_DIR,
 )
 
@@ -323,6 +323,9 @@ def load_frames_from_references(
         If a referenced frame has no energy or forces labels, or if a resolved
         path would escape the configured root_path/domain.
     """
+    # Note: enforce identical convention of root_path with resolver.root_path.
+    # This ensures that the resolver's cache can be reused given the same
+    # root_path but with different conventions.
     root_path = Path(root_path).expanduser().resolve()
     if resolver is None or resolver.root_path != root_path:
         resolver = FrameReferenceResolver(root_path)
@@ -438,7 +441,6 @@ def load_frames_train_validation(
 ######
 
 def build_export_filename(
-    *,
     domain: str,
     group_name: str,
     grouping_strategy: str | None,
@@ -606,13 +608,12 @@ def write_atoms_list_to_extxyz(
 def write_all_sets_in_split_group_to_extxyz(
     split_group: SplitGroup,
     root_path: Path | str = DEFAULT_DATA_DIR,
-    output_dir: Path | str = DEFAULT_SPLIT_DATA_DIR,
+    output_path: Path | str = DEFAULT_TRAIN_UNITS_DIR,
     write_validation: bool = False,
     write_extra_tests: bool = True,
-    extra_tests_folder : str = DEFAULT_EXTRA_TEST_FOLDER_NAME,
     all_split_groups: List[SplitGroup] | None = None,
     resolver: FrameReferenceResolver | None = None,
-) -> Tuple[Dict[str, List[Path]], FrameReferenceResolver]:
+) -> Tuple[List[TrainingUnit], FrameReferenceResolver]:
     """Export training and testing sets, optionally including validation sets.
 
     Extra testing sets from other groups will also be written if required.
@@ -625,9 +626,10 @@ def write_all_sets_in_split_group_to_extxyz(
         Source root_path directory beneath which each reference's
         ``domain / filename`` resolves.
         Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
-    output_dir : Path | str
+    output_path : Path | str
         Output directory; created if missing. Existing generated artifacts are
-        replaced atomically.
+        replaced atomically. Defaults to ``DEFAULT_TRAIN_UNITS_DIR``.
+        See src.temper.utils.defaults.
     write_validation : bool, optional
         Whether to export non-empty validation sets at every checkpoint.
         Defaults to ``False``. The returned mapping always contains a
@@ -637,10 +639,6 @@ def write_all_sets_in_split_group_to_extxyz(
         Whether to export extra testing sets from other groups. Defaults to
         ``True``. All extra tests are written to the ``"extra_tests"`` subfolder
         under ``output_dir``.
-    extra_tests_folder : str, optional
-        Name of the folder to write extra tests to. Will be put directly under
-        ``output_dir``. Defaults to ``DEFAULT_EXTRA_TEST_FOLDER_NAME``.
-        See src.temper.utils.defaults.
     all_split_groups : list[SplitGroup], optional
         All split groups in the same domain. Required if ``write_extra_tests``
         is ``True``. Used to retrieve data of extra tests from.
@@ -652,10 +650,11 @@ def write_all_sets_in_split_group_to_extxyz(
 
     Returns
     -------
-    dict[str, List[Path]], FrameReferenceResolver
-        A mapping from dataset roles to the written file paths. Training and
-        test paths are always included; validation paths are included only
-        when ``write_validation=True``. Then returns the resolver used to load
+    List[TrainingUnit], FrameReferenceResolver
+        A list of training unit objects, each containing the path to the training
+        set, the path to the validation set (if any), and the path to the test
+        set within a unitary training process, for future reference.
+        Then returns the resolver used to load
         the frames, whose internal cache might be reused to save loading time.
 
     Raises
@@ -665,24 +664,23 @@ def write_all_sets_in_split_group_to_extxyz(
         ``None``.
     """
     root_path = Path(root_path).expanduser().resolve()
-    output_dir = Path(output_dir).expanduser().resolve()
+    output_path = Path(output_path).expanduser().resolve()
 
     if write_extra_tests and (all_split_groups is None):
         raise ValueError(
             "all_split_groups must be provided if write_extra_tests is True."
         )
 
-    written_files = {
-        "train": [],
-        "validation": [],
-        "test": [],
-    }
+    train_files: List[str] = []
+    val_files: List[str | None] = []
+    test_files: List[str] = []
+
     # Write training sets and optionally validation sets.
     for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
         atoms_train, atoms_val, resolver = load_frames_train_validation(
             split_group, i, root_path=root_path, resolver=resolver
         )
-        written_files["train"].append(write_atoms_list_to_extxyz(
+        train_files.append(write_atoms_list_to_extxyz(
             atoms_list=atoms_train,
             domain=split_group.domain,
             group_name=split_group.group_name,
@@ -690,10 +688,11 @@ def write_all_sets_in_split_group_to_extxyz(
             method=split_group.train_val_split_trajectory.method,
             role="train",
             repeat_id=split_group.repeat_id,
-            output_dir=output_dir,
-        ))
+            output_dir=output_path,
+        ).name)
+        val_file = None
         if write_validation and atoms_val:
-            written_files["validation"].append(write_atoms_list_to_extxyz(
+            val_file = write_atoms_list_to_extxyz(
                 atoms_list=atoms_val,
                 domain=split_group.domain,
                 group_name=split_group.group_name,
@@ -701,13 +700,14 @@ def write_all_sets_in_split_group_to_extxyz(
                 method=split_group.train_val_split_trajectory.method,
                 role="validation",
                 repeat_id=split_group.repeat_id,
-                output_dir=output_dir,
-            ))
+                output_dir=output_path,
+            ).name
+        val_files.append(val_file)
     # Write the testing set of the current group.
     atoms_test, resolver = load_frames_test(
         split_group, root_path, resolver=resolver
     )
-    written_files["test"].append(write_atoms_list_to_extxyz(
+    test_files.append(write_atoms_list_to_extxyz(
         atoms_list=atoms_test,
         domain=split_group.domain,
         group_name=split_group.group_name,
@@ -715,12 +715,13 @@ def write_all_sets_in_split_group_to_extxyz(
         method=split_group.train_val_split_trajectory.method,
         role="test",
         repeat_id=split_group.repeat_id,
-        output_dir=output_dir,
-    ))
-    # Write extra tests.
+        output_dir=output_path,
+    ).name)
+    # Write extra tests. Since extra test files are already written, we only need to
+    # write the paths to them into TrainingUnit objects.
     if write_extra_tests:
         # Find groups by matching domain, grouping strategy, group name and repeat_id.
-        all_split_groups = []
+        all_split_groups: List[SplitGroup] = [] if all_split_groups is None else all_split_groups
         for other_group in all_split_groups:
             if (
                 other_group.domain == split_group.domain
@@ -728,20 +729,50 @@ def write_all_sets_in_split_group_to_extxyz(
                 and other_group.group_name in split_group.extra_tested_groups
                 and other_group.repeat_id == split_group.repeat_id
             ):
-                atoms_test, resolver = load_frames_test(
-                    other_group, root_path, resolver=resolver
-                )
-                written_files["test"].append(write_atoms_list_to_extxyz(
-                    atoms_list=atoms_test,
+                filename = build_export_filename(
                     domain=other_group.domain,
                     group_name=other_group.group_name,
                     grouping_strategy=other_group.grouping_strategy,
                     method=other_group.train_val_split_trajectory.method,
                     role="test",
+                    structure_count=len(other_group.test_set),
                     repeat_id=other_group.repeat_id,
-                    output_dir=output_dir / extra_tests_folder,
-                ))
-    return written_files, resolver
+                )
+                filepath = (output_path / filename).resolve()
+                if not filepath.exists():  # Other group's file not yet written.
+                    atoms_test, resolver = load_frames_test(
+                        other_group, root_path, resolver=resolver
+                    )
+                    test_files.append(write_atoms_list_to_extxyz(
+                        atoms_list=atoms_test,
+                        domain=other_group.domain,
+                        group_name=other_group.group_name,
+                        grouping_strategy=other_group.grouping_strategy,
+                        method=other_group.train_val_split_trajectory.method,
+                        role="test",
+                        repeat_id=other_group.repeat_id,
+                        output_dir=output_path,
+                    ).name)
+                else:  # Already written, just record file name.
+                    test_files.append(filename)
+    # Build TrainingUnit objects. All units share the same test sets.
+    training_units: List[TrainingUnit] = [
+        TrainingUnit(
+            train_set=train_files[i],
+            val_set=val_files[i],
+            test_sets=test_files,
+            root_path=output_path,
+            domain=split_group.domain,
+            group_name=split_group.group_name,
+            grouping_strategy=split_group.grouping_strategy,
+            method=split_group.train_val_split_trajectory.method,
+            repeat_id=split_group.repeat_id,
+            n_train=split_group.train_val_split_trajectory.requested_train_sizes[i]
+        )
+        for i in range(len(train_files))
+    ]
+
+    return training_units, resolver
 
 
 
