@@ -1,154 +1,141 @@
 """Defines persisted schemas for frame references and train, validation, and test splits. These models store references and split metadata, not atomic structures or descriptors."""
 from __future__ import annotations
 
-import math
-from typing import List, Literal, Tuple, ClassVar
+from pathlib import Path
+from typing import List, Literal, Tuple, ClassVar, Any
 
-from pydantic import field_validator, model_validator, Field
-
-from src.temper.schemas.utils import validate_relative_extxyz_path
-from src.temper.splitting.quests_adapter import QuestsAdapterConfig
+import numpy as np
+from pydantic import field_validator, model_validator, Field, ConfigDict
 
 from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.quests_adapter import QuestsAdapterConfig
+from src.temper.utils.defaults import (
+    DEFAULT_DATA_DIR,
+    DEFAULT_SPLIT_REPEATS,
+    DEFAULT_TEST_RATIO,
+    DEFAULT_TRAIN_RATIOS,
+    DEFAULT_MAX_N_TRAIN
+)
+from src.temper.schemas.entropy import EntropyProfile
+from src.temper.schemas.frame_refrence import FrameReference
 
 
-class FrameReference(JsonIOModel):
-    """Persisted reference to a single structure frame in a data group.
+def _check_seeds(seeds: List[int] | None, seed_name: str, expected_len: int) -> None:
+    """Check whether a seed is positive."""
+    if seeds is not None and np.any(np.array(seeds) < 0):
+        raise ValueError(f"{seed_name} must be positive, got {seeds}.")
+    if seeds is not None and len(seeds) != expected_len:
+        raise ValueError(
+            f"{seed_name} must have length split_repeats={expected_len}, got {len(seeds)}."
+        )
 
-    References are lightweight: they only store the identity of a frame
-    (domain, relative extxyz source filename, and nonnegative frame index).
-    Structures and descriptors are never stored.
 
-    Attributes:
-        domain (str): Name of the data domain the frame belongs to.
-        filename (str): Relative path to the extxyz source file, relative to
-            the domain directory. Must be relative, end with ``.extxyz``, and
-            must not contain directory-traversal segments.
-        frame_index (int): Zero-based, nonnegative index of the frame within
-            the source file.
+class SplitConfig(JsonIOModel):
+    """Configuration for splitting a grouped domain into train/validation/test sets.
+
+    Attributes
+    ----------
+    root_path: Path | str
+        Path to the root directory of the dataset. Will always be expanded and
+        resolved before assignment.
+    split_repeats : int
+        Number of times to repeat the split. See default in src.temper.utils.defaults.
+    trainval_test_split_seeds : List[int] | None
+        Seed for the random number generator for the train/validation and test
+        splits. If ``unified_seed`` is provided, these seeds are ignored.
+        Lengths should be equal to ``split_repeats``.
+    train_val_split_seeds : List[int] | None
+        Seed for the random number generator for the train and validation
+        splits. If ``unified_seed`` is provided, these seeds are ignored.
+        Lengths should be equal to ``split_repeats``.
+    test_ratio : float
+        Ratio of the test set to the total number of frames.
+        See default in src.temper.utils.defaults.
+    requested_train_ratios : list[float] | None
+        List of requested train ratios. If not provided, will use
+        ``DEFAULT_TRAIN_RATIOS``. See default in src.temper.utils.defaults.
+    max_train_size : float
+        Maximum number of training frames. If not provided, will use
+        ``DEFAULT_MAX_N_TRAIN``.
+        See default in src.temper.utils.defaults.
+    train_val_split_method : Literal["random", "quests"]
+        Method to use for splitting the train and validation sets.
+        Must be either ``"random"`` or ``"quests"``.
+    quests_adapter_config: QuestsAdapterConfig
+        Configuration for the Quests adapter. If not provided, will use
+        all default settings. See src.temper.splitting.quests_adapter ``QuestsAdapterConfig``
+        for details.
     """
+    model_config = ConfigDict(frozen=True)
 
-    domain: str
-    filename: str
-    frame_index: int
+    root_path: Path = Field(
+        default=DEFAULT_DATA_DIR,
+        validate_default=True,
+    )  # Explicitly request conversion of str to Path.
+    split_repeats: int = DEFAULT_SPLIT_REPEATS
 
-    @field_validator("domain")
+    trainval_test_split_seeds: list[int] = Field(default_factory=list)
+    train_val_split_seeds: list[int] = Field(default_factory=list)
+
+    test_ratio: float = DEFAULT_TEST_RATIO
+
+    requested_train_ratios: list[float] = Field(
+        default_factory=lambda: list(DEFAULT_TRAIN_RATIOS)
+    )
+
+    max_train_size: int = DEFAULT_MAX_N_TRAIN
+
+    train_val_split_method: Literal["random", "quests"] = "quests"
+
+    quests_adapter_config: QuestsAdapterConfig = Field(
+        default_factory=QuestsAdapterConfig
+    )
+
+    @model_validator(mode="before")
     @classmethod
-    def validate_domain(cls, value: str) -> str:
-        """Require a non-empty domain name."""
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError("domain must be a non-empty string.")
-        return value
+    def fill_defaults(cls, data: Any) -> Any:
+        """Fill defaults that depend on other input fields."""
+        if data is None:
+            data = {}
 
-    @field_validator("filename")
-    @classmethod
-    def validate_filename(cls, value: str) -> str:
-        """Require a safe relative extxyz source path."""
-        return validate_relative_extxyz_path(value)
+        if not isinstance(data, dict):
+            return data
 
-    @field_validator("frame_index")
-    @classmethod
-    def validate_frame_index(cls, value: int) -> int:
-        """Reject negative frame indices."""
-        if value < 0:
-            raise ValueError(f"frame_index must be nonnegative, got {value}.")
-        return value
+        data = dict(data)
 
-    @property
-    def identity(self) -> tuple[str, str, int]:
-        """A hashable identity tuple ``(domain, filename, frame_index)``.
+        split_repeats = data.get(
+            "split_repeats",
+            DEFAULT_SPLIT_REPEATS,
+        )
 
-        Used for set-membership checks (e.g. duplicate detection and
-        train/validation complement computation) without relying on model
-        hashing.
-        """
-        return self.domain, self.filename, self.frame_index
+        if data.get("trainval_test_split_seeds") is None:
+            data["trainval_test_split_seeds"] = [
+                int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+                for _ in range(split_repeats)
+            ]
 
+        if data.get("train_val_split_seeds") is None:
+            data["train_val_split_seeds"] = [
+                int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+                for _ in range(split_repeats)
+            ]
 
-class EntropyProfilePoint(JsonIOModel):
-    """A single point of a QUESTS maximum-entropy entropy profile.
-
-    Each point corresponds to one selection step. The step may add multiple
-    frames; ``training_size`` is the selected-set size after that step. The
-    "chunk" is the set of frames added since the previous point, so its size
-    is the difference between consecutive ``training_size`` values.
-
-    Attributes:
-        training_size (int): Number of training frames selected at this point.
-        cumulative_entropy (float): Cumulative QUESTS entropy of the training
-            set at this point. Must be finite; the QUESTS entropy normalizes
-            by the set size, so it is not guaranteed to be non-decreasing as
-            frames are added. Nonnegativity is validated with a configurable
-            tolerance by :class:`EntropyProfile`.
-        information_gain (float): QUESTS information gain contributed by
-            the chunk of frames added at this point, computed with the same
-            ``delta_entropy`` objective used for selection. Must be finite.
-            The QUESTS ``delta_entropy`` is an unnormalized differential
-            entropy (``-log(p)``) that is not bounded below by zero, so this
-            value may legitimately be negative for redundant chunks.
-    """
-
-    training_size: int
-    cumulative_entropy: float
-    information_gain: float
-
-    @field_validator("training_size")
-    @classmethod
-    def validate_training_size(cls, value: int) -> int:
-        """Reject non-positive training sizes."""
-        if value <= 0:
-            raise ValueError(f"training_size must be positive, got {value}.")
-        return value
-
-    @field_validator("cumulative_entropy", "information_gain")
-    @classmethod
-    def validate_finite(cls, value: float) -> float:
-        """Reject NaN and infinite entropy values."""
-        if not math.isfinite(value):
-            raise ValueError(f"Entropy values must be finite, got {value}.")
-        return value
-
-
-class EntropyProfile(JsonIOModel):
-    """Ordered sequence of QUESTS entropy profile points.
-
-    A trajectory may be persisted before evaluation with no profile
-    (``entropy_profile=None``). When a profile is present it must be complete:
-    the points must be ordered by strictly increasing ``training_size`` and all
-    entropy values must be finite. Profile points represent the owning
-    trajectory's selection steps, so one point may represent a multi-frame
-    chunk.
-
-    Validation is deliberately restricted to what the QUESTS objective
-    guarantees (verified against ``quests==2026.2.22``):
-
-    - Cumulative entropy normalizes by the set size and may increase or
-      decrease as frames are added; no monotonicity or nonnegativity check is
-      applied.
-    - ``information_gain`` is a differential entropy (``-log(p)`` with an
-      unnormalized kernel sum ``p``) and may legitimately be negative; only
-      finiteness is enforced.
-
-    Attributes:
-        points (list[EntropyProfilePoint]): Ordered entropy profile points.
-    """
-
-    points: List[EntropyProfilePoint]
+        return data
 
     @model_validator(mode="after")
-    def validate_profile(self) -> "EntropyProfile":
-        """Validate ordering and reject present-but-empty profiles."""
-        if not self.points:
-            raise ValueError("EntropyProfile.points must not be empty.")
-        previous_size = 0
-        for i, point in enumerate(self.points):
-            if point.training_size <= previous_size:
-                raise ValueError(
-                    "EntropyProfile points must have strictly increasing "
-                    f"training_size; point {i} has training_size "
-                    f"{point.training_size} after {previous_size}."
-                )
-            previous_size = point.training_size
+    def validate_config(self) -> "SplitConfig":
+        """Validate and normalize the completed configuration."""
+        _check_seeds(
+            self.trainval_test_split_seeds,
+            "trainval_test_split_seed",
+            self.split_repeats,
+        )
+        _check_seeds(
+            self.train_val_split_seeds,
+            "train_val_split_seed",
+            self.split_repeats,
+        )
+
         return self
 
 
@@ -173,12 +160,12 @@ class TrainValSplitTrajectory(JsonIOModel):
             And ``"random"`` further uses it at every incremental selection step.
         requested_train_sizes (list[int]): Strictly increasing requested
             training sizes. Each is the size of a nested training prefix.
-        selected_frames (list[FrameReference]): Ordered selected-frame list;
+        selected_frames (list[temper.schemas.frame_refrence.FrameReference]): Ordered selected-frame list;
             the first ``s`` frames form the training set of size ``s``.
-        additional_trainval_frames (list[FrameReference] | None): Additional frames in
+        additional_trainval_frames (list[temper.schemas.frame_refrence.FrameReference] | None): Additional frames in
             the original train+val dataset but not selected in ``selected_frames``.
             Will go into the validation set. Empty list by default.
-        entropy_profile (EntropyProfile | None): QUESTS maximum-entropy
+        entropy_profile (temper.schemas.entropy.EntropyProfile | None): QUESTS maximum-entropy
             profile with one point per incremental selection step.
             ``None`` before evaluation; a complete profile once evaluated.
     """
@@ -242,14 +229,6 @@ class TrainValSplitTrajectory(JsonIOModel):
                 f"overlap starts with {next(iter(overlap))!r}."
             )
 
-        if self.entropy_profile is not None:
-            profile_sizes = [point.training_size for point in self.entropy_profile.points]
-            for i, size in enumerate(profile_sizes):
-                if i > 0 and size <= profile_sizes[i - 1]:
-                    raise ValueError(
-                        "entropy_profile points must be strictly increasing in "
-                        f"training_size; index {i} has {size} after {profile_sizes[i - 1]}."
-                    )
         return self
 
 

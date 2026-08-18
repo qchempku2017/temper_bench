@@ -9,7 +9,8 @@ from typing import Dict, List, Tuple
 from ase import Atoms
 from ase.io import read, write
 
-from src.temper.schemas.split import FrameReference, SplitGroup
+from src.temper.schemas.split import SplitGroup
+from src.temper.schemas.frame_refrence import FrameReference
 from src.temper.schemas.train_unit import TrainingUnit
 from src.temper.utils.defaults import (
     DEFAULT_TRAIN_UNITS_DIR,
@@ -310,7 +311,7 @@ def load_frames_test(
     ----------
     schema : SplitGroup
         The persisted split result whose
-        :attr:`~SplitDataSchema.test_set` is reconstructed.
+        :attr:`~SplitGroup.test_set` is reconstructed.
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.

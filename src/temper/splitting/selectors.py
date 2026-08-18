@@ -7,10 +7,7 @@ import logging
 
 import numpy as np
 
-from src.temper.schemas.split import (
-    EntropyProfilePoint,
-    EntropyProfile,
-)
+from src.temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
 from src.temper.splitting.quests_adapter import (
     QuestsDescriptorsStorage, QuestsAdapter, compute_information_gain_per_candidate_frame
 )
@@ -64,7 +61,7 @@ class BaseIndicesSelector(ABC):
         self.seed = seed if (seed is not None and seed >= 0) else int(np.random.randint(0, 2**32))
         self.rng = np.random.default_rng(self.seed)
         self.adapter = QuestsAdapter(pool_descriptors.quests_adapter_config)
-        self.logger = logging.getLogger(self.__name__)
+        self.logger = logging.getLogger(type(self).__name__)
 
         self.n_trainval = len(self.trainval_indices_in_pool)
         self.requested_train_sizes = get_requested_train_sizes_from_ratios(

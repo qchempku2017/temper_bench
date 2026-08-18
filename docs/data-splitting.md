@@ -7,13 +7,13 @@ TEMPER splits a [`GroupedDomain`](../src/temper/schemas/group.py:15) into refere
 ## Public workflow
 
 ```python
-from temper.grouping import partition_domain_groups
-from temper.splitting import (
-    QuestsAdapterConfig,
+from src.temper.grouping import partition_domain_groups
+from src.temper.splitting import (
     split_grouped_domain,
     write_all_sets_in_split_group_to_extxyz,
 )
-from src.temper.splitting.split import SplitConfig
+from src.temper.schemas.quests_adapter import QuestsAdapterConfig
+from src.temper.schemas.split import SplitConfig
 
 # Load one GroupedDomain for each grouping specification in metadata.json.
 grouped_domains = partition_domain_groups("sse_llzo", root_path="./data")

@@ -25,6 +25,15 @@ class InfoEntry(JsonIOModel):
     This API is not recommended for public exposure, and shall instead be called by
     GroupedDomain.
 
+    required fields:
+     ``"name"``, ``"source"``, ``"domain"``, ``"filename"``, ``"system_type"``
+    auto-detected fields (not recommended to override):
+     ``"num_systems"``, ``"num_frames_per_system"``, ``"num_atoms_per_system"``, ``"formulas"``,
+     ``"has_stress"``, ``"has_other_properties"``
+    optional fields:
+     ``"description"``, ``"first_principle_software"``, ``"first_principles_settings"``, ``"theory_level"``,
+     ``"structure_generation_method"``, ``"additional_info"``
+
     Attributes:
         name (str): Name of the dataset. Default name would be the name of the extxyz file without extension.
         description (str): Description of the dataset.
@@ -209,7 +218,7 @@ class InfoEntry(JsonIOModel):
                 f"User supplied metadata overrides automatic detection of {auto_detected_fields}."
                 f" Not recommended!",
                 UserWarning,
-            )
+            )  # TODO: still dangerous. should prohibit overriding auto-detected fields.
         metadata.update(kwargs)
 
         return cls(**metadata)

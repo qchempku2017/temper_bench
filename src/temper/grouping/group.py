@@ -8,8 +8,8 @@ from typing import Union, List
 
 from monty.serialization import loadfn
 
-from temper.schemas import GroupedDomain
-from temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
+from src.temper.schemas.group import GroupedDomain
+from src.temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 
 
 def partition_domain_groups(

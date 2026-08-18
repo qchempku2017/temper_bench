@@ -1,25 +1,21 @@
 """Splits each group of a grouped domain into repeatable train, validation, and test records. It configures the initial test partition and subsequent training-frame selection."""
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Literal, Any
-from pathlib import Path
+from typing import List, Tuple, Dict
 
 import numpy as np
 
 from ase import Atoms
-from pydantic import Field, ConfigDict, model_validator
 
 from src.temper.schemas.split import SplitGroup, TrainValSplitTrajectory
 from src.temper.schemas.group import GroupedDomain
-from src.temper.utils.defaults import DEFAULT_SPLIT_REPEATS
-from src.temper.schemas.split import FrameReference
-from src.temper.utils.defaults import DEFAULT_TEST_RATIO, DEFAULT_MAX_N_TRAIN, DEFAULT_TRAIN_RATIOS
+from src.temper.schemas.frame_refrence import FrameReference
+from src.temper.utils.defaults import DEFAULT_TEST_RATIO
 
 from src.temper.splitting.io import FrameReferenceResolver, load_frames_from_references
 from src.temper.splitting.selectors import selector_class_factory
-from src.temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter, QuestsAdapterConfig
-from src.temper.utils.defaults import DEFAULT_DATA_DIR
-from src.temper.schemas.base import JsonIOModel
+from src.temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter
+from src.temper.schemas.split import SplitConfig
 
 
 def partition_trainval_test(
@@ -111,125 +107,6 @@ def partition_trainval_test(
     return trainval_pool, test_set, train_positions, test_positions
 
 
-def _check_seeds(seeds: List[int] | None, seed_name: str, expected_len: int) -> None:
-    """Check whether a seed is positive."""
-    if seeds is not None and np.any(np.array(seeds) < 0):
-        raise ValueError(f"{seed_name} must be positive, got {seeds}.")
-    if seeds is not None and len(seeds) != expected_len:
-        raise ValueError(
-            f"{seed_name} must have length split_repeats={expected_len}, got {len(seeds)}."
-        )
-
-
-class SplitConfig(JsonIOModel):
-    """Configuration for splitting a grouped domain into train/validation/test sets.
-
-    Attributes
-    ----------
-    root_path: Path | str
-        Path to the root directory of the dataset. Will always be expanded and
-        resolved before assignment.
-    split_repeats : int
-        Number of times to repeat the split. See default in src.temper.utils.defaults.
-    trainval_test_split_seeds : List[int] | None
-        Seed for the random number generator for the train/validation and test
-        splits. If ``unified_seed`` is provided, these seeds are ignored.
-        Lengths should be equal to ``split_repeats``.
-    train_val_split_seeds : List[int] | None
-        Seed for the random number generator for the train and validation
-        splits. If ``unified_seed`` is provided, these seeds are ignored.
-        Lengths should be equal to ``split_repeats``.
-    test_ratio : float
-        Ratio of the test set to the total number of frames.
-        See default in src.temper.utils.defaults.
-    requested_train_ratios : list[float] | None
-        List of requested train ratios. If not provided, will use
-        ``DEFAULT_TRAIN_RATIOS``. See default in src.temper.utils.defaults.
-    max_train_size : float
-        Maximum number of training frames. If not provided, will use
-        ``DEFAULT_MAX_N_TRAIN``.
-        See default in src.temper.utils.defaults.
-    train_val_split_method : Literal["random", "quests"]
-        Method to use for splitting the train and validation sets.
-        Must be either ``"random"`` or ``"quests"``.
-    quests_adapter_config: QuestsAdapterConfig
-        Configuration for the Quests adapter. If not provided, will use
-        all default settings. See src.temper.splitting.quests_adapter ``QuestsAdapterConfig``
-        for details.
-    """
-    model_config = ConfigDict(frozen=True)
-
-    root_path: Path = Field(
-        default=DEFAULT_DATA_DIR,
-        validate_default=True,
-    )  # Explicitly request conversion of str to Path.
-    split_repeats: int = DEFAULT_SPLIT_REPEATS
-
-    trainval_test_split_seeds: list[int] = Field(default_factory=list)
-    train_val_split_seeds: list[int] = Field(default_factory=list)
-
-    test_ratio: float = DEFAULT_TEST_RATIO
-
-    requested_train_ratios: list[float] = Field(
-        default_factory=lambda: list(DEFAULT_TRAIN_RATIOS)
-    )
-
-    max_train_size: int = DEFAULT_MAX_N_TRAIN
-
-    train_val_split_method: Literal["random", "quests"] = "quests"
-
-    quests_adapter_config: QuestsAdapterConfig = Field(
-        default_factory=QuestsAdapterConfig
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def fill_defaults(cls, data: Any) -> Any:
-        """Fill defaults that depend on other input fields."""
-        if data is None:
-            data = {}
-
-        if not isinstance(data, dict):
-            return data
-
-        data = dict(data)
-
-        split_repeats = data.get(
-            "split_repeats",
-            DEFAULT_SPLIT_REPEATS,
-        )
-
-        if data.get("trainval_test_split_seeds") is None:
-            data["trainval_test_split_seeds"] = [
-                int(np.random.randint(0, 2**32))
-                for _ in range(split_repeats)
-            ]
-
-        if data.get("train_val_split_seeds") is None:
-            data["train_val_split_seeds"] = [
-                int(np.random.randint(0, 2**32))
-                for _ in range(split_repeats)
-            ]
-
-        return data
-
-    @model_validator(mode="after")
-    def validate_config(self) -> "SplitConfig":
-        """Validate and normalize the completed configuration."""
-        _check_seeds(
-            self.trainval_test_split_seeds,
-            "trainval_test_split_seed",
-            self.split_repeats,
-        )
-        _check_seeds(
-            self.train_val_split_seeds,
-            "train_val_split_seed",
-            self.split_repeats,
-        )
-
-        return self
-
-
 def split_grouped_domain(
     grouped_domain: GroupedDomain,
     config: SplitConfig | None = None,
@@ -249,7 +126,8 @@ def split_grouped_domain(
     Returns
     -------
     List[SplitGroup]
-        List of split groups hosting train-val-test split records.
+        List of split groups hosting train-val-test split records, each corresponds to
+        one group in the input grouped domain, and one independent repeated split.
 
     Raises
     ------

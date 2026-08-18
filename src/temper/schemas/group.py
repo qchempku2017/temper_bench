@@ -8,8 +8,7 @@ from typing import Dict, List
 from pydantic import field_validator
 
 from src.temper.utils.defaults import DEFAULT_METADATA_FILE
-from src.temper.grouping.strategies import GROUPING_STRATEGIES
-from src.temper.schemas.split import FrameReference
+from src.temper.schemas.frame_refrence import FrameReference
 from src.temper.schemas.base import JsonIOModel
 from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
 
@@ -46,11 +45,11 @@ class GroupedDomain(JsonIOModel):
     """
     domain: str
 
-    info_entries: List[InfoEntry]
+    info_entries: List[InfoEntry]  # TODO: must check info_entries contains all filenames in groups.
 
     grouping_strategy: str
 
-    groups: Dict[str, List[str]]
+    groups: Dict[str, List[str]]  # TODO: must check groups do not overlap.
 
     add_extra_cross_tests: bool = False
 
@@ -139,6 +138,9 @@ class GroupedDomain(JsonIOModel):
         ValueError
            If the grouping strategy is not recognized.
         """
+        # Move local to avoid circular imports.
+        from src.temper.grouping.strategies import GROUPING_STRATEGIES
+
         if grouping_strategy not in GROUPING_STRATEGIES:
             raise ValueError(
                 f"Unknown grouping strategy: {grouping_strategy}. "
