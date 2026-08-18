@@ -114,8 +114,60 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
     assert split.train_val_split_trajectory.entropy_profile is not None
 
 
+def test_cross_test_configuration_supports_automatic_tests_and_specified_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    domain_dir = tmp_path / "demo"
+    domain_dir.mkdir()
+    for filename in ("left.extxyz", "right.extxyz"):
+        write(
+            domain_dir / filename,
+            [make_frame("H", -float(index), f"{filename}-{index}") for index in range(10)],
+            format="extxyz",
+        )
+    infos = [
+        InfoEntry(
+            name=filename.removesuffix(".extxyz"), source="test", domain="demo",
+            filename=filename, system_type=["atom"], num_frames_per_system=[10],
+        )
+        for filename in ("left.extxyz", "right.extxyz")
+    ]
+
+    class ComputeAdapter(_EntropyAdapter):
+        def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
+            return _storage(len(frames))
+
+    import src.temper.splitting.split as split_module
+    monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
+    monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
+    config = SplitConfig(
+        root_path=tmp_path, split_repeats=1, trainval_test_split_seeds=[7],
+        train_val_split_seeds=[9], test_ratio=0.2, requested_train_ratios=[0.5],
+        max_train_size=4, train_val_split_method="random",
+    )
+    groups = {"left": ["left.extxyz"], "right": ["right.extxyz"]}
+    automatic = GroupedDomain(
+        domain="demo", info_entries=infos, grouping_strategy="as_specified", groups=groups,
+        add_extra_cross_tests=True,
+    )
+    automatic_splits = split_grouped_domain(automatic, config)
+    assert {split.group_name: split.extra_tested_groups for split in automatic_splits} == {
+        "left": ["right"], "right": ["left"],
+    }
+
+    specified = GroupedDomain(
+        domain="demo", info_entries=infos, grouping_strategy="as_specified", groups=groups,
+        add_extra_cross_tests=True, specify_cross_tests={"left": ["left", "right", "right"]},
+    )
+    specified_splits = split_grouped_domain(specified, config)
+    assert {split.group_name: split.extra_tested_groups for split in specified_splits} == {
+        "left": ["right"], "right": [],
+    }  # Automatically deduplicated.
+
+
 def test_split_config_requires_complete_nonnegative_seed_lists() -> None:
-    config = SplitConfig(split_repeats=2, trainval_test_split_seeds=None, train_val_split_seeds=None)
+    config = SplitConfig(split_repeats=2)
     assert len(config.trainval_test_split_seeds) == len(config.train_val_split_seeds) == 2
     with pytest.raises(ValueError, match="length"):
         SplitConfig(split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])

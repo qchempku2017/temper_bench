@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any, ClassVar, List, Dict
+from typing import Any, ClassVar, List
 from collections import OrderedDict
 
 from ase.io import read
@@ -27,7 +27,7 @@ class InfoEntry(JsonIOModel):
 
     required fields:
      ``"name"``, ``"source"``, ``"domain"``, ``"filename"``, ``"system_type"``
-    auto-detected fields (not recommended to override):
+    auto-detected fields (do NOT override):
      ``"num_systems"``, ``"num_frames_per_system"``, ``"num_atoms_per_system"``, ``"formulas"``,
      ``"has_stress"``, ``"has_other_properties"``
     optional fields:
@@ -211,14 +211,12 @@ class InfoEntry(JsonIOModel):
             formulas=formulas,
         )
 
-        # User supplied metadata overrides automatic detection.
-        auto_detected_fields = cls.auto_detected_fields
-        if any(k in kwargs for k in auto_detected_fields):
-            warnings.warn(
-                f"User supplied metadata overrides automatic detection of {auto_detected_fields}."
-                f" Not recommended!",
-                UserWarning,
-            )  # TODO: still dangerous. should prohibit overriding auto-detected fields.
+        supplied_auto_detected_fields = set(kwargs) & set(cls.auto_detected_fields)
+        if supplied_auto_detected_fields:
+            raise ValueError(
+                "Cannot override automatically detected metadata fields: "
+                f"{sorted(supplied_auto_detected_fields)}."
+            )
         metadata.update(kwargs)
 
         return cls(**metadata)

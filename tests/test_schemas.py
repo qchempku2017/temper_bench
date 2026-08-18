@@ -97,7 +97,7 @@ def test_relative_extxyz_paths_reject_unsafe_or_wrong_suffix(path: str) -> None:
         validate_relative_extxyz_path(3)  # type: ignore[arg-type]
 
 
-def test_info_entry_discovers_extxyz_metadata_and_warns_on_overrides(extxyz_domain: Path) -> None:
+def test_info_entry_discovers_extxyz_metadata_and_rejects_overrides(extxyz_domain: Path) -> None:
     with pytest.warns(UserWarning, match="Missing optional fields"):
         entry = InfoEntry.from_extxyz(extxyz_domain / "alpha_t_300_run.extxyz", source="unit-test", system_type=["molecule"])
 
@@ -110,9 +110,13 @@ def test_info_entry_discovers_extxyz_metadata_and_warns_on_overrides(extxyz_doma
     assert entry.has_stress is True
     assert entry.has_other_properties == ["dataset_tag"]
 
-    with pytest.warns(UserWarning, match="overrides automatic detection"):
-        overridden = InfoEntry.from_extxyz(extxyz_domain / "alpha_t_300_run.extxyz", source="unit-test", system_type=["molecule"], num_systems=99)
-    assert overridden.num_systems == 99
+    with pytest.raises(ValueError, match=r"Cannot override automatically detected metadata fields: \['num_systems'\]"):
+        InfoEntry.from_extxyz(
+            extxyz_domain / "alpha_t_300_run.extxyz",
+            source="unit-test",
+            system_type=["molecule"],
+            num_systems=99,
+        )
 
 
 def test_info_loading_orders_files_and_checks_metadata_count(extxyz_domain: Path, metadata_payload: dict) -> None:
@@ -147,6 +151,12 @@ def test_grouped_domain_generates_frame_references_and_validates_group_filenames
     ]
     with pytest.raises(ValidationError, match="invalid file extension"):
         GroupedDomain(domain="domain", info_entries=[], grouping_strategy="all", groups={"bad": ["not-extxyz.xyz"]})
+    with pytest.raises(ValidationError, match="not present in info_entries"):
+        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"missing": ["second.extxyz"]})
+    with pytest.raises(ValidationError, match="occurs more than once"):
+        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"one": ["first.extxyz"], "two": ["first.extxyz"]})
+    with pytest.raises(ValidationError, match="occurs more than once"):
+        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"one": ["first.extxyz", "first.extxyz"]})
 
 
 def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions() -> None:

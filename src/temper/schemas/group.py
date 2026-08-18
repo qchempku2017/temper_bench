@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 from src.temper.utils.defaults import DEFAULT_METADATA_FILE
 from src.temper.schemas.frame_refrence import FrameReference
@@ -45,11 +45,11 @@ class GroupedDomain(JsonIOModel):
     """
     domain: str
 
-    info_entries: List[InfoEntry]  # TODO: must check info_entries contains all filenames in groups.
+    info_entries: List[InfoEntry]
 
     grouping_strategy: str
 
-    groups: Dict[str, List[str]]  # TODO: must check groups do not overlap.
+    groups: Dict[str, List[str]]
 
     add_extra_cross_tests: bool = False
 
@@ -93,6 +93,27 @@ class GroupedDomain(JsonIOModel):
                     )
 
         return value
+
+    @model_validator(mode="after")
+    def validate_group_membership(self) -> "GroupedDomain":
+        """Ensure groups partition filenames are in info entries and are disjoint."""
+        info_filenames = {entry.filename for entry in self.info_entries}
+        filenames_to_groups: Dict[str, str] = {}
+        for group_name, filenames in self.groups.items():
+            for filename in filenames:
+                if filename not in info_filenames:
+                    raise ValueError(
+                        f"groups[{group_name}] contains filename {filename!r} "
+                        "that is not present in info_entries."
+                    )
+                previous_group = filenames_to_groups.get(filename)
+                if previous_group is not None:
+                    raise ValueError(
+                        f"Filename {filename!r} occurs more than once: "
+                        f"in groups {previous_group!r} and {group_name!r}."
+                    )
+                filenames_to_groups[filename] = group_name
+        return self
 
     @classmethod
     def from_datadir_with_strategy(
