@@ -1,0 +1,123 @@
+"""Deterministic unit tests for split partitioning, selectors, and orchestration."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+from ase.io import write
+
+from src.temper.schemas.group import GroupedDomain
+from src.temper.schemas.info import InfoEntry
+from src.temper.schemas.frame_refrence import FrameReference
+from src.temper.splitting import selectors
+from src.temper.splitting.quests_adapter import QuestsAdapterConfig, QuestsDescriptorsStorage
+from src.temper.splitting.split import partition_trainval_test, split_grouped_domain
+from src.temper.schemas.split import SplitConfig
+from src.temper.splitting.utils import get_requested_train_sizes_from_ratios
+from conftest import make_frame
+
+
+def _references(count: int) -> list[FrameReference]:
+    return [FrameReference(domain="demo", filename="frames.extxyz", frame_index=index) for index in range(count)]
+
+
+def _storage(count: int) -> QuestsDescriptorsStorage:
+    return QuestsDescriptorsStorage(
+        values=np.arange(count * 2, dtype=float).reshape(count, 2),
+        frame_offsets=tuple(range(count + 1)),
+        quests_adapter_config=QuestsAdapterConfig(device="cpu"),
+    )  # `count` structures, each has one atom.
+
+
+class _EntropyAdapter:
+    def __init__(self, config: QuestsAdapterConfig) -> None:
+        self.config = config
+
+    def get_entropy(self, descriptors: np.ndarray) -> float:
+        return float(descriptors.sum())
+
+
+def test_requested_sizes_and_partition_are_exact_and_deterministic() -> None:
+    assert get_requested_train_sizes_from_ratios(10, [0.8, 0.2], max_train_size=4) == [1, 4]
+    with pytest.raises(ValueError, match="too small"):
+        get_requested_train_sizes_from_ratios(3, [0.1])
+
+    pool = _references(10)
+    trainval, test, train_positions, test_positions = partition_trainval_test(pool, seed=7, test_ratio=0.2)
+    assert test_positions == [6, 8]
+    assert train_positions == [0, 1, 2, 3, 4, 5, 7, 9]
+    assert [frame.frame_index for frame in trainval] == train_positions
+    assert [frame.frame_index for frame in test] == test_positions
+    assert set(train_positions).isdisjoint(test_positions)
+    with pytest.raises(ValueError, match="duplicate"):
+        partition_trainval_test([pool[0], pool[0]], seed=1, test_ratio=0.5)
+
+
+def test_random_selector_maps_full_pool_indices_and_nested_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
+    selector = selectors.RandomIndicesSelector(
+        _storage(8), [0, 2, 3, 5, 7], requested_train_ratios=[0.4, 0.8],
+        max_train_size=4, seed=14, num_selected_per_step=1,
+    )
+    selected, remaining, profile = selector.run()
+    assert selector.requested_train_sizes == [2, 4]
+    assert len(selected) == 4
+    assert len(set(selected)) == 4
+    assert set(selected).issubset({0, 2, 3, 5, 7})
+    assert sorted(selected + remaining) == [0, 2, 3, 5, 7]
+    assert [point.training_size for point in profile.points] == [1, 2, 3, 4]
+
+
+def test_selector_helpers_validate_pool_membership_and_rank_entropy_gain() -> None:
+    storage = _storage(4)
+
+    class Adapter:
+        def delta_entropy(self, candidate: np.ndarray, reference: np.ndarray) -> np.ndarray:
+            return candidate[:, 0]
+
+    assert selectors.greedy_select_frame_indices_by_entropy_gain(storage, Adapter(), [0], 2, [0, 1, 2, 3]) == [3, 2]
+    with pytest.raises(ValueError, match="not all within"):
+        selectors.select_frame_indices_at_random([4], 1, [0, 1], np.random.default_rng(1))
+    with pytest.raises(ValueError, match="Unknown"):
+        selectors.selector_class_factory("other")
+
+
+def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    domain_dir = tmp_path / "demo"
+    domain_dir.mkdir()
+    write(domain_dir / "frames.extxyz", [make_frame("H", -float(index), str(index)) for index in range(10)], format="extxyz")
+    with pytest.warns(UserWarning, match="Missing optional fields"):
+        info = InfoEntry(
+            name="demo", source="test", domain="demo", filename="frames.extxyz",
+            system_type=["atom"], num_frames_per_system=[10],
+        )
+    grouped = GroupedDomain(domain="demo", info_entries=[info], grouping_strategy="all", groups={"all": ["frames.extxyz"]})
+
+    class ComputeAdapter(_EntropyAdapter):
+        def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
+            return _storage(len(frames))
+
+    import src.temper.splitting.split as split_module
+    monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
+    monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
+    config = SplitConfig(root_path=tmp_path, split_repeats=1, trainval_test_split_seeds=[7], train_val_split_seeds=[9], test_ratio=0.2, requested_train_ratios=[0.25, 0.5], max_train_size=4, train_val_split_method="random")
+    result = split_grouped_domain(grouped, config)
+    assert len(result) == 1
+    split = result[0]
+    trajectory = split.train_val_split_trajectory
+    assert len(split.test_set) == 2
+    assert trajectory.requested_train_sizes == [2, 4]
+    assert len(trajectory.selected_frames) == 4
+    assert len(trajectory.additional_trainval_frames) == 4
+    assert {ref.identity for ref in split.test_set}.isdisjoint(ref.identity for ref in trajectory.selected_frames + trajectory.additional_trainval_frames)
+    assert split.train_val_split_trajectory.entropy_profile is not None
+
+
+def test_split_config_requires_complete_nonnegative_seed_lists() -> None:
+    config = SplitConfig(split_repeats=2, trainval_test_split_seeds=None, train_val_split_seeds=None)
+    assert len(config.trainval_test_split_seeds) == len(config.train_val_split_seeds) == 2
+    with pytest.raises(ValueError, match="length"):
+        SplitConfig(split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])
+    with pytest.raises(ValueError, match="positive"):
+        SplitConfig(split_repeats=1, trainval_test_split_seeds=[-1], train_val_split_seeds=[2])
