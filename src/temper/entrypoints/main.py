@@ -29,28 +29,7 @@ def main():
     parser = main_parser()
     args = parser.parse_args()
     if args.command == "split":
-        sysexit = split_cli(
-            args.root_path,
-            args.output_path,
-            args.domains,
-            args.split_repeats,
-            args.seed,
-            args.test_ratio,
-            args.train_ratios,
-            args.max_train_size,
-            args.method,
-            args.descriptor_k,
-            args.descriptor_cutoff,
-            args.descriptor_dtype,
-            args.compute_descriptor_chunk_size,
-            args.entropy_bandwidth,
-            args.entropy_batch_size,
-            args.device,
-            args.gpu_device,
-            args.numba_threads,
-            args.write_validation,
-            not args.no_write_extra_tests,
-        )
+        sysexit = split_cli(args.config_file)
     else:
         parser.print_help()
         sysexit = 1

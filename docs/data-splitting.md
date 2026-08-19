@@ -6,16 +6,29 @@ TEMPER splits a [`GroupedDomain`](../src/temper/schemas/group.py) into reference
 
 ## Command-line workflow
 
+Copy or adapt the complete [default configuration example](split_config.example.json)
+to `split_config.json`, then run:
+
 ```console
-python -m src.temper.entrypoints.main split \
-  --root-path ./data \
-  --output-path ./split_results \
-  --domains sse_llzo \
-  --seed 11 \
-  --device cpu
+python -m src.temper.entrypoints.main split
 ```
 
-Without `--domains`, the command discovers all domain directories beneath `--root-path` that contain `metadata.json`. It groups and splits each selected domain, exports its datasets, and writes:
+The split subcommand accepts no individual split parameters. To use another JSON or
+YAML file, provide its path as the sole configuration selector:
+
+```console
+python -m src.temper.entrypoints.main split --config-file configs/sse_llzo.yaml
+```
+
+When `--config-file` is omitted, the CLI reads the path in
+`DEFAULT_SPLIT_CONFIG_FILE`; that environment variable defaults to
+`split_config.json`. Relative paths in the configuration are interpreted relative to
+the process's current working directory.
+
+With `"domains": null`, the command discovers all domain directories beneath
+`root_path` that contain `metadata.json`. Set `domains` to a list such as
+`["sse_llzo"]` to select specific domain directory names. The CLI groups and splits
+each selected domain, exports its datasets, and writes:
 
 ```text
 split_results/
@@ -26,7 +39,34 @@ split_results/
     └── *.extxyz
 ```
 
-Use `--write-validation` to materialize validation files and `--no-write-extra-tests` to omit cross-test datasets. Run the command with `--help` for the split, ratio, size, QUESTS, and device options.
+Set `write_validation` to `true` to materialize validation files and
+`write_extra_tests` to `false` to omit cross-test datasets.
+
+### Reproduction file and exact seed replay
+
+Immediately after loading and validating a configuration, `split_cli` writes a
+resolved MSON-compatible JSON configuration beside the input. The filename replaces
+the input extension with `_reproduce.json`; for example:
+
+- `split_config.json` writes `split_config_reproduce.json`;
+- `configs/run.yaml` writes `configs/run_reproduce.json`; and
+- replaying `split_config_reproduce.json` writes
+  `split_config_reproduce_reproduce.json`.
+
+The input file is therefore never overwritten. The reproduction file contains the
+resolved `seed`, `trainval_test_split_seeds`, and `train_val_split_seeds`. Pass that
+file back to `--config-file` to reuse both per-repeat seed lists exactly:
+
+```console
+python -m src.temper.entrypoints.main split \
+  --config-file split_config_reproduce.json
+```
+
+For a fresh run, set the two per-repeat seed lists to `null`. A fixed nonnegative
+`seed` deterministically derives them; `seed: null` generates and persists a new base
+seed. For an exact replay, provide both lists (as the reproduction file does). Their
+lengths must equal `split_repeats`; supplied values are validated and used unchanged,
+not regenerated from `seed`.
 
 ## Public workflow
 
@@ -44,6 +84,7 @@ grouped_domains = partition_domain_into_groups("sse_llzo", root_path="./data")
 
 config = SplitConfig(
     root_path="./data",
+    output_path="./split_results",
     split_repeats=3,
     seed=11,
     train_val_split_method="quests",
@@ -55,8 +96,8 @@ split_groups = split_grouped_domain(grouped_domains[0], config)
 # Extra tests are enabled by default for this exporter, so provide all results.
 training_units, resolver = write_all_sets_in_split_group_to_extxyz(
     split_groups[0],
-    root_path="./data",
-    output_path="./split_results",
+    root_path=config.root_path,
+    output_path=config.output_path,
     all_split_groups=split_groups,
 )
 ```
@@ -68,6 +109,8 @@ training_units, resolver = write_all_sets_in_split_group_to_extxyz(
 `SplitConfig` accepts:
 
 - `root_path`: source data root, defaulting to `DEFAULT_DATA_DIR`;
+- `output_path`: results root, defaulting to `DEFAULT_SPLIT_RESULTS_DIR`;
+- `domains`: domain names to process, or `null` to discover domains from metadata;
 - `split_repeats`: number of repeats;
 - `seed`: nonnegative base seed from which both per-repeat seed lists are derived;
 - `trainval_test_split_seeds` and `train_val_split_seeds`: persisted per-repeat seeds, normally generated rather than supplied directly;
@@ -75,11 +118,18 @@ training_units, resolver = write_all_sets_in_split_group_to_extxyz(
 - `requested_train_ratios`: nested training sizes as fractions of the train+validation pool;
 - `max_train_size`: cap on the largest requested training set;
 - `train_val_split_method`: `random` or `quests`; and
-- `quests_adapter_config`: a [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:39).
+- `quests_adapter_config`: a [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py);
+- `write_validation`: whether validation datasets are exported; and
+- `write_extra_tests`: whether configured cross-test datasets are exported.
 
-Defaults are defined in [`src/temper/utils/defaults.py`](../src/temper/utils/defaults.py): the default data root is `./data`, split-results root is `./split_results`, metadata filename is `metadata.json`, test ratio is `0.2`, training ratios are `[0.1, 0.2, 0.4, 0.6, 0.8, 0.9]`, maximum training size is `3000`, and repeat count is `3`. Environment variables with the corresponding default names are read when that module is imported.
+Defaults are defined in [`src/temper/utils/defaults.py`](../src/temper/utils/defaults.py): the default configuration file is `split_config.json`, data root is `./data`, split-results root is `./split_results`, metadata filename is `metadata.json`, test ratio is `0.2`, training ratios are `[0.1, 0.2, 0.4, 0.6, 0.8, 0.9]`, maximum training size is `3000`, and repeat count is `3`. Environment variables with the corresponding default names are read when that module is imported.
 
-Constructing `SplitConfig` with a base `seed` deterministically derives two seed lists of length `split_repeats`: one for train+validation/test partitioning and one for train/validation selection. If `seed` is omitted or `None`, a nonnegative base seed is generated and stored in the model so the resulting configuration remains reproducible.
+The [complete JSON example](split_config.example.json) lists every option with its
+built-in default when no environment overrides are set. JSON and YAML use the same
+field names and nesting. `numba_threads: null` selects the dynamic default of half the
+available CPU count, capped at 8; the reproduction file records the resulting value.
+
+Constructing `SplitConfig` with a base `seed` deterministically derives two seed lists of length `split_repeats`: one for train+validation/test partitioning and one for train/validation selection. If `seed` is omitted or `None`, a nonnegative base seed is generated and stored in the model so the resulting configuration remains reproducible. Explicit seed lists always take precedence and are preserved exactly.
 
 ## What each split does
 
@@ -105,6 +155,10 @@ from monty.serialization import dumpfn, loadfn
 dumpfn(split_groups, "split_groups.json", indent=2)
 restored_split_groups = loadfn("split_groups.json")
 ```
+
+`SplitConfig` serializes both `root_path` and `output_path` as portable strings and
+reconstructs them as `Path` values. The CLI also accepts a plain JSON/YAML mapping
+without Monty's `@module` and `@class` metadata.
 
 A [`FrameReferenceResolver`](../src/temper/splitting/io.py:87) resolves each reference as `root_path / domain / filename`, protects against traversal outside that location, reads each source file at most once per resolver lifetime, and validates energy and forces. Treat frames returned through its cache as read-only.
 

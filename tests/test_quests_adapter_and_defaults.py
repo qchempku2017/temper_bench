@@ -74,8 +74,10 @@ def test_defaults_environment_parsing_and_public_exports(monkeypatch: pytest.Mon
     monkeypatch.setenv("DEFAULT_TEST_RATIO", "0.35")
     monkeypatch.setenv("DEFAULT_MAX_N_TRAIN", "12")
     monkeypatch.setenv("DEFAULT_TRAIN_RATIOS", "0.2, 0.5")
+    monkeypatch.setenv("DEFAULT_SPLIT_CONFIG_FILE", "custom-split.yaml")
     defaults = importlib.reload(defaults)
     assert (defaults.DEFAULT_TEST_RATIO, defaults.DEFAULT_MAX_N_TRAIN, defaults.DEFAULT_TRAIN_RATIOS) == (0.35, 12, [0.2, 0.5])
+    assert defaults.DEFAULT_SPLIT_CONFIG_FILE == "custom-split.yaml"
     assert defaults._env_float("MISSING_FLOAT", 2.5) == 2.5
     monkeypatch.setenv("INVALID_INT", "two")
     with pytest.raises(ValueError, match="INVALID_INT"):

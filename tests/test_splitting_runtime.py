@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from ase.io import write
+from monty.serialization import dumpfn, loadfn
 
 from src.temper.schemas.group import GroupedDomain
 from src.temper.schemas.info import InfoEntry
@@ -166,12 +167,28 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
     }  # Automatically deduplicated.
 
 
-def test_split_config_derives_complete_reproducible_seed_lists() -> None:
+def test_split_config_derives_and_round_trips_complete_reproducible_seed_lists(
+    tmp_path: Path,
+) -> None:
     first = SplitConfig(split_repeats=2, seed=42)
     second = SplitConfig(split_repeats=2, seed=42)
     assert len(first.trainval_test_split_seeds) == len(first.train_val_split_seeds) == 2
     assert first.trainval_test_split_seeds == second.trainval_test_split_seeds
     assert first.train_val_split_seeds == second.train_val_split_seeds
+    exact = SplitConfig(
+        root_path=tmp_path / "data",
+        output_path=tmp_path / "results",
+        split_repeats=2,
+        seed=99,
+        trainval_test_split_seeds=[123, 456],
+        train_val_split_seeds=[789, 101112],
+    )
+    path = tmp_path / "split_config_reproduce.json"
+    dumpfn(exact, path, indent=2)
+    restored = loadfn(path)
+    assert restored == exact
+    assert restored.trainval_test_split_seeds == [123, 456]
+    assert restored.train_val_split_seeds == [789, 101112]
     with pytest.raises(ValueError, match="Length"):
         SplitConfig(seed=42, split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])
     with pytest.raises(ValueError, match="non-negative integer"):

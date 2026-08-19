@@ -11,11 +11,17 @@ The workflow is available through both the CLI and Python API:
 3. Call [`split_grouped_domain`](src/temper/splitting/split.py) with a [`SplitConfig`](src/temper/schemas/split.py) to split every group for every configured repeat.
 4. Persist models with Monty serialization, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
 
-The end-to-end command discovers every domain containing `metadata.json`; pass `--domains` to select specific domain directory names:
+The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 
 ```console
-python -m src.temper.entrypoints.main split --root-path ./data --output-path ./split_results
+python -m src.temper.entrypoints.main split
 ```
+
+Use `--config-file path/to/custom.yaml` to select another file, or set the
+`DEFAULT_SPLIT_CONFIG_FILE` environment variable. The command writes a resolved
+`<config-stem>_reproduce.json` next to the input configuration, including the exact
+generated or supplied seeds needed to replay the split.
+Configuration parameters are explained in [`data splitting`](docs/data-splitting.md)
 
 Each domain receives `grouped_domains.json`, `split_groups.json`, `training_units.json`, and its generated `extxyz` datasets under `split_results/<domain>/`.
 

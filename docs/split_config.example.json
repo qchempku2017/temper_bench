@@ -1,0 +1,26 @@
+{
+  "root_path": "./data",
+  "output_path": "./split_results",
+  "domains": null,
+  "split_repeats": 3,
+  "seed": null,
+  "trainval_test_split_seeds": null,
+  "train_val_split_seeds": null,
+  "test_ratio": 0.2,
+  "requested_train_ratios": [0.1, 0.2, 0.4, 0.6, 0.8, 0.9],
+  "max_train_size": 3000,
+  "train_val_split_method": "quests",
+  "quests_adapter_config": {
+    "descriptor_k": 32,
+    "descriptor_cutoff": 5.0,
+    "descriptor_dtype": "float32",
+    "compute_descriptor_chunk_size": 200,
+    "entropy_bandwidth": 0.015,
+    "entropy_batch_size": 20000,
+    "device": "auto",
+    "gpu_device": null,
+    "numba_threads": null
+  },
+  "write_validation": false,
+  "write_extra_tests": true
+}

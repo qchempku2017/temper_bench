@@ -72,7 +72,7 @@ A `SplitGroup` retains its own group's holdout set separately from extra tested 
 
 ## 3. Splitting: references, trajectories, and repeats
 
-[`split_grouped_domain`](../src/temper/splitting/split.py) performs the split for every group and every configured repeat. [`SplitConfig`](../src/temper/schemas/split.py) supplies the source root, repeat count, a reproducible base seed, test ratio, requested training ratios, maximum training size, train/validation method, and [`QuestsAdapterConfig`](../src/temper/schemas/quests_adapter.py). The base seed deterministically derives and persists separate per-repeat seed lists for the two partitioning stages.
+[`split_grouped_domain`](../src/temper/splitting/split.py) performs the split for every group and every configured repeat. [`SplitConfig`](../src/temper/schemas/split.py) supplies the source and output roots, selected domains, repeat count, a reproducible base seed, test ratio, requested training ratios, maximum training size, train/validation method, export options, and [`QuestsAdapterConfig`](../src/temper/schemas/quests_adapter.py). The base seed deterministically derives and persists separate per-repeat seed lists for the two partitioning stages; explicitly loaded lists are reused unchanged.
 
 For each `(group, repeat_id)` pair, the implementation first makes a seeded random train+validation versus test partition. Its own-group test size is `round(pool_size * test_ratio)` using Python's built-in rounding. It computes QUESTS descriptors for the whole group, then selects training frames from the train+validation partition using either `random` or `quests`. The result is one [`SplitGroup`](../src/temper/schemas/split.py:299), not a separate split object per requested training size.
 

@@ -82,6 +82,10 @@ def _env_int(name: str, default: int) -> int:
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default storage directory for training units.
 DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
+# Default split configuration read by the ``temper split`` CLI.
+DEFAULT_SPLIT_CONFIG_FILE: str = os.environ.get(
+    "DEFAULT_SPLIT_CONFIG_FILE", "split_config.json"
+)
 # Default name of the info file under each data directory.
 DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
 # Default name of the output file to save grouped domains in a domain.
@@ -119,6 +123,7 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 __all__ = [
     "DEFAULT_DATA_DIR",
     "DEFAULT_SPLIT_RESULTS_DIR",
+    "DEFAULT_SPLIT_CONFIG_FILE",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",

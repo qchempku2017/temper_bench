@@ -5,12 +5,13 @@ from pathlib import Path
 from typing import List, Literal, Tuple, ClassVar, Any
 
 import numpy as np
-from pydantic import field_validator, model_validator, Field, ConfigDict
+from pydantic import field_serializer, field_validator, model_validator, Field, ConfigDict
 
 from src.temper.schemas.base import MSONableModel
 from src.temper.schemas.quests_adapter import QuestsAdapterConfig
 from src.temper.utils.defaults import (
     DEFAULT_DATA_DIR,
+    DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_SPLIT_REPEATS,
     DEFAULT_TEST_RATIO,
     DEFAULT_TRAIN_RATIOS,
@@ -28,6 +29,11 @@ class SplitConfig(MSONableModel):
     root_path: Path | str
         Path to the root directory of the dataset. Will always be expanded and
         resolved before assignment.
+    output_path: Path | str
+        Directory in which split artifacts and exported datasets are written.
+    domains: list[str] | None
+        Domain directory names to split. ``None`` discovers every domain beneath
+        ``root_path`` that contains the configured metadata filename.
     split_repeats : int
         Number of times to repeat the split. See default in src.temper.utils.defaults.
     seed: int
@@ -56,6 +62,10 @@ class SplitConfig(MSONableModel):
         Configuration for the Quests adapter. If not provided, will use
         all default settings. See src.temper.splitting.quests_adapter ``QuestsAdapterConfig``
         for details.
+    write_validation: bool
+        Whether to materialize validation datasets.
+    write_extra_tests: bool
+        Whether to materialize configured cross-test datasets.
     """
     model_config = ConfigDict(frozen=True)
 
@@ -63,6 +73,11 @@ class SplitConfig(MSONableModel):
         default=DEFAULT_DATA_DIR,
         validate_default=True,
     )  # Explicitly request conversion of str to Path.
+    output_path: Path = Field(
+        default=DEFAULT_SPLIT_RESULTS_DIR,
+        validate_default=True,
+    )
+    domains: list[str] | None = None
     split_repeats: int = DEFAULT_SPLIT_REPEATS
 
     seed: int = Field(ge=0, default_factory=lambda: int(np.random.randint(0, 2**32)))
@@ -82,6 +97,26 @@ class SplitConfig(MSONableModel):
     quests_adapter_config: QuestsAdapterConfig = Field(
         default_factory=QuestsAdapterConfig
     )
+
+    write_validation: bool = False
+    write_extra_tests: bool = True
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return JSON-compatible MSON data, including paths as strings."""
+        return self.model_dump(mode="json")
+
+    @field_serializer("root_path", "output_path")
+    def serialize_paths(self, value: Path) -> str:
+        """Serialize configuration paths portably instead of as Monty path objects."""
+        return str(value)
+
+    @field_validator("root_path", "output_path", mode="before")
+    @classmethod
+    def load_monty_paths(cls, value: Any) -> Any:
+        """Accept path dictionaries written by earlier Monty/Pydantic encoders."""
+        if isinstance(value, dict) and value.get("@module") == "pathlib":
+            return value.get("string", value)
+        return value
 
     @model_validator(mode="before")
     @classmethod
