@@ -82,9 +82,9 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
     )  # TODO: add test cases where extra_tests are correctly treated.
     assert len(units) == 2
     assert [(unit.n_train, unit.val_set is not None) for unit in units] == [(2, True), (4, True)]
-    assert [len(read(output / unit.train_set, index=":")) for unit in units] == [2, 4]
-    assert [len(read(output / unit.val_set, index=":")) for unit in units if unit.val_set] == [6, 4]
-    assert len(read(output / units[0].test_sets[0], index=":")) == 2
+    assert [len(read(output / unit.domain / unit.train_set, index=":")) for unit in units] == [2, 4]
+    assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in units if unit.val_set] == [6, 4]
+    assert len(read(output / units[0].domain / units[0].test_sets[0], index=":")) == 2
     assert all("__n" in filename and filename.endswith(".extxyz") for unit in units for filename in [unit.train_set, *unit.test_sets])
     assert resolver.root_path == source.parent.resolve()
     assert build_export_filename("d /", "g", None, "random", "train", 2, 3) == "d____unknown_grouping__g__random__train__n2__repeat3.extxyz"
@@ -92,7 +92,10 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
         build_export_filename("d", "g", "s", "m", "other", 1, 0)
 
 
-def test_export_includes_cross_tests_only_when_requested(tmp_path: Path) -> None:
+def test_export_includes_cross_tests_only_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
     for filename in ("frames.extxyz", "other.extxyz"):
@@ -105,9 +108,25 @@ def test_export_includes_cross_tests_only_when_requested(tmp_path: Path) -> None
     )
     assert all(len(unit.test_sets) == 1 for unit in without_extra)
 
+    with_extra_output = tmp_path / "with-extra"
+    write_all_sets_in_split_group_to_extxyz(
+        other, root_path=source.parent, output_path=with_extra_output,
+        write_extra_tests=False,
+    )
+    import src.temper.splitting.io as io_module
+    original_write = io_module.write_atoms_list_to_extxyz
+    written_groups: list[str] = []
+
+    def tracked_write(*args, **kwargs):
+        written_groups.append(kwargs["group_name"])
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(io_module, "write_atoms_list_to_extxyz", tracked_write)
     with_extra, _ = write_all_sets_in_split_group_to_extxyz(
-        main, root_path=source.parent, output_path=tmp_path / "with-extra", write_extra_tests=True,
+        main, root_path=source.parent, output_path=with_extra_output, write_extra_tests=True,
         all_split_groups=[main, other],
     )
     assert all(len(unit.test_sets) == 2 for unit in with_extra)
     assert any("__other__" in filename for filename in with_extra[0].test_sets)
+    assert "other" not in written_groups  # Reuse the test file already written for the other group.
+    assert all((tmp_path / "with-extra" / "demo" / filename).is_file() for filename in with_extra[0].test_sets)

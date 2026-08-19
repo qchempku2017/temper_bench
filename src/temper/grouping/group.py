@@ -12,7 +12,7 @@ from src.temper.schemas.group import GroupedDomain
 from src.temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 
 
-def partition_domain_groups(
+def partition_domain_into_groups(
         domain_name: str,
         root_path: Union[str, Path] = DEFAULT_DATA_DIR,
         metadata_file_name: str = DEFAULT_METADATA_FILE,

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
+from monty.serialization import dumpfn, loadfn
 from pydantic import ValidationError
 
 from src.temper.schemas.group import GroupedDomain
@@ -56,8 +57,8 @@ def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
 
     for model in (info, refs[0], trajectory, split, grouped):
         path = tmp_path / f"{type(model).__name__}.json"
-        model.save_json(path)
-        assert type(model).load_json(path) == model
+        dumpfn(model, path, indent=2)
+        assert loadfn(path) == model
 
 
 def test_atom_property_helpers_validate_and_report_common_properties() -> None:
@@ -177,16 +178,18 @@ def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions() -> No
 
 def test_training_unit_validates_files_immutability_and_movable_root(tmp_path: Path) -> None:
     root = tmp_path / "sets"
-    root.mkdir()
+    domain_root = root / "domain"
+    domain_root.mkdir(parents=True)
     for name in ("train.extxyz", "val.extxyz", "test.extxyz"):
-        (root / name).write_text("", encoding="utf-8")
+        (domain_root / name).write_text("", encoding="utf-8")
     unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=root)
     with pytest.raises(ValidationError):
         unit.n_train = 2
     moved_root = tmp_path / "moved"
-    moved_root.mkdir()
+    moved_domain_root = moved_root / "domain"
+    moved_domain_root.mkdir(parents=True)
     for name in ("train.extxyz", "val.extxyz", "test.extxyz"):
-        (moved_root / name).write_text("", encoding="utf-8")
+        (moved_domain_root / name).write_text("", encoding="utf-8")
     unit.root_path = moved_root
     assert unit.root_path == moved_root
     with pytest.raises(ValidationError, match="does not exist"):

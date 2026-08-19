@@ -101,7 +101,7 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
     import src.temper.splitting.split as split_module
     monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
     monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
-    config = SplitConfig(root_path=tmp_path, split_repeats=1, trainval_test_split_seeds=[7], train_val_split_seeds=[9], test_ratio=0.2, requested_train_ratios=[0.25, 0.5], max_train_size=4, train_val_split_method="random")
+    config = SplitConfig(root_path=tmp_path, split_repeats=1, seed=7, test_ratio=0.2, requested_train_ratios=[0.25, 0.5], max_train_size=4, train_val_split_method="random")
     result = split_grouped_domain(grouped, config)
     assert len(result) == 1
     split = result[0]
@@ -142,8 +142,8 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
     monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
     monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
     config = SplitConfig(
-        root_path=tmp_path, split_repeats=1, trainval_test_split_seeds=[7],
-        train_val_split_seeds=[9], test_ratio=0.2, requested_train_ratios=[0.5],
+        root_path=tmp_path, split_repeats=1, seed=7,
+        test_ratio=0.2, requested_train_ratios=[0.5],
         max_train_size=4, train_val_split_method="random",
     )
     groups = {"left": ["left.extxyz"], "right": ["right.extxyz"]}
@@ -166,10 +166,13 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
     }  # Automatically deduplicated.
 
 
-def test_split_config_requires_complete_nonnegative_seed_lists() -> None:
-    config = SplitConfig(split_repeats=2)
-    assert len(config.trainval_test_split_seeds) == len(config.train_val_split_seeds) == 2
-    with pytest.raises(ValueError, match="length"):
-        SplitConfig(split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])
-    with pytest.raises(ValueError, match="positive"):
-        SplitConfig(split_repeats=1, trainval_test_split_seeds=[-1], train_val_split_seeds=[2])
+def test_split_config_derives_complete_reproducible_seed_lists() -> None:
+    first = SplitConfig(split_repeats=2, seed=42)
+    second = SplitConfig(split_repeats=2, seed=42)
+    assert len(first.trainval_test_split_seeds) == len(first.train_val_split_seeds) == 2
+    assert first.trainval_test_split_seeds == second.trainval_test_split_seeds
+    assert first.train_val_split_seeds == second.train_val_split_seeds
+    with pytest.raises(ValueError, match="Length"):
+        SplitConfig(seed=42, split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])
+    with pytest.raises(ValueError, match="non-negative integer"):
+        SplitConfig(split_repeats=1, seed=-1)

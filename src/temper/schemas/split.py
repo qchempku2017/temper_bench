@@ -7,7 +7,7 @@ from typing import List, Literal, Tuple, ClassVar, Any
 import numpy as np
 from pydantic import field_validator, model_validator, Field, ConfigDict
 
-from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.base import MSONableModel
 from src.temper.schemas.quests_adapter import QuestsAdapterConfig
 from src.temper.utils.defaults import (
     DEFAULT_DATA_DIR,
@@ -20,17 +20,7 @@ from src.temper.schemas.entropy import EntropyProfile
 from src.temper.schemas.frame_refrence import FrameReference
 
 
-def _check_seeds(seeds: List[int] | None, seed_name: str, expected_len: int) -> None:
-    """Check whether a seed is positive."""
-    if seeds is not None and np.any(np.array(seeds) < 0):
-        raise ValueError(f"{seed_name} must be positive, got {seeds}.")
-    if seeds is not None and len(seeds) != expected_len:
-        raise ValueError(
-            f"{seed_name} must have length split_repeats={expected_len}, got {len(seeds)}."
-        )
-
-
-class SplitConfig(JsonIOModel):
+class SplitConfig(MSONableModel):
     """Configuration for splitting a grouped domain into train/validation/test sets.
 
     Attributes
@@ -40,14 +30,15 @@ class SplitConfig(JsonIOModel):
         resolved before assignment.
     split_repeats : int
         Number of times to repeat the split. See default in src.temper.utils.defaults.
-    trainval_test_split_seeds : List[int] | None
-        Seed for the random number generator for the train/validation and test
-        splits. If ``unified_seed`` is provided, these seeds are ignored.
-        Lengths should be equal to ``split_repeats``.
-    train_val_split_seeds : List[int] | None
-        Seed for the random number generator for the train and validation
-        splits. If ``unified_seed`` is provided, these seeds are ignored.
-        Lengths should be equal to ``split_repeats``.
+    seed: int
+       Random seed for reproducing the split. Must record a non-negative int value.
+       If not provided, will generate a random seed.
+    trainval_test_split_seeds : list[int] | None
+        List of seeds for splitting the trainval and test sets. Not recommended to
+        set directly as these will be automatically generated from the provided ``seed``.
+    train_val_split_seeds : list[int] | None
+        List of seeds for splitting the train and validation sets. Not recommended to
+        set directly as these will be automatically generated from the provided ``seed``.
     test_ratio : float
         Ratio of the test set to the total number of frames.
         See default in src.temper.utils.defaults.
@@ -74,6 +65,7 @@ class SplitConfig(JsonIOModel):
     )  # Explicitly request conversion of str to Path.
     split_repeats: int = DEFAULT_SPLIT_REPEATS
 
+    seed: int = Field(ge=0, default_factory=lambda: int(np.random.randint(0, 2**32)))
     trainval_test_split_seeds: list[int] = Field(default_factory=list)
     train_val_split_seeds: list[int] = Field(default_factory=list)
 
@@ -108,38 +100,38 @@ class SplitConfig(JsonIOModel):
             DEFAULT_SPLIT_REPEATS,
         )
 
+        if data.get("seed") is None:
+            data["seed"] = int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+        rng = np.random.default_rng(data["seed"])
+
         if data.get("trainval_test_split_seeds") is None:
             data["trainval_test_split_seeds"] = [
-                int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+                int(rng.integers(0, 2**32, dtype=np.uint32))
                 for _ in range(split_repeats)
             ]
 
         if data.get("train_val_split_seeds") is None:
             data["train_val_split_seeds"] = [
-                int(np.random.default_rng().integers(0, 2**32, dtype=np.uint32))
+                int(rng.integers(0, 2**32, dtype=np.uint32))
                 for _ in range(split_repeats)
             ]
 
+        # Check length of seeds are valid.
+        if len(data["trainval_test_split_seeds"]) != split_repeats:
+            raise ValueError(
+                f"Length of trainval_test_split_seeds ({len(data['trainval_test_split_seeds'])}) "
+                f"does not match split_repeats ({split_repeats})."
+            )
+        if len(data["train_val_split_seeds"]) != split_repeats:
+            raise ValueError(
+                f"Length of train_val_split_seeds ({len(data['train_val_split_seeds'])}) "
+                f"does not match split_repeats ({split_repeats})."
+            )
+
         return data
 
-    @model_validator(mode="after")
-    def validate_config(self) -> "SplitConfig":
-        """Validate and normalize the completed configuration."""
-        _check_seeds(
-            self.trainval_test_split_seeds,
-            "trainval_test_split_seed",
-            self.split_repeats,
-        )
-        _check_seeds(
-            self.train_val_split_seeds,
-            "train_val_split_seed",
-            self.split_repeats,
-        )
 
-        return self
-
-
-class TrainValSplitTrajectory(JsonIOModel):
+class TrainValSplitTrajectory(MSONableModel):
     """A single train/validation trajectory for one splitting method.
 
     Both the ``"random"`` method and the ``"quests"`` (QUESTS
@@ -275,7 +267,7 @@ class TrainValSplitTrajectory(JsonIOModel):
         return self.selected_frames[size:] + self.additional_trainval_frames
 
 
-class SplitGroup(JsonIOModel):
+class SplitGroup(MSONableModel):
     """Persisted top-level result of splitting a data group.
 
     This is the persisted (reference-only) result schema for splitting a

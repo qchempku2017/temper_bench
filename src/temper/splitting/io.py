@@ -13,7 +13,7 @@ from src.temper.schemas.split import SplitGroup
 from src.temper.schemas.frame_refrence import FrameReference
 from src.temper.schemas.train_unit import TrainingUnit
 from src.temper.utils.defaults import (
-    DEFAULT_TRAIN_UNITS_DIR,
+    DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_DATA_DIR,
 )
 
@@ -576,7 +576,7 @@ def write_atoms_list_to_extxyz(
 def write_all_sets_in_split_group_to_extxyz(
     split_group: SplitGroup,
     root_path: Path | str = DEFAULT_DATA_DIR,
-    output_path: Path | str = DEFAULT_TRAIN_UNITS_DIR,
+    output_path: Path | str = DEFAULT_SPLIT_RESULTS_DIR,
     write_validation: bool = False,
     write_extra_tests: bool = True,
     all_split_groups: List[SplitGroup] | None = None,
@@ -596,8 +596,9 @@ def write_all_sets_in_split_group_to_extxyz(
         Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
     output_path : Path | str
         Output directory; created if missing. Existing generated artifacts are
-        replaced atomically. Defaults to ``DEFAULT_TRAIN_UNITS_DIR``.
+        replaced atomically. Defaults to ``DEFAULT_SPLIT_RESULTS_DIR``.
         See src.temper.utils.defaults.
+        Files will be written into each domain subfolder under ``output_path``.
     write_validation : bool, optional
         Whether to export non-empty validation sets at every checkpoint.
         Defaults to ``False``. The returned mapping always contains a
@@ -656,7 +657,7 @@ def write_all_sets_in_split_group_to_extxyz(
             method=split_group.train_val_split_trajectory.method,
             role="train",
             repeat_id=split_group.repeat_id,
-            output_dir=output_path,
+            output_dir=output_path / split_group.domain,
         ).name)
         val_file = None
         if write_validation and atoms_val:
@@ -668,7 +669,7 @@ def write_all_sets_in_split_group_to_extxyz(
                 method=split_group.train_val_split_trajectory.method,
                 role="validation",
                 repeat_id=split_group.repeat_id,
-                output_dir=output_path,
+                output_dir=output_path / split_group.domain,
             ).name
         val_files.append(val_file)
     # Write the testing set of the current group.
@@ -683,7 +684,7 @@ def write_all_sets_in_split_group_to_extxyz(
         method=split_group.train_val_split_trajectory.method,
         role="test",
         repeat_id=split_group.repeat_id,
-        output_dir=output_path,
+        output_dir=output_path / split_group.domain,
     ).name)
     # Write extra tests. Since extra test files are already written, we only need to
     # write the paths to them into TrainingUnit objects.
@@ -706,7 +707,7 @@ def write_all_sets_in_split_group_to_extxyz(
                     structure_count=len(other_group.test_set),
                     repeat_id=other_group.repeat_id,
                 )
-                filepath = (output_path / filename).resolve()
+                filepath = (output_path / other_group.domain / filename).resolve()
                 if not filepath.exists():  # Other group's file not yet written.
                     atoms_test, resolver = load_frames_test(
                         other_group, root_path, resolver=resolver
@@ -719,7 +720,7 @@ def write_all_sets_in_split_group_to_extxyz(
                         method=other_group.train_val_split_trajectory.method,
                         role="test",
                         repeat_id=other_group.repeat_id,
-                        output_dir=output_path,
+                        output_dir=output_path / other_group.domain,
                     ).name)
                 else:  # Already written, just record file name.
                     test_files.append(filename)

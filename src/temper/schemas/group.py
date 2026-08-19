@@ -9,11 +9,11 @@ from pydantic import field_validator, model_validator
 
 from src.temper.utils.defaults import DEFAULT_METADATA_FILE
 from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.base import MSONableModel
 from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
 
 
-class GroupedDomain(JsonIOModel):
+class GroupedDomain(MSONableModel):
     """Storage of a data domain that has been grouped into multiple groups by a strategy.
 
     Each GroupEntry corresponds to one dictionary entry:

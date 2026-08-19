@@ -7,10 +7,10 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.base import MSONableModel
 
 
-class QuestsAdapterConfig(JsonIOModel):
+class QuestsAdapterConfig(MSONableModel):
     """Typed configuration for the QUESTS adapter.
 
     Persists every descriptor, entropy, device, and reproducibility parameter

@@ -4,11 +4,11 @@ from typing import List
 from pathlib import Path
 from pydantic import model_validator, ConfigDict, Field
 
-from src.temper.schemas.base import JsonIOModel
-from src.temper.utils.defaults import DEFAULT_TRAIN_UNITS_DIR
+from src.temper.schemas.base import MSONableModel
+from src.temper.utils.defaults import DEFAULT_SPLIT_RESULTS_DIR
 
 
-class TrainingUnit(JsonIOModel):
+class TrainingUnit(MSONableModel):
     """Schema to define a unit containing a training set, validation set (optional) and test sets.
 
     A unit belongs to:
@@ -52,7 +52,8 @@ class TrainingUnit(JsonIOModel):
             Filename of the validation set.
         root_path: Path
             Root path to the train, val and test files. Should be able to load from:
-            rootpath / train_set, rootpath / val_set, rootpath / test_sets.
+            rootpath / domain / train_set, rootpath / domain / val_set,
+            rootpath / domain / test_sets.
             Defaults to ``DEFAULT_SPLIT_DATA_DIR``. See src.temper.utils.defaults.
     """
     model_config = ConfigDict(
@@ -86,7 +87,7 @@ class TrainingUnit(JsonIOModel):
     )
 
     root_path: Path = Field(
-        default=DEFAULT_TRAIN_UNITS_DIR,
+        default=DEFAULT_SPLIT_RESULTS_DIR,
         validate_default=True,
     )
 
@@ -95,7 +96,7 @@ class TrainingUnit(JsonIOModel):
         """Validate that all referenced dataset files exist and are extxyz."""
 
         def _check_extxyz_file(f: str) -> None:
-            file_path = self.root_path / f
+            file_path = self.root_path / self.domain / f
 
             if file_path.suffix != ".extxyz":
                 raise ValueError(

@@ -5,10 +5,10 @@ from typing import List
 
 from pydantic import field_validator, model_validator
 
-from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.base import MSONableModel
 
 
-class EntropyProfilePoint(JsonIOModel):
+class EntropyProfilePoint(MSONableModel):
     """A single point of a QUESTS maximum-entropy entropy profile.
 
     Each point corresponds to one selection step. The step may add multiple
@@ -52,7 +52,7 @@ class EntropyProfilePoint(JsonIOModel):
         return value
 
 
-class EntropyProfile(JsonIOModel):
+class EntropyProfile(MSONableModel):
     """Ordered sequence of QUESTS entropy profile points.
 
     A trajectory may be persisted before evaluation with no profile

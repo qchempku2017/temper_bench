@@ -81,5 +81,9 @@ def test_defaults_environment_parsing_and_public_exports(monkeypatch: pytest.Mon
     with pytest.raises(ValueError, match="INVALID_INT"):
         defaults._env_int("INVALID_INT", 1)
     import src.temper.grouping as grouping
-    assert {"partition_domain_groups"}.issubset(grouping.__all__)
+    assert {"partition_domain_into_groups"}.issubset(grouping.__all__)
+    assert defaults.DEFAULT_SPLIT_RESULTS_DIR == "./split_results"
+    assert defaults.DEFAULT_GROUPED_DOMAIN_FILE == "grouped_domains.json"
+    assert defaults.DEFAULT_SPLIT_GROUPS_FILE == "split_groups.json"
+    assert defaults.DEFAULT_TRAINING_UNITS_FILE == "training_units.json"
     importlib.reload(defaults)

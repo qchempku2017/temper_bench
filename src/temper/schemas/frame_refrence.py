@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pydantic import field_validator
 
-from src.temper.schemas.base import JsonIOModel
+from src.temper.schemas.base import MSONableModel
 from src.temper.schemas.utils import validate_relative_extxyz_path
 
 
-class FrameReference(JsonIOModel):
+class FrameReference(MSONableModel):
     """Persisted reference to a single structure frame in a data group.
 
     References are lightweight: they only store the identity of a frame

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.temper.grouping.group import partition_domain_groups
+from src.temper.grouping.group import partition_domain_into_groups
 from src.temper.grouping.strategies import (
     GROUPING_STRATEGIES,
     group_all,
@@ -79,7 +79,7 @@ def test_grouped_domain_factory_applies_registered_strategy(extxyz_domain: Path)
         GroupedDomain.from_datadir_with_strategy(extxyz_domain, "unknown", info_entries=entries)
 
 
-def test_partition_domain_groups_reuses_metadata_and_applies_each_configuration(
+def test_partition_domain_into_groups_reuses_metadata_and_applies_each_configuration(
     extxyz_domain: Path, metadata_payload: dict,
 ) -> None:
     metadata_payload["groupings"] = [
@@ -89,7 +89,7 @@ def test_partition_domain_groups_reuses_metadata_and_applies_each_configuration(
     (extxyz_domain / "metadata.json").write_text(json.dumps(metadata_payload), encoding="utf-8")
     root = extxyz_domain.parent
     with pytest.warns(UserWarning, match="Missing optional fields"):
-        grouped = partition_domain_groups("demo_domain", root_path=root)
+        grouped = partition_domain_into_groups("demo_domain", root_path=root)
 
     assert [domain.grouping_strategy for domain in grouped] == ["all", "by_property"]
     assert grouped[0].groups == {"all": ["alpha_t_300_run.extxyz", "beta_t_600_run.extxyz"]}

@@ -81,13 +81,15 @@ def _env_int(name: str, default: int) -> int:
 ##################################
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default storage directory for training units.
-DEFAULT_TRAIN_UNITS_DIR: str = os.environ.get("DEFAULT_TRAIN_UNITS_DIR", "./train_units")
+DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
 # Default name of the info file under each data directory.
 DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
-# Default name of the folder to put extra test files under the main folder when exporting a split group.
-DEFAULT_EXTRA_TEST_FOLDER_NAME: str = os.environ.get(
-    "DEFAULT_EXTRA_TEST_FOLDER_NAME", "extra_tests"
-)
+# Default name of the output file to save grouped domains in a domain.
+DEFAULT_GROUPED_DOMAIN_FILE: str = os.environ.get("DEFAULT_GROUPED_DOMAIN_FILE", "grouped_domains.json")
+# Default name of the output file to save split groups in a domain.
+DEFAULT_SPLIT_GROUPS_FILE: str = os.environ.get("DEFAULT_SPLIT_GROUPS_FILE", "split_groups.json")
+# Default name of the output file to save training units in a domain.
+DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get("DEFAULT_TRAINING_UNITS_FILE", "training_units.json")
 
 ##################################
 # Default values for creating experiments from extxyz data.
@@ -116,14 +118,16 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 __all__ = [
     "DEFAULT_DATA_DIR",
-    "DEFAULT_TRAIN_UNITS_DIR",
-    "DEFAULT_EXTRA_TEST_FOLDER_NAME",
+    "DEFAULT_SPLIT_RESULTS_DIR",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",
     "DEFAULT_TEST_RATIO",
     "DEFAULT_TRAIN_RATIOS",
     "DEFAULT_SPLIT_REPEATS",
+    "DEFAULT_GROUPED_DOMAIN_FILE",
+    "DEFAULT_SPLIT_GROUPS_FILE",
+    "DEFAULT_TRAINING_UNITS_FILE",
     "_env_float",
     "_env_int",
 ]
