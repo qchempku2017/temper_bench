@@ -98,4 +98,4 @@ The automatically generated other-group target ordering is not guaranteed becaus
 
 ## Next step
 
-Use [`partition_domain_groups`](../src/temper/grouping/group.py:15) to load one domain's configured grouping strategies, then follow [Data splitting](data-splitting.md) to create and export splits.
+Use [`partition_domain_into_groups`](../src/temper/grouping/group.py) to load one domain's configured grouping strategies, then follow [Data splitting](data-splitting.md) to create and export splits. The split CLI can also discover and process domain directories directly from the data root.

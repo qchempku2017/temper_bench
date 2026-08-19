@@ -2,12 +2,36 @@
 
 [Back to the project overview](../README.md) · [Data format and grouping](raw-data-format.md) · [Roadmap](roadmap.md)
 
-TEMPER splits a [`GroupedDomain`](../src/temper/schemas/group.py:15) into reference-based [`SplitGroup`](../src/temper/schemas/split.py:318) results. The implementation has no CLI: use the Python API below.
+TEMPER splits a [`GroupedDomain`](../src/temper/schemas/group.py) into reference-based [`SplitGroup`](../src/temper/schemas/split.py) results. Use the end-to-end CLI for the standard workflow or the Python API for finer control.
+
+## Command-line workflow
+
+```console
+python -m src.temper.entrypoints.main split \
+  --root-path ./data \
+  --output-path ./split_results \
+  --domains sse_llzo \
+  --seed 11 \
+  --device cpu
+```
+
+Without `--domains`, the command discovers all domain directories beneath `--root-path` that contain `metadata.json`. It groups and splits each selected domain, exports its datasets, and writes:
+
+```text
+split_results/
+└── sse_llzo/
+    ├── grouped_domains.json
+    ├── split_groups.json
+    ├── training_units.json
+    └── *.extxyz
+```
+
+Use `--write-validation` to materialize validation files and `--no-write-extra-tests` to omit cross-test datasets. Run the command with `--help` for the split, ratio, size, QUESTS, and device options.
 
 ## Public workflow
 
 ```python
-from src.temper.grouping import partition_domain_groups
+from src.temper.grouping import partition_domain_into_groups
 from src.temper.splitting import (
     split_grouped_domain,
     write_all_sets_in_split_group_to_extxyz,
@@ -16,13 +40,12 @@ from src.temper.schemas.quests_adapter import QuestsAdapterConfig
 from src.temper.schemas.split import SplitConfig
 
 # Load one GroupedDomain for each grouping specification in metadata.json.
-grouped_domains = partition_domain_groups("sse_llzo", root_path="./data")
+grouped_domains = partition_domain_into_groups("sse_llzo", root_path="./data")
 
 config = SplitConfig(
     root_path="./data",
     split_repeats=3,
-    trainval_test_split_seeds=[11, 12, 13],
-    train_val_split_seeds=[21, 22, 23],
+    seed=11,
     train_val_split_method="quests",
     quests_adapter_config=QuestsAdapterConfig(device="cpu"),
 )
@@ -33,12 +56,12 @@ split_groups = split_grouped_domain(grouped_domains[0], config)
 training_units, resolver = write_all_sets_in_split_group_to_extxyz(
     split_groups[0],
     root_path="./data",
-    output_path="./train_units",
+    output_path="./split_results",
     all_split_groups=split_groups,
 )
 ```
 
-[`partition_domain_groups`](../src/temper/grouping/group.py:15) reads the domain metadata and produces one grouped domain per grouping definition. [`split_grouped_domain`](../src/temper/splitting/split.py:237) splits **every group** in its input for **every repeat**, returning a flat `list[SplitGroup]`. A [`SplitConfig`](../src/temper/splitting/split.py:128) selects one train/validation method per call: `random` or `quests`.
+[`partition_domain_into_groups`](../src/temper/grouping/group.py) reads the domain metadata and produces one grouped domain per grouping definition. [`split_grouped_domain`](../src/temper/splitting/split.py) splits **every group** in its input for **every repeat**, returning a flat `list[SplitGroup]`. A [`SplitConfig`](../src/temper/schemas/split.py) selects one train/validation method per call: `random` or `quests`.
 
 ## Split configuration and defaults
 
@@ -46,17 +69,17 @@ training_units, resolver = write_all_sets_in_split_group_to_extxyz(
 
 - `root_path`: source data root, defaulting to `DEFAULT_DATA_DIR`;
 - `split_repeats`: number of repeats;
-- `trainval_test_split_seeds`: one seed per repeat for the random train+validation/test partition;
-- `train_val_split_seeds`: one seed per repeat for train/validation selection;
+- `seed`: nonnegative base seed from which both per-repeat seed lists are derived;
+- `trainval_test_split_seeds` and `train_val_split_seeds`: persisted per-repeat seeds, normally generated rather than supplied directly;
 - `test_ratio`: fraction of each group held out for its own test set;
 - `requested_train_ratios`: nested training sizes as fractions of the train+validation pool;
 - `max_train_size`: cap on the largest requested training set;
 - `train_val_split_method`: `random` or `quests`; and
 - `quests_adapter_config`: a [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:39).
 
-Defaults are defined in [`src/temper/utils/defaults.py`](../src/temper/utils/defaults.py): the default data root is `./data`, metadata filename is `metadata.json`, test ratio is `0.2`, training ratios are `[0.1, 0.2, 0.4, 0.6, 0.8, 0.9]`, maximum training size is `3000`, and repeat count is `3`. Environment variables with the corresponding default names are read when that module is imported.
+Defaults are defined in [`src/temper/utils/defaults.py`](../src/temper/utils/defaults.py): the default data root is `./data`, split-results root is `./split_results`, metadata filename is `metadata.json`, test ratio is `0.2`, training ratios are `[0.1, 0.2, 0.4, 0.6, 0.8, 0.9]`, maximum training size is `3000`, and repeat count is `3`. Environment variables with the corresponding default names are read when that module is imported.
 
-When `SplitConfig()` is constructed without explicitly passing seed lists, its current default factories create empty lists. Provide seed lists with exactly `split_repeats` nonnegative integers for a usable, reproducible configuration. Passing `None` explicitly instead generates random seed values during configuration validation.
+Constructing `SplitConfig` with a base `seed` deterministically derives two seed lists of length `split_repeats`: one for train+validation/test partitioning and one for train/validation selection. If `seed` is omitted or `None`, a nonnegative base seed is generated and stored in the model so the resulting configuration remains reproducible.
 
 ## What each split does
 
@@ -74,7 +97,14 @@ At checkpoint index `i`, [`TrainValSplitTrajectory.get_train_set`](../src/temper
 
 ## Persistence and reconstruction
 
-[`SplitGroup`](../src/temper/schemas/split.py:318), [`SplitConfig`](../src/temper/splitting/split.py:128), and the other JSON models inherit JSON save/load helpers from [`JsonIOModel`](../src/temper/schemas/base.py:1). A split result persists references, not `ase.Atoms` objects or computed descriptors.
+[`SplitGroup`](../src/temper/schemas/split.py), [`SplitConfig`](../src/temper/schemas/split.py), and the other persisted schemas derive from [`MSONableModel`](../src/temper/schemas/base.py). Use Monty's `dumpfn` and `loadfn` to write and reconstruct them. A split result persists references, not `ase.Atoms` objects or computed descriptors.
+
+```python
+from monty.serialization import dumpfn, loadfn
+
+dumpfn(split_groups, "split_groups.json", indent=2)
+restored_split_groups = loadfn("split_groups.json")
+```
 
 A [`FrameReferenceResolver`](../src/temper/splitting/io.py:87) resolves each reference as `root_path / domain / filename`, protects against traversal outside that location, reads each source file at most once per resolver lifetime, and validates energy and forces. Treat frames returned through its cache as read-only.
 
@@ -85,10 +115,11 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 [`write_all_sets_in_split_group_to_extxyz`](../src/temper/splitting/io.py:608) reconstructs and writes every requested training checkpoint plus the group's own test set. It returns a list of [`TrainingUnit`](../src/temper/schemas/train_unit.py:9) records and the reusable resolver.
 
 - Exported names are deterministic and include domain, grouping strategy, group, method, role, frame count, and repeat ID.
-- Writes atomically replace existing generated files in `output_path`.
+- Dataset files are written under `output_path / split_group.domain`; writes atomically replace existing generated files.
 - `write_validation=False` by default; set it to `True` to write non-empty validation datasets.
 - `write_extra_tests=True` by default. In that mode, `all_split_groups` is required so the exporter can find and write the test sets of groups named in `extra_tested_groups`.
 - Extra test files are recorded alongside the ordinary test file in each returned `TrainingUnit`; they are not added to `SplitGroup.test_set` itself.
+- Each `TrainingUnit.root_path` is the shared results root, and its file validation resolves datasets beneath `root_path / domain`.
 
 ## QUESTS backend
 

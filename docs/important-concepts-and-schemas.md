@@ -50,7 +50,7 @@ An [`InfoEntry`](../src/temper/schemas/info.py:20) is the inventory record for *
 
 ## 2. Grouping: `GroupedDomain` and its constituent representations
 
-Grouping answers: **which source files should be pooled before making a split?** [`partition_domain_groups`](../src/temper/grouping/group.py:15) reads the `groupings` specifications from a domain's metadata and returns one [`GroupedDomain`](../src/temper/schemas/group.py:17) for each specification. It reuses previously loaded `InfoEntry` objects when processing additional specifications.
+Grouping answers: **which source files should be pooled before making a split?** [`partition_domain_into_groups`](../src/temper/grouping/group.py) reads the `groupings` specifications from a domain's metadata and returns one [`GroupedDomain`](../src/temper/schemas/group.py) for each specification. It reuses previously loaded `InfoEntry` objects when processing additional specifications.
 
 A `GroupedDomain` contains these related group-level representations:
 
@@ -72,7 +72,7 @@ A `SplitGroup` retains its own group's holdout set separately from extra tested 
 
 ## 3. Splitting: references, trajectories, and repeats
 
-[`split_grouped_domain`](../src/temper/splitting/split.py:233) performs the split for every group and every configured repeat. [`SplitConfig`](../src/temper/splitting/split.py:124) supplies the source root, repeat count, two seed lists, test ratio, requested training ratios, maximum training size, train/validation method, and [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:36).
+[`split_grouped_domain`](../src/temper/splitting/split.py) performs the split for every group and every configured repeat. [`SplitConfig`](../src/temper/schemas/split.py) supplies the source root, repeat count, a reproducible base seed, test ratio, requested training ratios, maximum training size, train/validation method, and [`QuestsAdapterConfig`](../src/temper/schemas/quests_adapter.py). The base seed deterministically derives and persists separate per-repeat seed lists for the two partitioning stages.
 
 For each `(group, repeat_id)` pair, the implementation first makes a seeded random train+validation versus test partition. Its own-group test size is `round(pool_size * test_ratio)` using Python's built-in rounding. It computes QUESTS descriptors for the whole group, then selects training frames from the train+validation partition using either `random` or `quests`. The result is one [`SplitGroup`](../src/temper/schemas/split.py:299), not a separate split object per requested training size.
 
@@ -114,7 +114,7 @@ A repeat is an independent train+validation/test split of the same group, indexe
 
 ## 4. Reference-based persistence and reconstruction
 
-The principal split schemas derive from [`JsonIOModel`](../src/temper/schemas/base.py:9), whose [`save_json`](../src/temper/schemas/base.py:12) and [`load_json`](../src/temper/schemas/base.py:20) methods serialize and validate JSON. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
+The principal split schemas derive from [`MSONableModel`](../src/temper/schemas/base.py), which combines Pydantic validation with Monty-compatible dictionaries. Persist them with `monty.serialization.dumpfn` and restore them with `loadfn`. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
 
 To use a persisted reference later, [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) resolves it as `root_path / domain / filename`. It validates the domain and resolved path boundaries, reads a source `.extxyz` file at most once for the resolver's lifetime, checks frame bounds, and verifies that each loaded frame has energy and forces labels. Reconstruction preserves reference order; cached source frames can be shared, so callers should treat them as read-only. The helpers [`load_frames_from_references`](../src/temper/splitting/io.py:250), [`load_frames_test`](../src/temper/splitting/io.py:302), and [`load_frames_train_validation`](../src/temper/splitting/io.py:346) provide the corresponding operations.
 
@@ -129,13 +129,13 @@ Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is the ex
 - It identifies one domain, grouping strategy, group, splitting method, repeat, and `n_train` checkpoint.
 - It points to exactly one training `.extxyz` file, an optional validation `.extxyz` file, and one or more test `.extxyz` files.
 - All identity fields, `repeat_id`, `n_train`, and dataset filenames are frozen after construction; only `root_path` can change to support moving exported artifacts.
-- Its validation ensures that every referenced dataset file exists beneath `root_path` and has the `.extxyz` extension.
+- Its validation ensures that every referenced dataset file exists beneath `root_path / domain` and has the `.extxyz` extension.
 
 All `TrainingUnit` objects made from a given `SplitGroup` share that split's own test file and any selected extra-test files, but differ in their nested training checkpoint and optional validation file. The class describes input datasets for a future training run; it does not create, execute, or evaluate that run.
 
 ## Implemented scope versus roadmap
 
-The implemented Python API covers metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. Training-job creation, MLFF training orchestration, benchmark evaluation, and metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). Therefore, `TrainingUnit` should be read as an exported training-data contract, not as evidence that TEMPER currently schedules or performs MLFF training.
+The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. Training-job creation, MLFF training orchestration, benchmark evaluation, and metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). Therefore, `TrainingUnit` should be read as an exported training-data contract, not as evidence that TEMPER currently schedules or performs MLFF training.
 
 ## Further reading
 
