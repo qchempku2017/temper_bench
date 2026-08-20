@@ -162,6 +162,12 @@ without Monty's `@module` and `@class` metadata.
 
 A [`FrameReferenceResolver`](../src/temper/splitting/io.py:87) resolves each reference as `root_path / domain / filename`, protects against traversal outside that location, reads each source file at most once per resolver lifetime, and validates energy and forces. Treat frames returned through its cache as read-only.
 
+Persisted `SplitGroup` records include a deterministic UUIDv5 `split_id`. It is
+derived from the materialized split definition rather than randomly generated.
+The ID is stored and verified once when loaded, so ordinary access does not
+rehash the frame-reference collections. Validated reassignment of a split field
+regenerates it; the derived entropy profile is excluded from identity.
+
 The lower-level reconstruction helpers are [`load_frames_from_references`](../src/temper/splitting/io.py:283), [`load_frames_test`](../src/temper/splitting/io.py:335), and [`load_frames_train_validation`](../src/temper/splitting/io.py:379). They preserve reference order and return both reconstructed frames and the resolver used.
 
 ## Export
@@ -174,6 +180,7 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 - `write_extra_tests=True` by default. In that mode, `all_split_groups` is required so the exporter can find and write the test sets of groups named in `extra_tested_groups`.
 - Extra test files are recorded alongside the ordinary test file in each returned `TrainingUnit`; they are not added to `SplitGroup.test_set` itself.
 - Each `TrainingUnit.root_path` is the shared results root, and its file validation resolves datasets beneath `root_path / domain`.
+- Each newly exported unit records its parent `split_id` and stores a deterministic UUIDv5 `training_unit_id`. Validated reassignment regenerates that ID, while relocating the excluded `root_path` leaves it unchanged.
 
 ## QUESTS backend
 

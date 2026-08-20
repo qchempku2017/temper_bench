@@ -112,9 +112,37 @@ The optional [`EntropyProfile`](../src/temper/schemas/split.py:112) records orde
 
 A repeat is an independent train+validation/test split of the same group, indexed by `repeat_id`. Repeats are orthogonal to checkpoints: each repeat has one trajectory with many nested checkpoints. The schema checks that all train, validation, and test references have the declared domain, do not duplicate one another, and that the test-set size matches the requested ratio calculation.
 
+Every `SplitGroup` stores a system-managed `split_id`. This deterministic UUIDv5 fingerprints the materialized split definition, including its provenance, frame membership, repeat, and QUESTS configuration, but excluding the derived entropy profile. A serialized ID is verified once when loaded and then reused. Validated reassignment of an identity-defining field regenerates it; tuple-backed reference collections prevent undetected `append`-style mutation and can be replaced as whole fields. Cross-test group order is normalized because it is not semantically significant.
+
 ## 4. Reference-based persistence and reconstruction
 
-The principal split schemas derive from [`MSONableModel`](../src/temper/schemas/base.py), which combines Pydantic validation with Monty-compatible dictionaries. Persist them with `monty.serialization.dumpfn` and restore them with `loadfn`. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
+The principal split schemas derive from [`MSONableModel`](../src/temper/schemas/base.py), which combines Pydantic validation with Monty-compatible dictionaries. Identity-bearing aggregate roots use its `ManagedIdentityModel` child, which centralizes stored-ID verification, assignment regeneration, and validated copying. Persist them with `monty.serialization.dumpfn` and restore them with `loadfn`. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
+
+### Developing a `ManagedIdentityModel` subclass
+
+A new persisted aggregate with a managed identity should declare the UUID field as a normal Pydantic field and configure the identity lifecycle through class variables:
+
+```python
+class ExampleRecord(ManagedIdentityModel):
+    _IDENTITY_FIELD_NAME = "example_id"
+    _IDENTITY_SOURCE_FIELDS = (
+        "domain",
+        "nested_record.method",
+    )
+    _IDENTITY_NAMESPACE = UUID("...")
+    _IDENTITY_SCHEMA = "temper.example-record.v1"
+    _IDENTITY_LABEL = "example record"
+
+    domain: str
+    nested_record: NestedRecord
+    example_id: UUID | None = None
+```
+
+`_IDENTITY_SOURCE_FIELDS` accepts simple field names and dotted attribute paths. The base class builds the nested canonical payload, derives which top-level assignments invalidate the ID, verifies a loaded ID, computes a missing ID, and serializes the managed UUID as a string. Give each logical schema its own fixed namespace and increment `_IDENTITY_SCHEMA` only when intentionally changing identity semantics. Declare only the required nested trajectory fields rather than their containing model when derived or presentation-only fields must be excluded.
+
+If a source collection has schema-specific equivalence rules, declare the smallest necessary callable in `_IDENTITY_SOURCE_NORMALIZERS`. For example, `SplitGroup.extra_tested_groups` is sorted and deduplicated because cross-test order is not meaningful. Ordered frame collections are not normalized this way because their order is part of their identity.
+
+There is one required validation convention. Do not add an independent `@model_validator(mode="after")` or `mode="wrap"` validator to a `ManagedIdentityModel` subclass, and do not override `_finalize_managed_identity`. Override `_validate_before_identity()` for cross-field or model-wide checks instead, raising `ValueError` for invalid state. The inherited `_finalize_managed_identity` validator calls that hook first and only then verifies or generates the ID. Field validators and `mode="before"` model validators remain appropriate for parsing and individual-field normalization. The base class rejects incompatible validator declarations when a subclass is created, preventing identity from being finalized before subclass consistency checks have completed.
 
 To use a persisted reference later, [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) resolves it as `root_path / domain / filename`. It validates the domain and resolved path boundaries, reads a source `.extxyz` file at most once for the resolver's lifetime, checks frame bounds, and verifies that each loaded frame has energy and forces labels. Reconstruction preserves reference order; cached source frames can be shared, so callers should treat them as read-only. The helpers [`load_frames_from_references`](../src/temper/splitting/io.py:250), [`load_frames_test`](../src/temper/splitting/io.py:302), and [`load_frames_train_validation`](../src/temper/splitting/io.py:346) provide the corresponding operations.
 
@@ -128,10 +156,13 @@ Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is the ex
 
 - It identifies one domain, grouping strategy, group, splitting method, repeat, and `n_train` checkpoint.
 - It points to exactly one training `.extxyz` file, an optional validation `.extxyz` file, and one or more test `.extxyz` files.
-- All identity fields, `repeat_id`, `n_train`, and dataset filenames are frozen after construction; only `root_path` can change to support moving exported artifacts.
+- It records the `split_id` of the `SplitGroup` that produced it and stores its own system-managed, deterministic `training_unit_id`.
+- Its fields remain mutable through validated reassignment. Reassigning an identity-defining field regenerates `training_unit_id`; changing only `root_path` does not.
 - Its validation ensures that every referenced dataset file exists beneath `root_path / domain` and has the `.extxyz` extension.
 
 All `TrainingUnit` objects made from a given `SplitGroup` share that split's own test file and any selected extra-test files, but differ in their nested training checkpoint and optional validation file. The class describes input datasets for a future training run; it does not create, execute, or evaluate that run.
+
+The `training_unit_id` fingerprints the parent split identity and the unit's dataset contract, but deliberately excludes `root_path`; moving an exported tree therefore does not rename its logical units. The stored value is verified once during loading and reused afterward. Older manifests without IDs remain loadable and receive stable identities from their existing fields, but only newly exported units can distinguish identical coordinates produced by different split definitions.
 
 ## Implemented scope versus roadmap
 
