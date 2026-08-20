@@ -108,7 +108,7 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
     split = result[0]
     trajectory = split.train_val_split_trajectory
     assert len(split.test_set) == 2
-    assert trajectory.requested_train_sizes == [2, 4]
+    assert trajectory.requested_train_sizes == (2, 4)
     assert len(trajectory.selected_frames) == 4
     assert len(trajectory.additional_trainval_frames) == 4
     assert {ref.identity for ref in split.test_set}.isdisjoint(ref.identity for ref in trajectory.selected_frames + trajectory.additional_trainval_frames)
@@ -154,7 +154,7 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
     )
     automatic_splits = split_grouped_domain(automatic, config)
     assert {split.group_name: split.extra_tested_groups for split in automatic_splits} == {
-        "left": ["right"], "right": ["left"],
+        "left": ("right",), "right": ("left",),
     }
 
     specified = GroupedDomain(
@@ -163,7 +163,7 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
     )
     specified_splits = split_grouped_domain(specified, config)
     assert {split.group_name: split.extra_tested_groups for split in specified_splits} == {
-        "left": ["right"], "right": [],
+        "left": ("right",), "right": (),
     }  # Automatically deduplicated.
 
 

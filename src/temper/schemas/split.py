@@ -3,11 +3,18 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Literal, Tuple, ClassVar, Any
+from uuid import UUID
 
 import numpy as np
-from pydantic import field_serializer, field_validator, model_validator, Field, ConfigDict
+from pydantic import (
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
-from src.temper.schemas.base import MSONableModel
+from src.temper.schemas.base import ManagedIdentityModel, MSONableModel
 from src.temper.schemas.quests_adapter import QuestsAdapterConfig
 from src.temper.utils.defaults import (
     DEFAULT_DATA_DIR,
@@ -19,6 +26,9 @@ from src.temper.utils.defaults import (
 )
 from src.temper.schemas.entropy import EntropyProfile
 from src.temper.schemas.frame_refrence import FrameReference
+
+
+_SPLIT_ID_NAMESPACE = UUID("c04a0d94-c7f1-5ef4-b45e-1f9de274c99d")
 
 
 class SplitConfig(MSONableModel):
@@ -171,7 +181,7 @@ class TrainValSplitTrajectory(MSONableModel):
 
     Both the ``"random"`` method and the ``"quests"`` (QUESTS
     maximum-entropy) method use this single output convention: an ordered
-    ``selected_frames`` list plus ordered ``additional_trainval_frames`` form
+    ``selected_frames`` tuple plus ordered ``additional_trainval_frames`` form
     the complete train/validation inventory. Prefixes of ``selected_frames``
     define nested training sets at strictly increasing
     ``requested_train_sizes``.
@@ -185,25 +195,29 @@ class TrainValSplitTrajectory(MSONableModel):
         seed (int | None): Random seed when partitioning train and val.
             Required for both methods as they both contain random initialization.
             And ``"random"`` further uses it at every incremental selection step.
-        requested_train_sizes (list[int]): Strictly increasing requested
+        requested_train_sizes (tuple[int, ...]): Strictly increasing requested
             training sizes. Each is the size of a nested training prefix.
-        selected_frames (list[temper.schemas.frame_refrence.FrameReference]): Ordered selected-frame list;
+        selected_frames (tuple[temper.schemas.frame_refrence.FrameReference, ...]): Ordered selected-frame tuple;
             the first ``s`` frames form the training set of size ``s``.
-        additional_trainval_frames (list[temper.schemas.frame_refrence.FrameReference] | None): Additional frames in
+        additional_trainval_frames (tuple[temper.schemas.frame_refrence.FrameReference, ...]): Additional frames in
             the original train+val dataset but not selected in ``selected_frames``.
-            Will go into the validation set. Empty list by default.
+            Will go into the validation set. Empty tuple by default.
         entropy_profile (temper.schemas.entropy.EntropyProfile | None): QUESTS maximum-entropy
             profile with one point per incremental selection step.
             ``None`` before evaluation; a complete profile once evaluated.
     """
     #: Supported train-val splitting methods.
     SUPPORTED_TRAIN_VAL_SPLIT_METHODS: ClassVar[Tuple[str, ...]] = ("random", "quests")
+    model_config = ConfigDict(validate_assignment=True)
 
     method: Literal["random", "quests"]
     seed: int | None = None
-    requested_train_sizes: List[int]
-    selected_frames: List[FrameReference]
-    additional_trainval_frames: List[FrameReference] = Field(default_factory=list)
+
+    requested_train_sizes: Tuple[int, ...]
+    selected_frames: Tuple[FrameReference, ...]
+    additional_trainval_frames: Tuple[FrameReference, ...] = Field(
+        default_factory=tuple
+    )
     entropy_profile: EntropyProfile | None = None
 
     @model_validator(mode="after")
@@ -275,7 +289,11 @@ class TrainValSplitTrajectory(MSONableModel):
         list[FrameReference]
             Ordered training set references.
         """
-        return self.selected_frames[:self.requested_train_sizes[requested_train_size_index]]
+        return list(
+            self.selected_frames[
+                :self.requested_train_sizes[requested_train_size_index]
+            ]
+        )
 
     def get_val_set(
         self,
@@ -299,10 +317,13 @@ class TrainValSplitTrajectory(MSONableModel):
             additional_trainval_frames.
         """
         size = self.requested_train_sizes[requested_train_size_index]
-        return self.selected_frames[size:] + self.additional_trainval_frames
+        return [
+            *self.selected_frames[size:],
+            *self.additional_trainval_frames,
+        ]
 
 
-class SplitGroup(MSONableModel):
+class SplitGroup(ManagedIdentityModel):
     """Persisted top-level result of splitting a data group.
 
     This is the persisted (reference-only) result schema for splitting a
@@ -314,14 +335,24 @@ class SplitGroup(MSONableModel):
     Only frame references are stored; structures and descriptors are never
     stored.
 
+    ``split_id`` is a stored, system-managed UUIDv5 identity for the complete
+    persisted split definition. It is computed for legacy objects without an
+    ID, verified once when an ID is loaded, and regenerated after validated
+    reassignment of an identity-defining field.
+
+    Identity-bearing collections are stored as tuples. To change trajectory
+    membership on an existing split, build a replacement trajectory and
+    assign it to ``train_val_split_trajectory`` so the parent can validate the
+    change and regenerate ``split_id``.
+
     Attributes:
         domain (str): Name of the data domain.
         grouping_strategy (str): Name of the grouping strategy used.
         group_name (str): Name of the group that was split.
-        test_set (list[FrameReference]): Test references within the current group
+        test_set (tuple[FrameReference, ...]): Test references within the current group
             only. Does not include extra cross tests from other groups!
             Merging of extra cross tests is done by higher-level callers.
-        extra_tested_groups (List(str)): Name of extra groups that should be tested
+        extra_tested_groups (tuple[str, ...]): Names of extra groups that should be tested
             on the model trained from the current group's split.
             Should belong to the same domain and same grouping strategy as the
             current group for correct reference.
@@ -339,17 +370,45 @@ class SplitGroup(MSONableModel):
             schema was produced without any QUESTS evaluation (kept for
             backward compatibility with schemas persisted before this field
             was added).
+        split_id (UUID | None): Stored, system-managed identity. ``None`` is
+            accepted only as construction input for legacy records and is
+            populated before a valid model is returned.
     """
+    _IDENTITY_FIELD_NAME: ClassVar[str] = "split_id"
+    _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "domain",
+        "grouping_strategy",
+        "group_name",
+        "test_set",
+        "extra_tested_groups",
+        "test_ratio",
+        "trainval_test_split_seed",
+        "train_val_split_trajectory.method",
+        "train_val_split_trajectory.seed",
+        "train_val_split_trajectory.requested_train_sizes",
+        "train_val_split_trajectory.selected_frames",
+        "train_val_split_trajectory.additional_trainval_frames",
+        "repeat_id",
+        "quests_adapter_config",
+    )
+    _IDENTITY_SOURCE_NORMALIZERS: ClassVar[dict[str, Any]] = {
+        "extra_tested_groups": lambda groups: sorted(set(groups)),
+    }
+    _IDENTITY_NAMESPACE: ClassVar[UUID] = _SPLIT_ID_NAMESPACE
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.split-group.v2"
+    _IDENTITY_LABEL: ClassVar[str] = "split"
+
     domain: str
     grouping_strategy: str
     group_name: str
-    test_set: List[FrameReference]
-    extra_tested_groups: List[str]
+    test_set: Tuple[FrameReference, ...]
+    extra_tested_groups: Tuple[str, ...]
     test_ratio: float
     trainval_test_split_seed: int
     train_val_split_trajectory: TrainValSplitTrajectory
     repeat_id: int = 0
     quests_adapter_config: "QuestsAdapterConfig | None" = None
+    split_id: UUID | None = None
 
     @field_validator("test_ratio")
     @classmethod
@@ -367,9 +426,8 @@ class SplitGroup(MSONableModel):
             raise ValueError(f"repeat_id must be non-negative, got {value}.")
         return value
 
-    @model_validator(mode="after")
-    def validate_split_result(self) -> "SplitGroup":
-        """Validate internal consistency of a persisted split result."""
+    def _validate_before_identity(self) -> None:
+        """Validate internal consistency before finalizing ``split_id``."""
         # Check testing set size.
         references = [
             *self.train_val_split_trajectory.selected_frames,
@@ -401,5 +459,3 @@ class SplitGroup(MSONableModel):
         identities = [ref.identity for ref in references]
         if len(set(identities)) != len(identities):
             raise ValueError("Train, val and test sets must not contain duplicate frames.")
-
-        return self

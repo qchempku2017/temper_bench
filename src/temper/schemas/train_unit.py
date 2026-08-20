@@ -1,14 +1,23 @@
 """Defines the schema for a written training unit and the extxyz train, validation, and test files it references."""
 
-from typing import List
+from typing import Any, ClassVar
 from pathlib import Path
-from pydantic import model_validator, ConfigDict, Field
+from uuid import UUID
 
-from src.temper.schemas.base import MSONableModel
+from pydantic import (
+    Field,
+    field_serializer,
+    field_validator,
+)
+
+from src.temper.schemas.base import ManagedIdentityModel
 from src.temper.utils.defaults import DEFAULT_SPLIT_RESULTS_DIR
 
 
-class TrainingUnit(MSONableModel):
+_TRAINING_UNIT_ID_NAMESPACE = UUID("a219bd97-5b63-5dc1-8543-38d74c746ecf")
+
+
+class TrainingUnit(ManagedIdentityModel):
     """Schema to define a unit containing a training set, validation set (optional) and test sets.
 
     A unit belongs to:
@@ -28,8 +37,10 @@ class TrainingUnit(MSONableModel):
     Usually produced by src.temper.splitting.io ``write_all_sets_in_split_group_to_extxyz``.
     Can be used to reference files when prepraing for MLFF training.
 
-    All attributes except ``root_path`` are NOT allowed to change after initialization, because file names
-    will not change after written, but the root path can be moved to different locations.
+    Fields remain mutable through validated reassignment. The system-managed
+    ``training_unit_id`` is stored, verified when loaded, and regenerated when
+    an identity-defining field changes. ``root_path`` can be relocated without
+    changing the identity.
 
     Attributes:
         domain: str
@@ -44,10 +55,18 @@ class TrainingUnit(MSONableModel):
             Repeat id of the independent train-val-test split.
         n_train: int
             Number of training structures.
+        split_id: UUID | None
+            Identity of the SplitGroup that produced this unit. ``None`` is
+            accepted for training-unit manifests written before split
+            identities were introduced.
+        training_unit_id: UUID | None
+            Stored, system-managed identity. ``None`` is accepted only as
+            construction input for legacy records and is populated before a
+            valid model is returned.
         train_set : str
             Filename of the training set.
-        test_sets : List[str]
-            List of filenames of the test sets.
+        test_sets : tuple[str, ...]
+            Filenames of the test sets.
         val_set : str | None
             Filename of the validation set.
         root_path: Path
@@ -56,44 +75,78 @@ class TrainingUnit(MSONableModel):
             rootpath / domain / test_sets.
             Defaults to ``DEFAULT_SPLIT_DATA_DIR``. See src.temper.utils.defaults.
     """
-    model_config = ConfigDict(
-        validate_assignment=True,
+    _IDENTITY_FIELD_NAME: ClassVar[str] = "training_unit_id"
+    _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "split_id",
+        "domain",
+        "grouping_strategy",
+        "group_name",
+        "method",
+        "repeat_id",
+        "n_train",
+        "train_set",
+        "test_sets",
+        "val_set",
     )
+    _IDENTITY_NAMESPACE: ClassVar[UUID] = _TRAINING_UNIT_ID_NAMESPACE
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.training-unit.v1"
+    _IDENTITY_LABEL: ClassVar[str] = "training-unit"
 
-    domain: str = Field(frozen=True)
-    grouping_strategy: str = Field(frozen=True)
-    group_name: str = Field(frozen=True)
-    method: str = Field(frozen=True)
+    domain: str
+    grouping_strategy: str
+    group_name: str
+    method: str
 
     repeat_id: int = Field(
         ge=0,
-        frozen=True,
     )
 
     n_train: int = Field(
         ge=1,
-        frozen=True,
     )
 
-    train_set: str = Field(frozen=True)
+    split_id: UUID | None = None
 
-    test_sets: List[str] = Field(
-        frozen=True,
-    )
+    train_set: str
 
-    val_set: str | None = Field(
-        default=None,
-        frozen=True,
-    )
+    test_sets: tuple[str, ...]
+
+    val_set: str | None = None
 
     root_path: Path = Field(
         default=DEFAULT_SPLIT_RESULTS_DIR,
         validate_default=True,
     )
+    training_unit_id: UUID | None = None
 
-    @model_validator(mode="after")
-    def validate_dataset_files(self) -> "TrainingUnit":
-        """Validate that all referenced dataset files exist and are extxyz."""
+    @field_serializer("root_path")
+    def serialize_root_path(self, value: Path) -> str:
+        """Serialize the movable root as a portable path string."""
+        return str(value)
+
+    @field_serializer("split_id")
+    def serialize_split_id(self, value: UUID | None) -> str | None:
+        """Serialize the parent identity as a standard UUID string."""
+        return None if value is None else str(value)
+
+    @field_validator("root_path", mode="before")
+    @classmethod
+    def load_monty_root_path(cls, value: Any) -> Any:
+        """Accept path dictionaries written by earlier Monty encoders."""
+        if isinstance(value, dict) and value.get("@module") == "pathlib":
+            return value.get("string", value)
+        return value
+
+    @field_validator("split_id", mode="before")
+    @classmethod
+    def load_monty_split_id(cls, value: Any) -> Any:
+        """Accept UUID dictionaries written by Monty encoders."""
+        if isinstance(value, dict) and value.get("@module") == "uuid":
+            return value.get("string", value)
+        return value
+
+    def _validate_before_identity(self) -> None:
+        """Validate referenced dataset files before finalizing identity."""
 
         def _check_extxyz_file(f: str) -> None:
             file_path = self.root_path / self.domain / f
@@ -116,5 +169,3 @@ class TrainingUnit(MSONableModel):
 
         for filename in self.test_sets:
             _check_extxyz_file(filename)
-
-        return self

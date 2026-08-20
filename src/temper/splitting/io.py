@@ -736,7 +736,8 @@ def write_all_sets_in_split_group_to_extxyz(
             grouping_strategy=split_group.grouping_strategy,
             method=split_group.train_val_split_trajectory.method,
             repeat_id=split_group.repeat_id,
-            n_train=split_group.train_val_split_trajectory.requested_train_sizes[i]
+            n_train=split_group.train_val_split_trajectory.requested_train_sizes[i],
+            split_id=split_group.split_id,
         )
         for i in range(len(train_files))
     ]

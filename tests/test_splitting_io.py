@@ -76,11 +76,14 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
     source.mkdir(parents=True)
     write(source / "frames.extxyz", [make_frame("H", -float(index), str(index)) for index in range(10)], format="extxyz")
     output = tmp_path / "out"
+    split_group = _split_group()
     units, resolver = write_all_sets_in_split_group_to_extxyz(
-        _split_group(), root_path=source.parent, output_path=output,
+        split_group, root_path=source.parent, output_path=output,
         write_validation=True, write_extra_tests=False,
     )  # TODO: add test cases where extra_tests are correctly treated.
     assert len(units) == 2
+    assert all(unit.split_id == split_group.split_id for unit in units)
+    assert len({unit.training_unit_id for unit in units}) == 2
     assert [(unit.n_train, unit.val_set is not None) for unit in units] == [(2, True), (4, True)]
     assert [len(read(output / unit.domain / unit.train_set, index=":")) for unit in units] == [2, 4]
     assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in units if unit.val_set] == [6, 4]

@@ -3,14 +3,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar, Self
+from uuid import UUID
 
 import pytest
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from monty.serialization import dumpfn, loadfn
-from pydantic import ValidationError
+from pydantic import ValidationError, model_validator
 
 from src.temper.schemas.group import GroupedDomain
+from src.temper.schemas.base import ManagedIdentityModel, MSONableModel
 from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
 from src.temper.schemas.split import (
     SplitGroup,
@@ -40,6 +43,34 @@ def references() -> list[FrameReference]:
     return [FrameReference(domain="domain", filename="sample.extxyz", frame_index=i) for i in range(4)]
 
 
+class NestedIdentitySource(MSONableModel):
+    selected: int
+    ignored: int = 0
+
+
+class DeclarativeIdentityModel(ManagedIdentityModel):
+    _IDENTITY_FIELD_NAME: ClassVar[str] = "record_id"
+    _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "name",
+        "nested.selected",
+        "must_be_positive",
+    )
+    _IDENTITY_NAMESPACE: ClassVar[UUID] = UUID(
+        "86ff3ebd-664c-59af-bf36-36a30fe49d63"
+    )
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.test-record.v1"
+    _IDENTITY_LABEL: ClassVar[str] = "test record"
+
+    name: str
+    nested: NestedIdentitySource
+    must_be_positive: int
+    record_id: UUID | None = None
+
+    def _validate_before_identity(self) -> None:
+        if self.must_be_positive <= 0:
+            raise ValueError("must_be_positive must be positive")
+
+
 def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
     info = InfoEntry(**required_info(), description="deterministic")
     refs = references()
@@ -59,6 +90,9 @@ def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
         path = tmp_path / f"{type(model).__name__}.json"
         dumpfn(model, path, indent=2)
         assert loadfn(path) == model
+        if isinstance(model, SplitGroup):
+            serialized = json.loads(path.read_text(encoding="utf-8"))
+            assert serialized["split_id"] == str(model.split_id)
 
 
 def test_atom_property_helpers_validate_and_report_common_properties() -> None:
@@ -176,15 +210,120 @@ def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions() -> No
         EntropyProfile(points=[EntropyProfilePoint(training_size=2, cumulative_entropy=0, information_gain=0), EntropyProfilePoint(training_size=1, cumulative_entropy=0, information_gain=0)])
 
 
-def test_training_unit_validates_files_immutability_and_movable_root(tmp_path: Path) -> None:
+def test_split_identity_is_deterministic_and_tracks_split_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    refs = references()
+    trajectory = TrainValSplitTrajectory(
+        method="random",
+        seed=4,
+        requested_train_sizes=[1, 2],
+        selected_frames=refs[:3],
+        additional_trainval_frames=[],
+    )
+    split = SplitGroup(
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        test_set=[refs[3]],
+        extra_tested_groups=["beta", "alpha"],
+        test_ratio=0.25,
+        trainval_test_split_seed=1,
+        train_val_split_trajectory=trajectory,
+    )
+
+    reconstructed = SplitGroup.model_validate(split.model_dump())
+    reordered_cross_tests = split.model_copy(
+        update={"extra_tested_groups": ["alpha", "beta"]}
+    )
+    different_seed = split.model_copy(update={"trainval_test_split_seed": 2})
+
+    assert "split_id" in SplitGroup.model_fields
+    assert split.split_id.version == 5
+    assert split.split_id == UUID("19400556-c9e7-57f4-aed3-b16101ff3840")
+    assert reconstructed.split_id == split.split_id
+    assert reordered_cross_tests.split_id == split.split_id
+    assert different_seed.split_id != split.split_id
+
+    original_id = split.split_id
+    split.trainval_test_split_seed = 2
+    assert split.split_id != original_id
+    changed_id = split.split_id
+    with pytest.raises(ValidationError, match="test_ratio"):
+        split.test_ratio = 0
+    assert split.test_ratio == 0.25
+    assert split.split_id == changed_id
+
+    with pytest.raises(AttributeError, match="system-managed"):
+        split.split_id = original_id
+    with pytest.raises(AttributeError):
+        split.test_set.append(refs[0])  # type: ignore[attr-defined]
+
+    before_membership_change = split.split_id
+    split.test_set = [
+        FrameReference(
+            domain="domain",
+            filename="sample.extxyz",
+            frame_index=4,
+        )
+    ]
+    assert isinstance(split.test_set, tuple)
+    assert split.split_id != before_membership_change
+
+    before_entropy_change = split.split_id
+    split.train_val_split_trajectory = trajectory.model_copy(update={
+        "entropy_profile": EntropyProfile(points=[
+            EntropyProfilePoint(
+                training_size=1,
+                cumulative_entropy=1.0,
+                information_gain=1.0,
+            )
+        ])
+    })
+    assert split.split_id == before_entropy_change
+
+    serialized = split.model_dump(mode="json")
+    serialized["split_id"] = str(original_id)
+    with pytest.raises(ValidationError, match="does not match split contents"):
+        SplitGroup.model_validate(serialized)
+
+    stored_id = split.split_id
+
+    def unexpected_recomputation(_: SplitGroup) -> UUID:
+        raise AssertionError("stored split_id should be reused")
+
+    monkeypatch.setattr(SplitGroup, "_compute_identity", unexpected_recomputation)
+    assert split.split_id == stored_id
+    assert split.model_dump(mode="json")["split_id"] == str(stored_id)
+
+
+def test_training_unit_validates_files_identity_updates_and_movable_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "sets"
     domain_root = root / "domain"
     domain_root.mkdir(parents=True)
     for name in ("train.extxyz", "val.extxyz", "test.extxyz"):
         (domain_root / name).write_text("", encoding="utf-8")
-    unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=root)
+    split_id = UUID("70f7b0c5-1894-5964-8e7c-89454fb0f52a")
+    unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, split_id=split_id, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=root)
+    original_training_unit_id = unit.training_unit_id
+    assert "training_unit_id" in TrainingUnit.model_fields
+    assert unit.training_unit_id.version == 5
+    assert unit.training_unit_id == UUID("83586d3e-01ff-5bd6-b440-be69cfb8b803")
+    unit.n_train = 2
+    assert unit.n_train == 2
+    assert unit.training_unit_id != original_training_unit_id
+    updated_training_unit_id = unit.training_unit_id
     with pytest.raises(ValidationError):
-        unit.n_train = 2
+        unit.n_train = 0
+    assert unit.n_train == 2
+    assert unit.training_unit_id == updated_training_unit_id
+    with pytest.raises(AttributeError, match="system-managed"):
+        unit.training_unit_id = original_training_unit_id
+    with pytest.raises(AttributeError):
+        unit.test_sets.append("other.extxyz")  # type: ignore[attr-defined]
     moved_root = tmp_path / "moved"
     moved_domain_root = moved_root / "domain"
     moved_domain_root.mkdir(parents=True)
@@ -192,5 +331,115 @@ def test_training_unit_validates_files_immutability_and_movable_root(tmp_path: P
         (moved_domain_root / name).write_text("", encoding="utf-8")
     unit.root_path = moved_root
     assert unit.root_path == moved_root
+    assert unit.training_unit_id == updated_training_unit_id
+
+    manifest = tmp_path / "training_unit.json"
+    dumpfn(unit, manifest, indent=2)
+    serialized = json.loads(manifest.read_text(encoding="utf-8"))
+    assert serialized["split_id"] == str(split_id)
+    assert serialized["training_unit_id"] == str(updated_training_unit_id)
+    loaded = loadfn(manifest)
+    assert loaded.split_id == split_id
+    assert loaded.training_unit_id == updated_training_unit_id
+
+    other_split = unit.model_copy(
+        update={"split_id": UUID("fcb30cc1-5e4c-5bb4-9c08-e932938b3c50")}
+    )
+    assert other_split.training_unit_id != unit.training_unit_id
+
+    legacy_unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=moved_root)
+    assert legacy_unit.split_id is None
+    legacy_payload = legacy_unit.model_dump()
+    legacy_payload.pop("training_unit_id")
+    assert TrainingUnit.model_validate(legacy_payload).training_unit_id == legacy_unit.training_unit_id
+
+    tampered_payload = unit.model_dump(mode="json")
+    tampered_payload["n_train"] = 3
+    with pytest.raises(ValidationError, match="does not match training-unit contents"):
+        TrainingUnit.model_validate(tampered_payload)
     with pytest.raises(ValidationError, match="does not exist"):
         TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="missing.extxyz", test_sets=[], root_path=root)
+
+    stored_id = unit.training_unit_id
+
+    def unexpected_recomputation(_: TrainingUnit) -> UUID:
+        raise AssertionError("stored training_unit_id should be reused")
+
+    monkeypatch.setattr(
+        TrainingUnit,
+        "_compute_identity",
+        unexpected_recomputation,
+    )
+    assert unit.training_unit_id == stored_id
+    assert unit.model_dump(mode="json")["training_unit_id"] == str(stored_id)
+
+
+def test_managed_identity_subclass_is_declarative_and_uses_validation_hook() -> None:
+    record = DeclarativeIdentityModel(
+        name="alpha",
+        nested=NestedIdentitySource(selected=1, ignored=10),
+        must_be_positive=1,
+    )
+
+    assert "_identity_payload" not in DeclarativeIdentityModel.__dict__
+    assert "_finalize_managed_identity" not in DeclarativeIdentityModel.__dict__
+    assert record._identity_payload() == {
+        "identity_schema": "temper.test-record.v1",
+        "name": "alpha",
+        "nested": {"selected": 1},
+        "must_be_positive": 1,
+    }
+    assert record.model_dump()["record_id"] == str(record.record_id)
+
+    original_id = record.record_id
+    record.nested = NestedIdentitySource(selected=1, ignored=20)
+    assert record.record_id == original_id
+    record.nested = NestedIdentitySource(selected=2, ignored=20)
+    assert record.record_id != original_id
+
+    valid_id = record.record_id
+    with pytest.raises(ValidationError, match="must_be_positive"):
+        record.must_be_positive = 0
+    assert record.must_be_positive == 1
+    assert record.record_id == valid_id
+
+    with pytest.raises(ValidationError, match="must_be_positive"):
+        DeclarativeIdentityModel(
+            name="invalid",
+            nested=NestedIdentitySource(selected=1),
+            must_be_positive=0,
+        )
+
+
+def test_managed_identity_rejects_invalid_developer_configuration() -> None:
+    with pytest.raises(TypeError, match="missing model field 'missing'"):
+
+        class MissingIdentitySource(ManagedIdentityModel):
+            _IDENTITY_FIELD_NAME: ClassVar[str] = "record_id"
+            _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = ("missing",)
+            _IDENTITY_NAMESPACE: ClassVar[UUID] = UUID(
+                "cc8f743e-8371-5780-8b24-c11fb4d93510"
+            )
+            _IDENTITY_SCHEMA: ClassVar[str] = "temper.invalid-record.v1"
+            _IDENTITY_LABEL: ClassVar[str] = "invalid record"
+
+            value: int
+            record_id: UUID | None = None
+
+    with pytest.raises(TypeError, match="_validate_before_identity"):
+
+        class InvalidAfterValidator(ManagedIdentityModel):
+            _IDENTITY_FIELD_NAME: ClassVar[str] = "record_id"
+            _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = ("value",)
+            _IDENTITY_NAMESPACE: ClassVar[UUID] = UUID(
+                "bc7f0ca1-c4b5-52b1-863e-b3179b20984f"
+            )
+            _IDENTITY_SCHEMA: ClassVar[str] = "temper.invalid-record.v1"
+            _IDENTITY_LABEL: ClassVar[str] = "invalid record"
+
+            value: int
+            record_id: UUID | None = None
+
+            @model_validator(mode="after")
+            def validate_value(self) -> Self:
+                return self
