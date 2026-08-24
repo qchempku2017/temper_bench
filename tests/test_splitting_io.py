@@ -7,10 +7,10 @@ import pytest
 from ase.io import read, write
 
 from conftest import make_frame
-from src.temper.schemas.split import SplitGroup, TrainValSplitTrajectory
-from src.temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.splitting.io import FrameReferenceResolver, build_export_filename, load_frames_from_references, write_all_sets_in_split_group_to_extxyz
+from temper.schemas.split import SplitGroup, TrainValSplitTrajectory
+from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
+from temper.schemas.frame_refrence import FrameReference
+from temper.splitting.io import FrameReferenceResolver, build_export_filename, load_frames_from_references, write_all_sets_in_split_group_to_extxyz
 
 
 def _refs() -> list[FrameReference]:
@@ -49,7 +49,7 @@ def test_resolver_cache_preserves_reference_order_and_rejects_escapes(monkeypatc
     source.mkdir()
     filename = source / "frames.extxyz"
     write(filename, [make_frame("H", -1.0, "first"), make_frame("He", -2.0, "second")], format="extxyz")
-    import src.temper.splitting.io as io_module
+    import temper.splitting.io as io_module
     original_read = io_module.read
     calls: list[Path] = []
 
@@ -116,7 +116,7 @@ def test_export_includes_cross_tests_only_when_requested(
         other, root_path=source.parent, output_path=with_extra_output,
         write_extra_tests=False,
     )
-    import src.temper.splitting.io as io_module
+    import temper.splitting.io as io_module
     original_write = io_module.write_atoms_list_to_extxyz
     written_groups: list[str] = []
 

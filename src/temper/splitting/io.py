@@ -9,10 +9,10 @@ from typing import Dict, List, Tuple
 from ase import Atoms
 from ase.io import read, write
 
-from src.temper.schemas.split import SplitGroup
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.schemas.train_unit import TrainingUnit
-from src.temper.utils.defaults import (
+from temper.schemas.split import SplitGroup
+from temper.schemas.frame_refrence import FrameReference
+from temper.schemas.train_unit import TrainingUnit
+from temper.utils.defaults import (
     DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_DATA_DIR,
 )

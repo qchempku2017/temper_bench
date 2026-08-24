@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from src.temper.utils.defaults import (
+from temper.utils.defaults import (
     DEFAULT_MAX_N_TRAIN,
     DEFAULT_TRAIN_RATIOS,
 )

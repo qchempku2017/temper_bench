@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 
-from src.temper.splitting.quests_adapter import QuestsAdapter, QuestsAdapterConfig, QuestsDescriptorsStorage, QuestsNumericalError, compute_information_gain_per_candidate_frame
+from temper.splitting.quests_adapter import QuestsAdapter, QuestsAdapterConfig, QuestsDescriptorsStorage, QuestsNumericalError, compute_information_gain_per_candidate_frame
 
 
 def test_descriptor_storage_slices_and_information_gain_aggregate_per_frame() -> None:
@@ -70,7 +70,7 @@ def test_auto_device_uses_gpu_when_available(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_defaults_environment_parsing_and_public_exports(monkeypatch: pytest.MonkeyPatch) -> None:
-    import src.temper.utils.defaults as defaults
+    import temper.utils.defaults as defaults
     monkeypatch.setenv("DEFAULT_TEST_RATIO", "0.35")
     monkeypatch.setenv("DEFAULT_MAX_N_TRAIN", "12")
     monkeypatch.setenv("DEFAULT_TRAIN_RATIOS", "0.2, 0.5")
@@ -82,7 +82,7 @@ def test_defaults_environment_parsing_and_public_exports(monkeypatch: pytest.Mon
     monkeypatch.setenv("INVALID_INT", "two")
     with pytest.raises(ValueError, match="INVALID_INT"):
         defaults._env_int("INVALID_INT", 1)
-    import src.temper.grouping as grouping
+    import temper.grouping as grouping
     assert {"partition_domain_into_groups"}.issubset(grouping.__all__)
     assert defaults.DEFAULT_SPLIT_RESULTS_DIR == "./split_results"
     assert defaults.DEFAULT_GROUPED_DOMAIN_FILE == "grouped_domains.json"

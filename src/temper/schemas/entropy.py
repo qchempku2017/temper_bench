@@ -5,7 +5,7 @@ from typing import List
 
 from pydantic import field_validator, model_validator
 
-from src.temper.schemas.base import MSONableModel
+from temper.schemas.base import MSONableModel
 
 
 class EntropyProfilePoint(MSONableModel):

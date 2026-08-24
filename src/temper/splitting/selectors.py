@@ -7,13 +7,13 @@ import logging
 
 import numpy as np
 
-from src.temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
-from src.temper.splitting.quests_adapter import (
+from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
+from temper.splitting.quests_adapter import (
     QuestsDescriptorsStorage, QuestsAdapter, compute_information_gain_per_candidate_frame
 )
-from src.temper.splitting.utils import get_requested_train_sizes_from_ratios
+from temper.splitting.utils import get_requested_train_sizes_from_ratios
 
-from src.temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
+from temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
 
 
 class BaseIndicesSelector(ABC):

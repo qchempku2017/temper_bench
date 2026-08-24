@@ -6,12 +6,12 @@ from pathlib import Path
 
 from monty.serialization import dumpfn, loadfn
 
-from src.temper.grouping import partition_domain_into_groups
-from src.temper.splitting.split import split_grouped_domain
-from src.temper.splitting.io import write_all_sets_in_split_group_to_extxyz
-from src.temper.schemas.split import SplitConfig
+from temper.grouping import partition_domain_into_groups
+from temper.splitting.split import split_grouped_domain
+from temper.splitting.io import write_all_sets_in_split_group_to_extxyz
+from temper.schemas.split import SplitConfig
 
-from src.temper.utils.defaults import (
+from temper.utils.defaults import (
     DEFAULT_SPLIT_CONFIG_FILE,
     DEFAULT_METADATA_FILE,
     DEFAULT_GROUPED_DOMAIN_FILE,

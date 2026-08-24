@@ -12,17 +12,17 @@ from ase.calculators.singlepoint import SinglePointCalculator
 from monty.serialization import dumpfn, loadfn
 from pydantic import ValidationError, model_validator
 
-from src.temper.schemas.group import GroupedDomain
-from src.temper.schemas.base import ManagedIdentityModel, MSONableModel
-from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
-from src.temper.schemas.split import (
+from temper.schemas.group import GroupedDomain
+from temper.schemas.base import ManagedIdentityModel, MSONableModel
+from temper.schemas.info import InfoEntry, load_info_entries_from_datadir
+from temper.schemas.split import (
     SplitGroup,
     TrainValSplitTrajectory,
 )
-from src.temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.schemas.train_unit import TrainingUnit
-from src.temper.schemas.utils import (
+from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
+from temper.schemas.frame_refrence import FrameReference
+from temper.schemas.train_unit import TrainingUnit
+from temper.schemas.utils import (
     check_atoms_has_stress,
     check_atoms_have_other_properties,
     validate_relative_extxyz_path,

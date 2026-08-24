@@ -12,9 +12,9 @@ from ase.io import read
 from pydantic import Field, model_validator
 from monty.serialization import loadfn
 
-from src.temper.schemas.base import MSONableModel
-from src.temper.utils.defaults import DEFAULT_METADATA_FILE
-from src.temper.schemas.utils import check_atoms_has_stress, check_atoms_have_other_properties
+from temper.schemas.base import MSONableModel
+from temper.utils.defaults import DEFAULT_METADATA_FILE
+from temper.schemas.utils import check_atoms_has_stress, check_atoms_have_other_properties
 
 
 class InfoEntry(MSONableModel):

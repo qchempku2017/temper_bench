@@ -8,8 +8,8 @@ import pytest
 
 
 def test_main_parser_accepts_only_a_split_config_file() -> None:
-    from src.temper.entrypoints.main import main_parser
-    from src.temper.utils.defaults import DEFAULT_SPLIT_CONFIG_FILE
+    from temper.entrypoints.main import main_parser
+    from temper.utils.defaults import DEFAULT_SPLIT_CONFIG_FILE
 
     default_args = main_parser().parse_args(["split"])
     assert default_args.command == "split"
@@ -25,7 +25,7 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import src.temper.entrypoints.split as entrypoint
+    import temper.entrypoints.split as entrypoint
 
     data_root = tmp_path / "data"
     for domain in ("selected", "ignored"):
@@ -126,7 +126,7 @@ def test_yaml_split_configs_are_supported_and_preserve_seeds(
     tmp_path: Path,
     suffix: str,
 ) -> None:
-    from src.temper.entrypoints.split import _load_split_config
+    from temper.entrypoints.split import _load_split_config
 
     config_file = tmp_path / f"split_config{suffix}"
     dumpfn(
@@ -144,7 +144,7 @@ def test_yaml_split_configs_are_supported_and_preserve_seeds(
 
 
 def test_reproduction_name_never_matches_input_name() -> None:
-    from src.temper.entrypoints.split import _load_split_config, _reproduce_config_path
+    from temper.entrypoints.split import _load_split_config, _reproduce_config_path
 
     assert _reproduce_config_path(Path("split_config.json")) == Path(
         "split_config_reproduce.json"

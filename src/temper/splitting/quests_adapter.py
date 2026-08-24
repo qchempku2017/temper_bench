@@ -9,7 +9,7 @@ import math
 import numpy as np
 from ase import Atoms
 
-from src.temper.schemas.quests_adapter import QuestsAdapterConfig
+from temper.schemas.quests_adapter import QuestsAdapterConfig
 
 
 class QuestsUnavailableError(RuntimeError):

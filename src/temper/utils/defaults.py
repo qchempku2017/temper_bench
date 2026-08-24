@@ -82,7 +82,7 @@ def _env_int(name: str, default: int) -> int:
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default storage directory for training units.
 DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
-# Default split configuration read by the ``temper split`` CLI.
+# Default split configuration read by the ``temper_bench split`` CLI.
 DEFAULT_SPLIT_CONFIG_FILE: str = os.environ.get(
     "DEFAULT_SPLIT_CONFIG_FILE", "split_config.json"
 )

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "temper-bench"
+version = "0.1.0"
+description = "Data preparation and splitting tools for the TEMPER MLFF benchmark"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ase",
+    "monty",
+    "numba",
+    "numpy==2.5.2",
+    "pydantic>=2.0.0",
+    "quests==2026.2.22",
+    "ruamel.yaml",
+]
+
+[project.scripts]
+temper_bench = "temper.entrypoints.main:main"
+
+[project.urls]
+Repository = "https://github.com/qchempku2017/temper_bench"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["temper*"]

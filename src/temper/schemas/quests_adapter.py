@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from src.temper.schemas.base import MSONableModel
+from temper.schemas.base import MSONableModel
 
 
 class QuestsAdapterConfig(MSONableModel):

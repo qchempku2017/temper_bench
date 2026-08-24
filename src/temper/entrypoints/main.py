@@ -1,7 +1,7 @@
 """Main CLI of TEMPER."""
 import argparse
 
-from src.temper.entrypoints.split import add_split_parser, split_cli
+from temper.entrypoints.split import add_split_parser, split_cli
 
 
 def main_parser() -> argparse.ArgumentParser:

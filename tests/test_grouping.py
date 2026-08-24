@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.temper.grouping.group import partition_domain_into_groups
-from src.temper.grouping.strategies import (
+from temper.grouping.group import partition_domain_into_groups
+from temper.grouping.strategies import (
     GROUPING_STRATEGIES,
     group_all,
     group_as_specified,
@@ -16,8 +16,8 @@ from src.temper.grouping.strategies import (
     group_by_property,
     group_by_regex,
 )
-from src.temper.schemas.group import GroupedDomain
-from src.temper.schemas.info import InfoEntry
+from temper.schemas.group import GroupedDomain
+from temper.schemas.info import InfoEntry
 
 
 def test_basic_grouping_strategies_and_their_validations() -> None:

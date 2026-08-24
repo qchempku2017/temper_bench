@@ -14,9 +14,9 @@ from pydantic import (
     model_validator,
 )
 
-from src.temper.schemas.base import ManagedIdentityModel, MSONableModel
-from src.temper.schemas.quests_adapter import QuestsAdapterConfig
-from src.temper.utils.defaults import (
+from temper.schemas.base import ManagedIdentityModel, MSONableModel
+from temper.schemas.quests_adapter import QuestsAdapterConfig
+from temper.utils.defaults import (
     DEFAULT_DATA_DIR,
     DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_SPLIT_REPEATS,
@@ -24,8 +24,8 @@ from src.temper.utils.defaults import (
     DEFAULT_TRAIN_RATIOS,
     DEFAULT_MAX_N_TRAIN
 )
-from src.temper.schemas.entropy import EntropyProfile
-from src.temper.schemas.frame_refrence import FrameReference
+from temper.schemas.entropy import EntropyProfile
+from temper.schemas.frame_refrence import FrameReference
 
 
 _SPLIT_ID_NAMESPACE = UUID("c04a0d94-c7f1-5ef4-b45e-1f9de274c99d")

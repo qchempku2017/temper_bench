@@ -13,9 +13,14 @@ The workflow is available through both the CLI and Python API:
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 
+Install TEMPER from the repository and invoke its command-line entry point:
+
 ```console
-python -m src.temper.entrypoints.main split
+python -m pip install .
+temper_bench split
 ```
+
+The module form is also available as `python -m temper.entrypoints.main split`.
 
 Use `--config-file path/to/custom.yaml` to select another file, or set the
 `DEFAULT_SPLIT_CONFIG_FILE` environment variable. The command writes a resolved

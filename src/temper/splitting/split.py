@@ -7,15 +7,15 @@ import numpy as np
 
 from ase import Atoms
 
-from src.temper.schemas.split import SplitGroup, TrainValSplitTrajectory
-from src.temper.schemas.group import GroupedDomain
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.utils.defaults import DEFAULT_TEST_RATIO
+from temper.schemas.split import SplitGroup, TrainValSplitTrajectory
+from temper.schemas.group import GroupedDomain
+from temper.schemas.frame_refrence import FrameReference
+from temper.utils.defaults import DEFAULT_TEST_RATIO
 
-from src.temper.splitting.io import FrameReferenceResolver, load_frames_from_references
-from src.temper.splitting.selectors import selector_class_factory
-from src.temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter
-from src.temper.schemas.split import SplitConfig
+from temper.splitting.io import FrameReferenceResolver, load_frames_from_references
+from temper.splitting.selectors import selector_class_factory
+from temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter
+from temper.schemas.split import SplitConfig
 
 
 def partition_trainval_test(

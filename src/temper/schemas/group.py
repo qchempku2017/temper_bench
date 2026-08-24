@@ -7,10 +7,10 @@ from typing import Dict, List
 
 from pydantic import field_validator, model_validator
 
-from src.temper.utils.defaults import DEFAULT_METADATA_FILE
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.schemas.base import MSONableModel
-from src.temper.schemas.info import InfoEntry, load_info_entries_from_datadir
+from temper.utils.defaults import DEFAULT_METADATA_FILE
+from temper.schemas.frame_refrence import FrameReference
+from temper.schemas.base import MSONableModel
+from temper.schemas.info import InfoEntry, load_info_entries_from_datadir
 
 
 class GroupedDomain(MSONableModel):
@@ -160,7 +160,7 @@ class GroupedDomain(MSONableModel):
            If the grouping strategy is not recognized.
         """
         # Move local to avoid circular imports.
-        from src.temper.grouping.strategies import GROUPING_STRATEGIES
+        from temper.grouping.strategies import GROUPING_STRATEGIES
 
         if grouping_strategy not in GROUPING_STRATEGIES:
             raise ValueError(

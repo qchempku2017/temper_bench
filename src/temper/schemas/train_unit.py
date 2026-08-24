@@ -10,8 +10,8 @@ from pydantic import (
     field_validator,
 )
 
-from src.temper.schemas.base import ManagedIdentityModel
-from src.temper.utils.defaults import DEFAULT_SPLIT_RESULTS_DIR
+from temper.schemas.base import ManagedIdentityModel
+from temper.utils.defaults import DEFAULT_SPLIT_RESULTS_DIR
 
 
 _TRAINING_UNIT_ID_NAMESPACE = UUID("a219bd97-5b63-5dc1-8543-38d74c746ecf")

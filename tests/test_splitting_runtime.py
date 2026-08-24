@@ -8,14 +8,14 @@ import pytest
 from ase.io import write
 from monty.serialization import dumpfn, loadfn
 
-from src.temper.schemas.group import GroupedDomain
-from src.temper.schemas.info import InfoEntry
-from src.temper.schemas.frame_refrence import FrameReference
-from src.temper.splitting import selectors
-from src.temper.splitting.quests_adapter import QuestsAdapterConfig, QuestsDescriptorsStorage
-from src.temper.splitting.split import partition_trainval_test, split_grouped_domain
-from src.temper.schemas.split import SplitConfig
-from src.temper.splitting.utils import get_requested_train_sizes_from_ratios
+from temper.schemas.group import GroupedDomain
+from temper.schemas.info import InfoEntry
+from temper.schemas.frame_refrence import FrameReference
+from temper.splitting import selectors
+from temper.splitting.quests_adapter import QuestsAdapterConfig, QuestsDescriptorsStorage
+from temper.splitting.split import partition_trainval_test, split_grouped_domain
+from temper.schemas.split import SplitConfig
+from temper.splitting.utils import get_requested_train_sizes_from_ratios
 from conftest import make_frame
 
 
@@ -99,7 +99,7 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
         def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
             return _storage(len(frames))
 
-    import src.temper.splitting.split as split_module
+    import temper.splitting.split as split_module
     monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
     monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
     config = SplitConfig(root_path=tmp_path, split_repeats=1, seed=7, test_ratio=0.2, requested_train_ratios=[0.25, 0.5], max_train_size=4, train_val_split_method="random")
@@ -139,7 +139,7 @@ def test_cross_test_configuration_supports_automatic_tests_and_specified_precede
         def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
             return _storage(len(frames))
 
-    import src.temper.splitting.split as split_module
+    import temper.splitting.split as split_module
     monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
     monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
     config = SplitConfig(
