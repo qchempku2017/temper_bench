@@ -37,15 +37,15 @@ class QuestsAdapterConfig(MSONableModel):
         entropy_batch_size (int): Maximum batch size used by the QUESTS
             backend when batching distance computations. Must be positive.
         device (Literal["cpu", "gpu", "auto"]): Which QUESTS backend route to
-            use. ``"cpu"`` never imports or initializes CUDA/torch;
-            ``"gpu"`` requires an available CUDA device and raises
+            use. ``"cpu"`` never imports or initializes a torch GPU backend;
+            ``"gpu"`` requires an available CUDA/ROCm PyTorch device and raises
             :class:`src.temper.splitting.quests.QuestsUnavailableError`
-            otherwise; ``"auto"`` uses the GPU route when a CUDA device is
+            otherwise; ``"auto"`` uses the GPU route when a PyTorch GPU is
             available and falls back to the CPU route otherwise (documented
             fallback).
         gpu_device (str | None): Optional torch device string (e.g.
-            ``"cuda:0"``) used by the GPU route. Must be ``None`` when
-            ``device == "cpu"``.
+            ``"cuda:0"``) used by the GPU route. ROCm builds use the same
+            ``"cuda"`` spelling. Must be ``None`` when ``device == "cpu"``.
         numba_threads (int | None): Optional number of threads for the numba
             parallel sections of the CPU descriptor/entropy kernels. ``None``
             will use half of the available CPU threads (maximum 8). The results are
@@ -100,6 +100,6 @@ class QuestsAdapterConfig(MSONableModel):
         if self.device == "cpu" and self.gpu_device is not None:
             raise ValueError(
                 "gpu_device must be None when device == 'cpu'; "
-                "the CPU route never initializes CUDA."
+                "the CPU route never initializes a GPU backend."
             )
         return self

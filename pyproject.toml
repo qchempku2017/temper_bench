@@ -18,6 +18,11 @@ dependencies = [
     "ruamel.yaml",
 ]
 
+[project.optional-dependencies]
+gpu = [
+    "torch",
+]
+
 [project.scripts]
 temper_bench = "temper.entrypoints.main:main"
 

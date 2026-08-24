@@ -16,8 +16,8 @@ class QuestsUnavailableError(RuntimeError):
     """Raised when a requested QUESTS backend route is not available.
 
     Raised when the GPU route is explicitly requested but torch is not
-    installed or no CUDA device is available, or when an ``"auto"`` route
-    cannot fall back. The CPU route never raises this error.
+    installed or no supported CUDA/ROCm device is available, or when an
+    ``"auto"`` route cannot fall back. The CPU route never raises this error.
     """
 
 
@@ -177,18 +177,20 @@ class QuestsAdapter:
 
     # -- backend import boundaries (explicit, mockable at this level) -------
 
-    def _import_cpu_backend(self) -> Tuple[Any, Any] | None:
+    def _import_cpu_backend(self) -> Tuple[Any, Any]:
         """Lazily import and return ``(descriptor, entropy)`` CPU modules.
 
         Importing these modules pulls in numba but never torch, keeping the
         CPU route free of any CUDA/torch initialization.
         """
-        if self._cpu_backend is None:
+        backend = self._cpu_backend
+        if backend is None:
             import quests.descriptor as descriptor_module
             import quests.entropy as entropy_module
 
-            self._cpu_backend = (descriptor_module, entropy_module)
-        return self._cpu_backend
+            backend = (descriptor_module, entropy_module)
+            self._cpu_backend = backend
+        return backend
 
     def _import_gpu_entropy(self) -> Any:
         """Lazily import and return the ``quests.gpu.entropy`` module.
@@ -208,25 +210,31 @@ class QuestsAdapter:
         return self.config.gpu_device if self.config.gpu_device is not None else "cuda"
 
     def _assert_gpu_available(self) -> None:
-        """Raise unless the configured CUDA backend/device is available."""
+        """Raise unless the configured PyTorch GPU backend is available."""
         try:
             import torch  # noqa: PLC0415
         except ImportError as exc:
             raise QuestsUnavailableError(
                 "The QUESTS GPU route requires torch, which is not installed. "
-                "Install the 'quests[gpu]' extra (torch) or configure "
-                "device='cpu' or device='auto'."
+                "Install a PyTorch build compatible with your accelerator "
+                "before TEMPER (see README), or use the 'temper-bench[gpu]' "
+                "convenience extra only when PyPI's default torch build is "
+                "suitable. Alternatively, configure device='cpu' or "
+                "device='auto'."
             ) from exc
         if not torch.cuda.is_available():
             raise QuestsUnavailableError(
-                "torch is installed but no CUDA device is available. "
+                "torch is installed but reports no usable CUDA/ROCm device. "
+                "Check that the installed PyTorch build supports the GPU and "
+                "driver, or install a compatible build. "
                 "Configure device='cpu' or device='auto' to run on the CPU."
             )
         if self.config.gpu_device is not None:
             device_string = self.config.gpu_device
             if not device_string.startswith("cuda"):
                 raise ValueError(
-                    "The QUESTS GPU route only supports CUDA device strings, "
+                    "The QUESTS GPU route requires a PyTorch 'cuda' device "
+                    "string (ROCm builds use the same spelling), "
                     f"got {device_string!r}."
                 )
             device_index_part = device_string[len("cuda") :].lstrip(":")
@@ -237,8 +245,8 @@ class QuestsAdapter:
             device_index = int(device_index_part) if device_index_part else 0
             if device_index >= torch.cuda.device_count():
                 raise ValueError(
-                    f"CUDA device {device_string!r} is not available; "
-                    f"torch reports {torch.cuda.device_count()} CUDA device(s)."
+                    f"GPU device {device_string!r} is not available; "
+                    f"torch reports {torch.cuda.device_count()} GPU device(s)."
                 )
 
     def resolve_device(self) -> Literal["cpu", "gpu"]:
@@ -249,21 +257,21 @@ class QuestsAdapter:
         Literal["cpu", "gpu"]
             ``"cpu"`` when ``config.device == "cpu"``; ``"gpu"`` when
             ``config.device == "gpu"`` (raising
-            :class:`QuestsUnavailableError` if CUDA is unavailable); and, for
-            ``config.device == "auto"``, ``"gpu"`` when CUDA is available with
+            :class:`QuestsUnavailableError` if the GPU is unavailable); and, for
+            ``config.device == "auto"``, ``"gpu"`` when a GPU is available with
             a documented fallback to ``"cpu"`` otherwise.
 
         Raises
         ------
         QuestsUnavailableError
-            If ``config.device == "gpu"`` but CUDA/torch is unavailable.
+            If ``config.device == "gpu"`` but torch or its GPU is unavailable.
         """
         if self.config.device == "cpu":
             return "cpu"
         if self.config.device == "gpu":
             self._assert_gpu_available()
             return "gpu"
-        # config.device == "auto": documented CPU fallback when CUDA is
+        # config.device == "auto": documented CPU fallback when the GPU is
         # unavailable.
         try:
             self._assert_gpu_available()

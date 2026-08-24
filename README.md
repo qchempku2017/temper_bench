@@ -20,6 +20,53 @@ python -m pip install .
 temper_bench split
 ```
 
+### Optional GPU support
+
+The base installation supports the QUESTS CPU backend and does not install
+PyTorch. For GPU execution, the recommended installation order is:
+
+1. Use the official [PyTorch installation selector](https://pytorch.org/get-started/locally/)
+   to choose a build compatible with the operating system, GPU, and driver.
+   NVIDIA users should check the CUDA version and GPU architecture; AMD users
+   need a supported ROCm build.
+2. Install that PyTorch build and verify that it can see the accelerator:
+
+   ```console
+   python -c "import torch; print(torch.__version__, torch.version.cuda, torch.version.hip, torch.cuda.is_available())"
+   ```
+
+   The final value must be `True` for the QUESTS GPU route.
+3. Install TEMPER without the extra, so pip leaves the selected PyTorch build
+   alone:
+
+   ```console
+   python -m pip install .
+   ```
+
+> [!WARNING]
+> Ordinary `pip install torch` does not inspect the installed GPU and choose a
+> matching build. As documented in the
+> [PyTorch 2.13 release notes](https://pytorch.org/blog/pytorch-2-13-release-blog/),
+> the default PyPI build on Linux and Windows uses CUDA 13.0. CUDA 13
+> [removed Maxwell, Pascal, and Volta support](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/index.html#deprecated-architectures);
+> those NVIDIA GPUs need a compatible CUDA 12.x build (PyTorch 2.13 provides a
+> CUDA 12.6 build). AMD GPUs need a compatible ROCm build rather than the
+> default CUDA build. Recheck the selector and compatibility information when
+> installing because PyTorch's defaults change between releases.
+
+For systems where the current default PyPI PyTorch build is known to be
+compatible, the `gpu` extra remains a convenience:
+
+```console
+python -m pip install ".[gpu]"
+```
+
+The extra cannot select a custom CUDA or ROCm package index. Leave
+`quests_adapter_config.device` as `auto` to use a PyTorch GPU when available
+and fall back to the CPU otherwise, or set it to `gpu` to require the GPU and
+fail if it is unavailable. See [Data splitting](docs/data-splitting.md#quests-backend)
+for the complete backend configuration.
+
 The module form is also available as `python -m temper.entrypoints.main split`.
 
 Use `--config-file path/to/custom.yaml` to select another file, or set the

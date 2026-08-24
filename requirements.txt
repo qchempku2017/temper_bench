@@ -3,8 +3,8 @@ ruamel.yaml
 ase
 pydantic >= 2.0.0
 # QUESTS entropy backend (verified API 2026.2.22; CPU path only needs these
-# deps). The optional GPU route additionally requires the `quests[gpu]` extra
-# (torch), which is intentionally NOT a default dependency.
+# deps). For the optional GPU route, install a hardware-compatible torch build
+# manually; the project's `gpu` extra installs PyPI's default torch build.
 quests==2026.2.22
 numpy == 2.5.2
 numba

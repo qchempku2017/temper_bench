@@ -186,7 +186,62 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 
 QUESTS is a required dependency of this project and provides descriptor and entropy calculations for both supported selection paths. [`QuestsAdapterConfig`](../src/temper/splitting/quests_adapter.py:39) controls descriptor settings, entropy settings, CPU thread count, and backend routing.
 
-Its `device` option is `auto` by default. `cpu` keeps execution on the CPU and does not initialize torch or CUDA. `gpu` requires a usable CUDA device and torch; `auto` uses GPU when available and otherwise falls back to CPU. GPU support is optional and is not installed by the base requirements. The configuration is stored as split provenance.
+The base installation does not install PyTorch. Because ordinary pip dependency
+metadata cannot select a hardware-specific PyTorch package index, install a
+compatible PyTorch build before TEMPER. Use the official
+[PyTorch installation selector](https://pytorch.org/get-started/locally/) to
+choose a CUDA build compatible with an NVIDIA GPU and driver, or a supported
+ROCm build for an AMD GPU. Then verify the installation:
+
+```console
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.version.hip, torch.cuda.is_available())"
+python -m pip install .
+```
+
+The final value printed by the first command must be `True`. PyTorch's ROCm
+build intentionally uses the `torch.cuda` API and `cuda` device spelling too.
+
+Do not assume that `pip install torch` detects the GPU. As documented in the
+[PyTorch 2.13 release notes](https://pytorch.org/blog/pytorch-2-13-release-blog/),
+the default PyPI build on Linux and Windows uses CUDA 13.0. CUDA 13
+[does not support Maxwell, Pascal, or Volta](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/index.html#deprecated-architectures);
+these GPUs need a compatible CUDA 12.x build (PyTorch 2.13 provides CUDA 12.6).
+AMD GPUs need an appropriate ROCm build. Consult the selector whenever
+installing because the default and compatibility matrix can change between
+PyTorch releases.
+
+If the default PyPI PyTorch build is known to be suitable, the optional `gpu`
+extra is a convenience:
+
+```console
+python -m pip install ".[gpu]"
+```
+
+For an installed distribution, use
+`python -m pip install "temper-bench[gpu]"`. The extra installs the default
+`torch` package but cannot choose a custom CUDA or ROCm package index.
+
+The `device` option controls routing:
+
+- `cpu` always uses the CPU and does not initialize torch or a GPU runtime;
+- `auto` (the default) uses the GPU when `torch.cuda.is_available()` is true
+  and otherwise falls back to the CPU; and
+- `gpu` requires the GPU route and raises an error instead of falling back when
+  torch or a compatible accelerator is unavailable.
+
+Set `gpu_device` to a PyTorch device such as `cuda:0` when a specific device is
+required. PyTorch uses this `cuda` spelling for ROCm devices as well. The
+resolved configuration is stored as split provenance. For example, this
+configuration requires the first GPU device:
+
+```json
+{
+  "quests_adapter_config": {
+    "device": "gpu",
+    "gpu_device": "cuda:0"
+  }
+}
+```
 
 ## Cross-test assignments
 
