@@ -1,29 +1,140 @@
 """Tests for the top-level CLI parser and split orchestration."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from monty.serialization import dumpfn, loadfn
 import pytest
 
 
-def test_main_parser_accepts_only_a_split_config_file() -> None:
+def test_main_parser_owns_global_logging_and_progress_options() -> None:
     from temper.entrypoints.main import main_parser
     from temper.utils.defaults import DEFAULT_SPLIT_CONFIG_FILE
 
     default_args = main_parser().parse_args(["split"])
     assert default_args.command == "split"
     assert default_args.config_file == Path(DEFAULT_SPLIT_CONFIG_FILE)
+    assert default_args.log_level == "INFO"
+    assert default_args.progress == "auto"
 
-    args = main_parser().parse_args(["split", "--config-file", "custom.yaml"])
+    args = main_parser().parse_args([
+        "--verbose",
+        "--progress",
+        "plain",
+        "split",
+        "--config-file",
+        "custom.yaml",
+    ])
     assert args.config_file == Path("custom.yaml")
+    assert args.log_level == "DEBUG"
+    assert args.progress == "plain"
+    assert main_parser().parse_args([
+        "--log-level",
+        "error",
+        "split",
+    ]).log_level == "ERROR"
     with pytest.raises(SystemExit):
         main_parser().parse_args(["split", "--root-path", "data"])
+    with pytest.raises(SystemExit):
+        main_parser().parse_args(["--verbose", "--quiet", "split"])
+
+
+def test_main_configures_logging_before_subcommand_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import temper.entrypoints.main as entrypoint
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        entrypoint,
+        "configure_cli_logging",
+        lambda level, progress_mode: calls.append(
+            ("configure", level, progress_mode)
+        ),
+    )
+    monkeypatch.setattr(
+        entrypoint,
+        "split_cli",
+        lambda config_file: calls.append(("split", config_file)) or 0,
+    )
+    monkeypatch.setattr(
+        entrypoint,
+        "shutdown_progress",
+        lambda: calls.append(("shutdown",)),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        entrypoint.main([
+            "--verbose",
+            "--progress",
+            "plain",
+            "split",
+            "--config-file",
+            "custom.yaml",
+        ])
+
+    assert exc_info.value.code == 0
+    assert calls == [
+        ("configure", "DEBUG", "plain"),
+        ("split", Path("custom.yaml")),
+        ("shutdown",),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_code", "expected_text"),
+    [
+        (ValueError("bad config"), 1, "Rerun with --verbose"),
+        (KeyboardInterrupt(), 130, "interrupted by the user"),
+    ],
+)
+def test_main_reports_failures_cleanly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: BaseException,
+    expected_code: int,
+    expected_text: str,
+) -> None:
+    import temper.entrypoints.main as entrypoint
+
+    def fail(_config_file):
+        raise error
+
+    monkeypatch.setattr(entrypoint, "split_cli", fail)
+    with pytest.raises(SystemExit) as exc_info:
+        entrypoint.main(["--progress", "off", "split"])
+
+    assert exc_info.value.code == expected_code
+    stderr = capsys.readouterr().err
+    assert expected_text in stderr
+    assert "Traceback" not in stderr
+
+
+def test_main_verbose_failure_includes_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import temper.entrypoints.main as entrypoint
+
+    def fail(_config_file):
+        raise RuntimeError("backend exploded")
+
+    monkeypatch.setattr(entrypoint, "split_cli", fail)
+    with pytest.raises(SystemExit) as exc_info:
+        entrypoint.main(["--verbose", "--progress", "off", "split"])
+
+    assert exc_info.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "backend exploded" in stderr
+    assert "Traceback" in stderr
+    assert "Rerun with --verbose" not in stderr
 
 
 def test_split_cli_loads_config_and_writes_exact_reproduction(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     import temper.entrypoints.split as entrypoint
 
@@ -98,7 +209,8 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     monkeypatch.setattr(entrypoint, "write_all_sets_in_split_group_to_extxyz", export)
     monkeypatch.setattr(entrypoint, "dumpfn", record_dump)
 
-    assert entrypoint.split_cli(config_file) == 0
+    with caplog.at_level(logging.DEBUG, logger="temper.entrypoints.split"):
+        assert entrypoint.split_cli(config_file) == 0
 
     assert partition_calls == [("selected", data_root, "metadata.json")]
     assert len(split_configs) == 1
@@ -119,6 +231,10 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     assert reproduced.train_val_split_seeds == requested_train_val_seeds
     assert reproduced == split_configs[0]
     assert config_file.exists()
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Starting split command" in message for message in messages)
+    assert any("Resolved split seeds" in message for message in messages)
+    assert any("Completed domain" in message for message in messages)
 
 
 @pytest.mark.parametrize("suffix", [".yaml", ".yml"])

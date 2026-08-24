@@ -8,6 +8,8 @@ from typing import List
 
 from ase import Atoms
 
+from temper.logging import DataQualityWarning
+
 
 def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
     """Check if the frames have energy, forces, and stress correctly loaded.
@@ -60,7 +62,8 @@ def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
         warnings.warn(
             "Stress information is missing in one or more frames. "
             "The dataset may not be suitable for stress-dependent benchmarks.",
-            UserWarning,
+            DataQualityWarning,
+            stacklevel=2,
         )
 
     return has_stress

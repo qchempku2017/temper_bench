@@ -1,8 +1,10 @@
 """Resolves persisted frame references to source extxyz data, reconstructs split datasets, and exports them deterministically."""
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -16,6 +18,10 @@ from temper.utils.defaults import (
     DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_DATA_DIR,
 )
+from temper.logging import format_elapsed, progress_task
+
+
+logger = logging.getLogger(__name__)
 
 
 #: Dataset roles accepted in export filenames.
@@ -183,7 +189,24 @@ class FrameReferenceResolver:
                 raise FileNotFoundError(
                     f"Source extxyz file does not exist: {resolved}"
                 )
-            self._cache[resolved] = list(read(resolved, index=":"))
+            logger.debug("Reading source extxyz file %s.", resolved)
+            read_started_at = time.monotonic()
+            with progress_task(
+                logger,
+                f"Reading source file {resolved.name!r}",
+                unit="frames",
+            ) as progress:
+                self._cache[resolved] = list(read(resolved, index=":"))
+                progress.update(
+                    completed=len(self._cache[resolved]),
+                    detail=f"source {resolved.parent.name}/{resolved.name}",
+                )
+            logger.debug(
+                "Read %d frame(s) from %s in %s.",
+                len(self._cache[resolved]),
+                resolved,
+                format_elapsed(time.monotonic() - read_started_at),
+            )
 
             # Check that all frames have energy and forces labels.
             try:
@@ -234,17 +257,30 @@ def _load_frames_with_resolver(
         If a referenced frame has no energy or forces labels.
     """
     frames: List[Atoms] = []
-    for reference in references:
-        source_path = resolver.resolve_source_path(reference)
-        raw_frames = resolver.load_raw_frames(source_path)
-        if reference.frame_index >= len(raw_frames):
-            raise IndexError(
-                f"Frame reference {reference.identity} has frame_index "
-                f"{reference.frame_index} but source file {source_path} "
-                f"contains only {len(raw_frames)} frames."
-            )
-        raw = raw_frames[reference.frame_index]
-        frames.append(raw)
+    update_interval = max(1, len(references) // 100)
+    with progress_task(
+        logger,
+        "Resolving frame references",
+        total=len(references),
+        unit="frames",
+    ) as progress:
+        for index, reference in enumerate(references):
+            source_path = resolver.resolve_source_path(reference)
+            if index % update_interval == 0:
+                progress.update(
+                    completed=index,
+                    detail=f"source {reference.domain}/{reference.filename}",
+                )
+            raw_frames = resolver.load_raw_frames(source_path)
+            if reference.frame_index >= len(raw_frames):
+                raise IndexError(
+                    f"Frame reference {reference.identity} has frame_index "
+                    f"{reference.frame_index} but source file {source_path} "
+                    f"contains only {len(raw_frames)} frames."
+                )
+            raw = raw_frames[reference.frame_index]
+            frames.append(raw)
+        progress.update(completed=len(references))
     return frames
 
 
@@ -502,8 +538,26 @@ def _write_atoms_list_to_extxyz(
     os.close(fd)
     tmp_path = Path(tmp_name)
     try:
-        write(tmp_path, atoms_list, format="extxyz")
+        logger.debug(
+            "Writing %d frame(s) to generated extxyz artifact %s.",
+            len(atoms_list),
+            dest_path,
+        )
+        write_started_at = time.monotonic()
+        with progress_task(
+            logger,
+            f"Writing dataset {dest_path.name!r}",
+            total=len(atoms_list),
+            unit="frames",
+        ) as progress:
+            write(tmp_path, atoms_list, format="extxyz")
+            progress.update(completed=len(atoms_list))
         os.replace(tmp_path, dest_path)
+        logger.debug(
+            "Published generated extxyz artifact %s in %s.",
+            dest_path,
+            format_elapsed(time.monotonic() - write_started_at),
+        )
     finally:
         if tmp_path.exists():
             tmp_path.unlink()

@@ -4,6 +4,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 import logging
+import time
+import warnings
 
 import numpy as np
 
@@ -14,6 +16,10 @@ from temper.splitting.quests_adapter import (
 from temper.splitting.utils import get_requested_train_sizes_from_ratios
 
 from temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
+from temper.logging import PerformanceWarning, format_elapsed, progress_task
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseIndicesSelector(ABC):
@@ -61,7 +67,7 @@ class BaseIndicesSelector(ABC):
         self.seed = seed if (seed is not None and seed >= 0) else int(np.random.randint(0, 2**32))
         self.rng = np.random.default_rng(self.seed)
         self.adapter = QuestsAdapter(pool_descriptors.quests_adapter_config)
-        self.logger = logging.getLogger(type(self).__name__)
+        self.logger = logger.getChild(type(self).__name__)
 
         self.n_trainval = len(self.trainval_indices_in_pool)
         self.requested_train_sizes = get_requested_train_sizes_from_ratios(
@@ -71,13 +77,16 @@ class BaseIndicesSelector(ABC):
         if self.num_selected_per_step > max(self.requested_train_sizes):
             raise ValueError(
                 f"Number of selected frames per step ({self.num_selected_per_step}) "
-                f"must be less than or equal to the smallest requested train size "
-                f"({min(self.requested_train_sizes)})."
+                f"must be less than or equal to the maximum requested train size "
+                f"({max(self.requested_train_sizes)})."
             )
         if self.num_selected_per_step > max(self.requested_train_sizes) // 10:
-            self.logger.warning(
-                "Number of selected frames per step is more than 10% of the smallest requested train size. "
-                "This may lead to overly sparse entropy profile. Consider using finer steps."
+            warnings.warn(
+                "Number of selected frames per step is more than 10% of the "
+                "maximum requested train size. This may produce an overly "
+                "sparse entropy profile; consider using finer steps.",
+                PerformanceWarning,
+                stacklevel=2,
             )
 
     def _initialize_selection(self) -> List[int]:
@@ -103,22 +112,6 @@ class BaseIndicesSelector(ABC):
         Tuple[List[int], List[int], EntropyProfile]
             Tuple of (selected_frame_indices, remaining_frame_indices, entropy_profile).
         """
-        # Initialize the selection with a random subset of the trainval pool.
-        self.logger.info("Initializing selection with random subset of the trainval pool.")
-        selected_frame_indices = self._initialize_selection()  # Indices in full pool.
-        entropy = self.adapter.get_entropy(
-            self.pool_descriptors.get_multiple_frames(
-                selected_frame_indices
-            )
-        )
-        entropy_trace = [
-            EntropyProfilePoint(
-                training_size=self.num_selected_per_step,
-                cumulative_entropy=entropy,
-                information_gain=entropy,
-            )
-        ]
-
         # Determine steps of training set size in entropy profile.
         max_size = max(self.requested_train_sizes)
         steps = list(range(
@@ -127,25 +120,75 @@ class BaseIndicesSelector(ABC):
             self.num_selected_per_step,
         ))
         steps.append(max_size)
-        for step_id in range(1, len(steps)):
-            step_size = steps[step_id] - steps[step_id - 1]
-            new_frame_indices = self._select_func(
-                selected_frame_indices,
-                step_size,
-            )  # Returns indices in full pool.
-            selected_frame_indices.extend(new_frame_indices)
+
+        with progress_task(
+            self.logger,
+            f"Selecting up to {max_size} training frame(s)",
+            total=max_size,
+            unit="frames",
+            detail="computing initial entropy",
+        ) as progress:
+            # Initialize the selection with a random subset of the trainval pool.
+            self.logger.debug(
+                "Initializing selection with %d random frame(s) from a pool of %d.",
+                self.num_selected_per_step,
+                self.n_trainval,
+            )
+            selected_frame_indices = self._initialize_selection()
             entropy = self.adapter.get_entropy(
                 self.pool_descriptors.get_multiple_frames(
-                    selected_frame_indices,
+                    selected_frame_indices
                 )
             )
-            entropy_trace.append(
+            entropy_trace = [
                 EntropyProfilePoint(
-                    training_size=len(selected_frame_indices),
+                    training_size=self.num_selected_per_step,
                     cumulative_entropy=entropy,
-                    information_gain=entropy - entropy_trace[-1].cumulative_entropy,
+                    information_gain=entropy,
                 )
+            ]
+            progress.update(
+                completed=len(selected_frame_indices),
+                detail=f"checkpoint 1/{len(steps)}",
             )
+
+            for step_id in range(1, len(steps)):
+                step_started_at = time.monotonic()
+                step_size = steps[step_id] - steps[step_id - 1]
+                progress.update(
+                    detail=f"evaluating checkpoint {step_id + 1}/{len(steps)}"
+                )
+                new_frame_indices = self._select_func(
+                    selected_frame_indices,
+                    step_size,
+                )  # Returns indices in full pool.
+                selected_frame_indices.extend(new_frame_indices)
+                entropy = self.adapter.get_entropy(
+                    self.pool_descriptors.get_multiple_frames(
+                        selected_frame_indices,
+                    )
+                )
+                entropy_trace.append(
+                    EntropyProfilePoint(
+                        training_size=len(selected_frame_indices),
+                        cumulative_entropy=entropy,
+                        information_gain=(
+                            entropy - entropy_trace[-1].cumulative_entropy
+                        ),
+                    )
+                )
+                progress.update(
+                    completed=len(selected_frame_indices),
+                    detail=f"checkpoint {step_id + 1}/{len(steps)}",
+                )
+                self.logger.debug(
+                    "Selection checkpoint %d/%d reached %d/%d frame(s) in %s.",
+                    step_id + 1,
+                    len(steps),
+                    len(selected_frame_indices),
+                    max_size,
+                    format_elapsed(time.monotonic() - step_started_at),
+                )
 
         # Convert to indices in pool.
         remaining_indices = np.sort(

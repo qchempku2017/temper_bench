@@ -1,6 +1,8 @@
 """Splits each group of a grouped domain into repeatable train, validation, and test records. It configures the initial test partition and subsequent training-frame selection."""
 from __future__ import annotations
 
+import logging
+import time
 from typing import List, Tuple, Dict
 
 import numpy as np
@@ -16,6 +18,10 @@ from temper.splitting.io import FrameReferenceResolver, load_frames_from_referen
 from temper.splitting.selectors import selector_class_factory
 from temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter
 from temper.schemas.split import SplitConfig
+from temper.logging import format_elapsed, progress_task
+
+
+logger = logging.getLogger(__name__)
 
 
 def partition_trainval_test(
@@ -137,28 +143,76 @@ def split_grouped_domain(
         if ``trainval_test_split_seed`` is negative,
     """
     config = config or SplitConfig()
+    started_at = time.monotonic()
 
     # Get pools of references in groups.
     group_pools = grouped_domain.load_frame_references_in_groups()
+    total_frames = sum(len(pool) for pool in group_pools.values())
+    total_jobs = len(group_pools) * config.split_repeats
+    logger.info(
+        "Splitting domain %r with strategy %r: %d group(s), %d frame(s), "
+        "%d repeat(s), %d selection job(s).",
+        grouped_domain.domain,
+        grouped_domain.grouping_strategy,
+        len(group_pools),
+        total_frames,
+        config.split_repeats,
+        total_jobs,
+    )
 
     # Load pools of frames in groups from references. Resolver reused.
     # For resolver to be reusable, root_path must have been expanded and resolved
     # to match the stored root_path in resolver.
     group_frames: Dict[str, List[Atoms]] = {}
     resolver = FrameReferenceResolver(config.root_path)
-    for group_name, pool in group_pools.items():
-        structures, resolver = load_frames_from_references(
-            pool,
-            root_path=config.root_path,
-            resolver=resolver,
-        )
-        group_frames[group_name] = structures
+    with progress_task(
+        logger,
+        f"Loading frames for strategy {grouped_domain.grouping_strategy!r}",
+        total=total_frames,
+        unit="frames",
+    ) as progress:
+        for group_name, pool in group_pools.items():
+            progress.update(detail=f"current group {group_name!r}")
+            structures, resolver = load_frames_from_references(
+                pool,
+                root_path=config.root_path,
+                resolver=resolver,
+            )
+            group_frames[group_name] = structures
+            progress.advance(len(pool))
+            logger.debug(
+                "Loaded %d frame(s) for group %r.",
+                len(structures),
+                group_name,
+            )
 
     # Compute descriptor for each pool.
     group_descriptors: Dict[str, QuestsDescriptorsStorage] = {}
     adapter = QuestsAdapter(config.quests_adapter_config)
-    for group_name, structures in group_frames.items():
-        group_descriptors[group_name] = adapter.compute_descriptors(structures)
+    if hasattr(adapter, "resolve_device"):
+        resolved_device = adapter.resolve_device()
+    else:
+        resolved_device = config.quests_adapter_config.device
+    logger.info(
+        "QUESTS backends for strategy %r: descriptors=CPU, entropy=%s%s.",
+        grouped_domain.grouping_strategy,
+        resolved_device.upper(),
+        (
+            f" ({config.quests_adapter_config.gpu_device})"
+            if resolved_device == "gpu" and config.quests_adapter_config.gpu_device
+            else ""
+        ),
+    )
+    with progress_task(
+        logger,
+        f"Computing descriptors for strategy {grouped_domain.grouping_strategy!r}",
+        total=total_frames,
+        unit="frames",
+    ) as progress:
+        for group_name, structures in group_frames.items():
+            progress.update(detail=f"current group {group_name!r}")
+            group_descriptors[group_name] = adapter.compute_descriptors(structures)
+            progress.advance(len(structures))
 
     # Determine extra_tests. Pre-specified tests over-write automatic determination.
     group_extra_tests: Dict[str, List[str]] = {}
@@ -181,43 +235,76 @@ def split_grouped_domain(
     selector_cls = selector_class_factory(selection_method=config.train_val_split_method)
 
     split_groups = []
-    for repeat_id in range(config.split_repeats):
-        for group_name, pool in group_pools.items():
-            trainval_pool, test_set, trainval_positions, test_positions = partition_trainval_test(
-                pool,
-                seed=config.trainval_test_split_seeds[repeat_id],
-                test_ratio=config.test_ratio,
-            )
-            selector = selector_cls(
-                pool_descriptors=group_descriptors[group_name],
-                trainval_indices_in_pool=trainval_positions,
-                requested_train_ratios=config.requested_train_ratios,
-                max_train_size=config.max_train_size,
-                seed=config.train_val_split_seeds[repeat_id],
-            )
-            selected_frame_indices, remaining_frame_indices, entropy_profile = selector.run()
-            selected_frames = [pool[i] for i in selected_frame_indices]
-            additional_trainval_frames = [pool[i] for i in remaining_frame_indices]
-            trajectory = TrainValSplitTrajectory(
-                method=config.train_val_split_method,
-                seed=config.train_val_split_seeds[repeat_id],
-                requested_train_sizes=selector.requested_train_sizes,
-                selected_frames=selected_frames,
-                additional_trainval_frames=additional_trainval_frames,
-                entropy_profile=entropy_profile,
-            )
-            split_group = SplitGroup(
-                domain=grouped_domain.domain,
-                grouping_strategy=grouped_domain.grouping_strategy,
-                group_name=group_name,
-                test_set=test_set,
-                extra_tested_groups=group_extra_tests.get(group_name, []),
-                test_ratio=config.test_ratio,
-                trainval_test_split_seed=config.trainval_test_split_seeds[repeat_id],
-                train_val_split_trajectory=trajectory,
-                repeat_id=repeat_id,
-                quests_adapter_config=config.quests_adapter_config,
-            )
-            split_groups.append(split_group)
+    with progress_task(
+        logger,
+        f"Selecting splits for strategy {grouped_domain.grouping_strategy!r}",
+        total=total_jobs,
+        unit="jobs",
+    ) as progress:
+        for repeat_id in range(config.split_repeats):
+            for group_name, pool in group_pools.items():
+                progress.update(
+                    detail=(
+                        f"group {group_name!r}, repeat "
+                        f"{repeat_id + 1}/{config.split_repeats}"
+                    )
+                )
+                trainval_pool, test_set, trainval_positions, test_positions = partition_trainval_test(
+                    pool,
+                    seed=config.trainval_test_split_seeds[repeat_id],
+                    test_ratio=config.test_ratio,
+                )
+                selector = selector_cls(
+                    pool_descriptors=group_descriptors[group_name],
+                    trainval_indices_in_pool=trainval_positions,
+                    requested_train_ratios=config.requested_train_ratios,
+                    max_train_size=config.max_train_size,
+                    seed=config.train_val_split_seeds[repeat_id],
+                )
+                selected_frame_indices, remaining_frame_indices, entropy_profile = selector.run()
+                selected_frames = [pool[i] for i in selected_frame_indices]
+                additional_trainval_frames = [pool[i] for i in remaining_frame_indices]
+                trajectory = TrainValSplitTrajectory(
+                    method=config.train_val_split_method,
+                    seed=config.train_val_split_seeds[repeat_id],
+                    requested_train_sizes=selector.requested_train_sizes,
+                    selected_frames=tuple(selected_frames),
+                    additional_trainval_frames=tuple(additional_trainval_frames),
+                    entropy_profile=entropy_profile,
+                )
+                split_group = SplitGroup(
+                    domain=grouped_domain.domain,
+                    grouping_strategy=grouped_domain.grouping_strategy,
+                    group_name=group_name,
+                    test_set=tuple(test_set),
+                    extra_tested_groups=tuple(
+                        group_extra_tests.get(group_name, [])
+                    ),
+                    test_ratio=config.test_ratio,
+                    trainval_test_split_seed=config.trainval_test_split_seeds[repeat_id],
+                    train_val_split_trajectory=trajectory,
+                    repeat_id=repeat_id,
+                    quests_adapter_config=config.quests_adapter_config,
+                )
+                split_groups.append(split_group)
+                progress.advance()
+                logger.debug(
+                    "Completed split job for group %r repeat %d/%d "
+                    "(train+validation=%d, test=%d, seed=%d).",
+                    group_name,
+                    repeat_id + 1,
+                    config.split_repeats,
+                    len(trainval_pool),
+                    len(test_set),
+                    config.train_val_split_seeds[repeat_id],
+                )
+
+    logger.info(
+        "Completed strategy %r for domain %r: %d split group(s) in %s.",
+        grouped_domain.grouping_strategy,
+        grouped_domain.domain,
+        len(split_groups),
+        format_elapsed(time.monotonic() - started_at),
+    )
 
     return split_groups

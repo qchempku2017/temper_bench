@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import warnings
 from pathlib import Path
 from typing import Any, ClassVar, List
@@ -15,6 +16,10 @@ from monty.serialization import loadfn
 from temper.schemas.base import MSONableModel
 from temper.utils.defaults import DEFAULT_METADATA_FILE
 from temper.schemas.utils import check_atoms_has_stress, check_atoms_have_other_properties
+from temper.logging import DataQualityWarning, progress_task
+
+
+logger = logging.getLogger(__name__)
 
 
 class InfoEntry(MSONableModel):
@@ -125,7 +130,9 @@ class InfoEntry(MSONableModel):
 
         if missing_optional:
             warnings.warn(
-                f"Missing optional fields to MetaDataEntry: {missing_optional}"
+                f"Missing optional fields to MetaDataEntry: {missing_optional}",
+                DataQualityWarning,
+                stacklevel=2,
             )
 
         return self
@@ -154,6 +161,7 @@ class InfoEntry(MSONableModel):
         if not extxyz_path.exists():
             raise FileNotFoundError(extxyz_path)
 
+        logger.debug("Reading source metadata from %s.", extxyz_path)
         frames = read(extxyz_path, index=":")
 
         if len(frames) == 0:
@@ -271,7 +279,16 @@ def load_info_entries_from_datadir(
         for entry in info
     ]
 
-    return [
-        InfoEntry.from_extxyz(datafile, **entry)
-        for datafile, entry in zip(datafiles, info)
-    ]
+    entries: List[InfoEntry] = []
+    with progress_task(
+        logger,
+        f"Inspecting metadata in {datadir.name!r}",
+        total=len(datafiles),
+        unit="files",
+    ) as progress:
+        for datafile, entry in zip(datafiles, info):
+            progress.update(detail=f"current file {datafile.name!r}")
+            entries.append(InfoEntry.from_extxyz(datafile, **entry))
+            progress.advance()
+            logger.debug("Loaded metadata from %s.", datafile)
+    return entries

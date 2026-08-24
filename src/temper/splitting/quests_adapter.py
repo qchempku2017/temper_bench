@@ -3,13 +3,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Tuple, List, Literal, Any
+import logging
+from typing import Tuple, List, Literal, Any, cast
 import math
+import time
+import threading
+import warnings
 
 import numpy as np
 from ase import Atoms
 
 from temper.schemas.quests_adapter import QuestsAdapterConfig
+from temper.logging import BackendFallbackWarning, format_elapsed, progress_task
+
+
+logger = logging.getLogger(__name__)
+_WARNED_BACKEND_FALLBACKS: set[str] = set()
+_BACKEND_WARNING_LOCK = threading.Lock()
+
+
+def _warn_backend_fallback_once(message: str) -> None:
+    """Emit one fallback warning for each distinct backend failure reason."""
+    with _BACKEND_WARNING_LOCK:
+        if message in _WARNED_BACKEND_FALLBACKS:
+            return
+        _WARNED_BACKEND_FALLBACKS.add(message)
+    warnings.warn(
+        message,
+        BackendFallbackWarning,
+        stacklevel=3,
+    )
 
 
 class QuestsUnavailableError(RuntimeError):
@@ -174,6 +197,7 @@ class QuestsAdapter:
         self._cpu_backend: Tuple[Any, Any] | None = None
         self._gpu_entropy: Any | None = None
         self._numba_threads_configured: bool = False
+        self._resolved_device: Literal["cpu", "gpu"] | None = None
 
     # -- backend import boundaries (explicit, mockable at this level) -------
 
@@ -266,19 +290,39 @@ class QuestsAdapter:
         QuestsUnavailableError
             If ``config.device == "gpu"`` but torch or its GPU is unavailable.
         """
-        if self.config.device == "cpu":
-            return "cpu"
-        if self.config.device == "gpu":
-            self._assert_gpu_available()
-            return "gpu"
-        # config.device == "auto": documented CPU fallback when the GPU is
-        # unavailable.
-        try:
-            self._assert_gpu_available()
-        except QuestsUnavailableError:
-            return "cpu"
+        cached_device = self._resolved_device
+        if cached_device is not None:
+            return cast(Literal["cpu", "gpu"], cached_device)
 
-        return "gpu"
+        if self.config.device == "cpu":
+            resolved: Literal["cpu", "gpu"] = "cpu"
+        elif self.config.device == "gpu":
+            self._assert_gpu_available()
+            resolved = "gpu"
+        else:
+            # config.device == "auto": documented CPU fallback when the GPU is
+            # unavailable. Warn once per call site through Python's standard
+            # warning filter because an unnoticed fallback can add hours.
+            try:
+                self._assert_gpu_available()
+            except QuestsUnavailableError as exc:
+                _warn_backend_fallback_once(
+                    "QUESTS device='auto' could not use a GPU and selected the "
+                    f"CPU entropy backend instead ({exc}). This run may be "
+                    "substantially slower."
+                )
+                resolved = "cpu"
+            else:
+                resolved = "gpu"
+
+        self._resolved_device = resolved
+        logger.debug(
+            "Resolved QUESTS entropy backend to %s (requested=%s, gpu_device=%r).",
+            resolved,
+            self.config.device,
+            self.config.gpu_device,
+        )
+        return resolved
 
     def _configure_numba_cpu_threads(self) -> None:
         """Apply ``config.numba_threads`` to the numba CPU kernels once."""
@@ -335,17 +379,45 @@ class QuestsAdapter:
                     "QUESTS descriptors require at least one atom per frame."
                 )
 
-        self._configure_numba_cpu_threads()
-        descriptor_module, _ = self._import_cpu_backend()
         chunks = []
-        for i in range(0, len(frames), self.config.compute_descriptor_chunk_size):
-            chunks.append(descriptor_module.get_descriptors(
-                frames[i:i+self.config.compute_descriptor_chunk_size],
-                k=self.config.descriptor_k,
-                cutoff=self.config.descriptor_cutoff,
-                concat=True,
-                dtype=self.config.descriptor_dtype,
-            ))
+        chunk_size = self.config.compute_descriptor_chunk_size
+        n_chunks = math.ceil(len(frames) / chunk_size)
+        with progress_task(
+            logger,
+            f"Computing descriptors for {len(frames)} frame(s)",
+            total=len(frames),
+            unit="frames",
+            detail="initializing CPU descriptor backend",
+        ) as progress:
+            self._configure_numba_cpu_threads()
+            descriptor_module, _ = self._import_cpu_backend()
+            for chunk_index, start in enumerate(
+                range(0, len(frames), chunk_size),
+                start=1,
+            ):
+                chunk_frames = frames[start:start + chunk_size]
+                chunk_atoms = sum(len(atoms) for atoms in chunk_frames)
+                progress.update(
+                    detail=f"descriptor chunk {chunk_index}/{n_chunks}"
+                )
+                chunk_started_at = time.monotonic()
+                chunks.append(descriptor_module.get_descriptors(
+                    chunk_frames,
+                    k=self.config.descriptor_k,
+                    cutoff=self.config.descriptor_cutoff,
+                    concat=True,
+                    dtype=self.config.descriptor_dtype,
+                ))
+                progress.advance(len(chunk_frames))
+                logger.debug(
+                    "Computed descriptor chunk %d/%d (%d frame(s), %d atom(s)) "
+                    "in %s.",
+                    chunk_index,
+                    n_chunks,
+                    len(chunk_frames),
+                    chunk_atoms,
+                    format_elapsed(time.monotonic() - chunk_started_at),
+                )
         values = np.concatenate(chunks, axis=0)
         if not np.all(np.isfinite(values)):
             raise QuestsNumericalError(

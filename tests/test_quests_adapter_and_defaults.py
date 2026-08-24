@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 from types import SimpleNamespace
+import warnings
 
 import numpy as np
 import pytest
@@ -67,6 +68,31 @@ def test_auto_device_uses_gpu_when_available(monkeypatch: pytest.MonkeyPatch) ->
     adapter = QuestsAdapter(QuestsAdapterConfig(device="auto"))
     monkeypatch.setattr(adapter, "_assert_gpu_available", lambda: None)
     assert adapter.resolve_device() == "gpu"
+
+
+def test_auto_device_warns_once_when_falling_back_to_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import temper.splitting.quests_adapter as adapter_module
+    from temper.splitting.quests_adapter import QuestsUnavailableError
+    from temper.logging import BackendFallbackWarning
+
+    adapter_module._WARNED_BACKEND_FALLBACKS.clear()
+
+    def unavailable() -> None:
+        raise QuestsUnavailableError("no compatible accelerator")
+
+    first = QuestsAdapter(QuestsAdapterConfig(device="auto"))
+    second = QuestsAdapter(QuestsAdapterConfig(device="auto"))
+    monkeypatch.setattr(first, "_assert_gpu_available", unavailable)
+    monkeypatch.setattr(second, "_assert_gpu_available", unavailable)
+
+    with pytest.warns(BackendFallbackWarning, match="substantially slower"):
+        assert first.resolve_device() == "cpu"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert second.resolve_device() == "cpu"
+    assert caught == []
 
 
 def test_defaults_environment_parsing_and_public_exports(monkeypatch: pytest.MonkeyPatch) -> None:
