@@ -1,7 +1,7 @@
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Self
+from typing import Any, Callable, ClassVar, Mapping, Self, cast
 from uuid import UUID, uuid5
 
 from pydantic import (
@@ -295,7 +295,7 @@ class ManagedIdentityModel(MSONableModel):
     def model_copy(
         self,
         *,
-        update: dict[str, Any] | None = None,
+        update: Mapping[str, Any] | None = None,
         deep: bool = False,
     ) -> Self:
         """Return a validated copy with identity regenerated from its contents."""
@@ -309,7 +309,9 @@ class ManagedIdentityModel(MSONableModel):
                 for key, value in update.items()
                 if key != self._IDENTITY_FIELD_NAME
             })
-        return type(self).model_validate(data)
+        cls = type(self)
+        result = cls.model_validate(data)
+        return cast(Self, result)
 
     @model_serializer(mode="wrap")
     def serialize_managed_identity(self, handler: Any) -> dict[str, Any]:
