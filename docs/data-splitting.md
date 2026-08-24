@@ -20,6 +20,59 @@ YAML file, provide its path as the sole configuration selector:
 python -m src.temper.entrypoints.main split --config-file configs/sse_llzo.yaml
 ```
 
+### Logging and live progress
+
+Logging options are global main-command options, not split options. Place them
+before the subcommand so the same interface can be reused by future TEMPER
+commands:
+
+```console
+temper_bench --verbose split --config-file configs/sse_llzo.yaml
+temper_bench --log-level WARNING split
+temper_bench --progress plain split 2> split.log
+```
+
+The available controls are:
+
+| Option | Behavior |
+| --- | --- |
+| default / `--log-level INFO` | Major command, domain, grouping, splitting, and export phases plus live progress. |
+| `-v`, `--verbose` | `DEBUG` diagnostics including paths, seeds, descriptor chunks, selector checkpoints, exports, timings, and failure tracebacks. |
+| `-q`, `--quiet` | `WARNING` and `ERROR` records only. |
+| `--log-level LEVEL` | Explicit `DEBUG`, `INFO`, `WARNING`, or `ERROR` threshold. |
+| `--progress auto` | Default: one reusable status line on a TTY, or plain heartbeat records otherwise. |
+| `--progress plain` | Always emit newline-based heartbeats, suitable for notebooks and CI. |
+| `--progress off` | Disable status and heartbeat output without suppressing lifecycle logs. |
+
+All diagnostics go to stderr. When stderr is redirected, TEMPER never writes
+an animated progress bar or one line per progress update. Instead, an active
+long operation emits at most one `Still ...` heartbeat per minute, including
+its current count, context, and elapsed time. Frequent inner-loop details remain
+available at `DEBUG`.
+
+Python API users retain control of application logging. To receive the same
+module records without invoking the CLI, configure Python logging before
+calling TEMPER:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+```
+
+TEMPER warning categories are exported from `temper.logging`. They derive from
+`TemperWarning`, with specific categories for data quality, backend fallback,
+and performance conditions, so API users may filter them through Python's
+standard `warnings` module:
+
+```python
+import warnings
+
+from temper.logging import TemperWarning
+
+warnings.filterwarnings("error", category=TemperWarning)
+```
+
 When `--config-file` is omitted, the CLI reads the path in
 `DEFAULT_SPLIT_CONFIG_FILE`; that environment variable defaults to
 `split_config.json`. Relative paths in the configuration are interpreted relative to

@@ -69,6 +69,23 @@ for the complete backend configuration.
 
 The module form is also available as `python -m temper.entrypoints.main split`.
 
+Logging and live-progress controls belong to the main `temper_bench` command and
+therefore come before the subcommand. The default `INFO` level reports major
+phases and keeps long work visible without printing per-frame details:
+
+```console
+temper_bench --verbose split --config-file path/to/custom.yaml
+temper_bench --quiet split
+temper_bench --log-level WARNING --progress plain split 2> temper.log
+```
+
+`--verbose` enables developer diagnostics and tracebacks; `--quiet` shows only
+warnings and errors. `--log-level` accepts `DEBUG`, `INFO`, `WARNING`, or
+`ERROR`. Progress defaults to one reusable status line on an interactive
+terminal and one heartbeat per minute when stderr is redirected. Use
+`--progress plain` to force heartbeat lines or `--progress off` to disable live
+status while keeping ordinary lifecycle logs.
+
 Use `--config-file path/to/custom.yaml` to select another file, or set the
 `DEFAULT_SPLIT_CONFIG_FILE` environment variable. The command writes a resolved
 `<config-stem>_reproduce.json` next to the input configuration, including the exact
