@@ -88,8 +88,8 @@ status while keeping ordinary lifecycle logs.
 
 Use `--config-file path/to/custom.yaml` to select another file, or set the
 `DEFAULT_SPLIT_CONFIG_FILE` environment variable. The command writes a resolved
-`<config-stem>_reproduce.json` next to the input configuration, including the exact
-generated or supplied seeds needed to replay the split.
+`<config-stem>_reproduce.json` next to the input configuration, including the concrete
+domain list and exact generated or supplied seeds needed to replay the split.
 Configuration parameters are explained in [`data splitting`](docs/data-splitting.md)
 
 Each domain receives `grouped_domains.json`, `split_groups.json`, `training_units.json`, and its generated `extxyz` datasets under `split_results/<domain>/`.

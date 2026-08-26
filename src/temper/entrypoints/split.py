@@ -65,24 +65,17 @@ def _reproduce_config_path(config_file: Path) -> Path:
 
 
 def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> int:
-    """Load configuration, persist exact seeds, then group, split, and export."""
+    """Resolve configuration, persist provenance, then group, split, and export."""
     command_started_at = time.monotonic()
     config_file = Path(config_file)
-    split_config = _load_split_config(config_file)
+    split_config = _load_split_config(config_file).resolve_domains()
     reproduce_path = _reproduce_config_path(config_file)
     dumpfn(split_config, reproduce_path, indent=2)
 
     root_path = split_config.root_path
     output_path = split_config.output_path
-
-    valid_domains = list(
-        split_config.domains
-        if split_config.domains is not None
-        else (
-            metadata.parent.name
-            for metadata in Path(root_path).resolve().rglob(DEFAULT_METADATA_FILE)
-        )
-    )
+    assert split_config.domains is not None
+    valid_domains = split_config.domains
     logger.info(
         "Starting split command from %s: %d domain(s), %d repeat(s), "
         "method=%s, requested device=%s.",

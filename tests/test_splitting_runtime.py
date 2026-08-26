@@ -193,3 +193,72 @@ def test_split_config_derives_and_round_trips_complete_reproducible_seed_lists(
         SplitConfig(seed=42, split_repeats=2, trainval_test_split_seeds=[1], train_val_split_seeds=[2, 3])
     with pytest.raises(ValueError, match="non-negative integer"):
         SplitConfig(split_repeats=1, seed=-1)
+
+
+def test_split_config_resolves_sorted_direct_domain_children_immutably(
+    tmp_path: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    for domain in ("zeta", "alpha"):
+        domain_path = data_root / domain
+        domain_path.mkdir()
+        (domain_path / "metadata.json").write_text("{}", encoding="utf-8")
+
+    (data_root / "without-metadata").mkdir()
+    nested_domain = data_root / "container" / "nested"
+    nested_domain.mkdir(parents=True)
+    (nested_domain / "metadata.json").write_text("{}", encoding="utf-8")
+    (data_root / "metadata.json").write_text("{}", encoding="utf-8")
+
+    config = SplitConfig(
+        root_path=data_root,
+        domains=None,
+        split_repeats=1,
+        seed=7,
+    )
+    resolved = config.resolve_domains()
+
+    assert config.domains is None
+    assert resolved is not config
+    assert resolved.domains == ["alpha", "zeta"]
+    assert resolved.trainval_test_split_seeds == config.trainval_test_split_seeds
+    assert resolved.train_val_split_seeds == config.train_val_split_seeds
+    assert resolved.resolve_domains() is resolved
+
+    added_domain = data_root / "beta"
+    added_domain.mkdir()
+    (added_domain / "metadata.json").write_text("{}", encoding="utf-8")
+
+    assert config.resolve_domains().domains == ["alpha", "beta", "zeta"]
+    assert resolved.domains == ["alpha", "zeta"]
+
+
+def test_split_config_resolve_domains_skips_io_for_explicit_domains(
+    tmp_path: Path,
+) -> None:
+    missing_root = tmp_path / "missing"
+    explicit = SplitConfig(
+        root_path=missing_root,
+        domains=["selected"],
+        split_repeats=1,
+        seed=7,
+    )
+    empty = SplitConfig(
+        root_path=missing_root,
+        domains=[],
+        split_repeats=1,
+        seed=7,
+    )
+
+    assert explicit.resolve_domains() is explicit
+    assert empty.resolve_domains() is empty
+
+    automatic = SplitConfig(
+        root_path=missing_root,
+        domains=None,
+        split_repeats=1,
+        seed=7,
+    )
+    with pytest.raises(ValueError, match="Data root is not a directory"):
+        automatic.resolve_domains()

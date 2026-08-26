@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Tuple, ClassVar, Any
+from typing import List, Literal, Tuple, ClassVar, Any, Self
 from uuid import UUID
 
 import numpy as np
@@ -22,7 +22,8 @@ from temper.utils.defaults import (
     DEFAULT_SPLIT_REPEATS,
     DEFAULT_TEST_RATIO,
     DEFAULT_TRAIN_RATIOS,
-    DEFAULT_MAX_N_TRAIN
+    DEFAULT_MAX_N_TRAIN,
+    DEFAULT_METADATA_FILE,
 )
 from temper.schemas.entropy import EntropyProfile
 from temper.schemas.frame_refrence import FrameReference
@@ -42,8 +43,9 @@ class SplitConfig(MSONableModel):
     output_path: Path | str
         Directory in which split artifacts and exported datasets are written.
     domains: list[str] | None
-        Domain directory names to split. ``None`` discovers every domain beneath
-        ``root_path`` that contains the configured metadata filename.
+        Domain directory names to split. Call :meth:`resolve_domains` to replace
+        ``None`` with the sorted direct child directories of ``root_path`` that
+        contain the configured metadata filename.
     split_repeats : int
         Number of times to repeat the split. See default in src.temper.utils.defaults.
     seed: int
@@ -110,6 +112,25 @@ class SplitConfig(MSONableModel):
 
     write_validation: bool = False
     write_extra_tests: bool = True
+
+    def resolve_domains(
+        self,
+        metadata_file_name: str = DEFAULT_METADATA_FILE,
+    ) -> Self:
+        """Return a config with automatic domain discovery materialized."""
+        if self.domains is not None:
+            return self
+
+        root_path = self.root_path.resolve()
+        if not root_path.is_dir():
+            raise ValueError(f"Data root is not a directory: {root_path}")
+
+        domains = sorted(
+            path.name
+            for path in root_path.iterdir()
+            if path.is_dir() and (path / metadata_file_name).is_file()
+        )
+        return self.model_copy(update={"domains": domains})
 
     def as_dict(self) -> dict[str, Any]:
         """Return JSON-compatible MSON data, including paths as strings."""

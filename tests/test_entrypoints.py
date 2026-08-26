@@ -151,7 +151,7 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
         {
             "root_path": str(data_root),
             "output_path": str(output_root),
-            "domains": ["selected"],
+            "domains": None,
             "split_repeats": 2,
             "seed": 7,
             "trainval_test_split_seeds": requested_trainval_test_seeds,
@@ -212,8 +212,11 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     with caplog.at_level(logging.DEBUG, logger="temper.entrypoints.split"):
         assert entrypoint.split_cli(config_file) == 0
 
-    assert partition_calls == [("selected", data_root, "metadata.json")]
-    assert len(split_configs) == 1
+    assert partition_calls == [
+        ("ignored", data_root, "metadata.json"),
+        ("selected", data_root, "metadata.json"),
+    ]
+    assert len(split_configs) == 2
     assert split_configs[0].output_path == output_root
     assert split_configs[0].trainval_test_split_seeds == requested_trainval_test_seeds
     assert split_configs[0].train_val_split_seeds == requested_train_val_seeds
@@ -221,20 +224,116 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     assert export_calls[0][3]["write_validation"] is True
     assert export_calls[0][3]["write_extra_tests"] is False
     assert [path for _, path in artifact_dumps] == [
+        output_root / "ignored" / "grouped_domains.json",
+        output_root / "ignored" / "split_groups.json",
+        output_root / "ignored" / "training_units.json",
         output_root / "selected" / "grouped_domains.json",
         output_root / "selected" / "split_groups.json",
         output_root / "selected" / "training_units.json",
     ]
 
     reproduced = loadfn(reproduce_path)
+    assert reproduced.domains == ["ignored", "selected"]
     assert reproduced.trainval_test_split_seeds == requested_trainval_test_seeds
     assert reproduced.train_val_split_seeds == requested_train_val_seeds
-    assert reproduced == split_configs[0]
+    assert all(reproduced == config for config in split_configs)
     assert config_file.exists()
     messages = [record.getMessage() for record in caplog.records]
     assert any("Starting split command" in message for message in messages)
     assert any("Resolved split seeds" in message for message in messages)
     assert any("Completed domain" in message for message in messages)
+
+
+def test_reproduction_config_reloads_and_replays_identical_real_split(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    extxyz_domain: Path,
+    metadata_payload: dict,
+) -> None:
+    import numpy as np
+
+    import temper.entrypoints.split as entrypoint
+    import temper.splitting.selectors as selectors_module
+    import temper.splitting.split as split_module
+    from temper.schemas.split import SplitConfig
+    from temper.splitting.quests_adapter import QuestsDescriptorsStorage
+
+    metadata_payload["groupings"] = [{"grouping_strategy": "all"}]
+    dumpfn(metadata_payload, extxyz_domain / "metadata.json", indent=2)
+
+    class DeterministicAdapter:
+        def __init__(self, config) -> None:
+            self.config = config
+
+        def resolve_device(self) -> str:
+            return "cpu"
+
+        def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
+            frame_count = len(frames)
+            return QuestsDescriptorsStorage(
+                values=np.arange(frame_count * 2, dtype=float).reshape(frame_count, 2),
+                frame_offsets=tuple(range(frame_count + 1)),
+                quests_adapter_config=self.config,
+            )
+
+        def get_entropy(self, descriptors: np.ndarray) -> float:
+            return float(descriptors.sum())
+
+    monkeypatch.setattr(split_module, "QuestsAdapter", DeterministicAdapter)
+    monkeypatch.setattr(selectors_module, "QuestsAdapter", DeterministicAdapter)
+
+    output_root = tmp_path / "split-results"
+    config_file = tmp_path / "split_config.json"
+    dumpfn(
+        {
+            "root_path": str(extxyz_domain.parent),
+            "output_path": str(output_root),
+            "domains": None,
+            "split_repeats": 2,
+            "seed": 11,
+            "trainval_test_split_seeds": None,
+            "train_val_split_seeds": None,
+            "test_ratio": 0.25,
+            "requested_train_ratios": [0.5],
+            "max_train_size": 2,
+            "train_val_split_method": "random",
+            "quests_adapter_config": {"device": "cpu"},
+            "write_validation": True,
+            "write_extra_tests": False,
+        },
+        config_file,
+        indent=2,
+    )
+
+    assert entrypoint.split_cli(config_file) == 0
+
+    reproduce_path = tmp_path / "split_config_reproduce.json"
+    reproduced = entrypoint._load_split_config(reproduce_path)
+    assert isinstance(reproduced, SplitConfig)
+    assert reproduced.domains == ["demo_domain"]
+    assert reproduced.resolve_domains() is reproduced
+
+    domain_output = output_root / "demo_domain"
+    first_split_groups = loadfn(domain_output / "split_groups.json")
+    first_training_units = loadfn(domain_output / "training_units.json")
+    first_exports = {
+        path.name: path.read_bytes()
+        for path in sorted(domain_output.glob("*.extxyz"))
+    }
+
+    assert entrypoint.split_cli(reproduce_path) == 0
+
+    assert loadfn(domain_output / "split_groups.json") == first_split_groups
+    assert loadfn(domain_output / "training_units.json") == first_training_units
+    assert {
+        path.name: path.read_bytes()
+        for path in sorted(domain_output.glob("*.extxyz"))
+    } == first_exports
+
+    replayed_reproduce_path = tmp_path / "split_config_reproduce_reproduce.json"
+    replayed_reproduction = entrypoint._load_split_config(replayed_reproduce_path)
+    assert isinstance(replayed_reproduction, SplitConfig)
+    assert replayed_reproduction == reproduced
 
 
 @pytest.mark.parametrize("suffix", [".yaml", ".yml"])

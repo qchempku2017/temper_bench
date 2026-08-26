@@ -78,10 +78,12 @@ When `--config-file` is omitted, the CLI reads the path in
 `split_config.json`. Relative paths in the configuration are interpreted relative to
 the process's current working directory.
 
-With `"domains": null`, the command discovers all domain directories beneath
-`root_path` that contain `metadata.json`. Set `domains` to a list such as
-`["sse_llzo"]` to select specific domain directory names. The CLI groups and splits
-each selected domain, exports its datasets, and writes:
+With `"domains": null`, the command discovers the direct child directories of
+`root_path` that contain `metadata.json`. Discovery is performed explicitly during
+command startup, and the resulting domain names are sorted and stored in the resolved
+configuration. Set `domains` to a list such as `["sse_llzo"]` to select specific
+domain directory names without filesystem discovery. The CLI groups and splits each
+selected domain, exports its datasets, and writes:
 
 ```text
 split_results/
@@ -97,9 +99,9 @@ Set `write_validation` to `true` to materialize validation files and
 
 ### Reproduction file and exact seed replay
 
-Immediately after loading and validating a configuration, `split_cli` writes a
-resolved MSON-compatible JSON configuration beside the input. The filename replaces
-the input extension with `_reproduce.json`; for example:
+After loading and validating a configuration, `split_cli` resolves automatic domain
+discovery and writes the resulting MSON-compatible JSON configuration beside the
+input. The filename replaces the input extension with `_reproduce.json`; for example:
 
 - `split_config.json` writes `split_config_reproduce.json`;
 - `configs/run.yaml` writes `configs/run_reproduce.json`; and
@@ -107,8 +109,9 @@ the input extension with `_reproduce.json`; for example:
   `split_config_reproduce_reproduce.json`.
 
 The input file is therefore never overwritten. The reproduction file contains the
-resolved `seed`, `trainval_test_split_seeds`, and `train_val_split_seeds`. Pass that
-file back to `--config-file` to reuse both per-repeat seed lists exactly:
+concrete `domains` used by the run as well as the resolved `seed`,
+`trainval_test_split_seeds`, and `train_val_split_seeds`. Pass that file back to
+`--config-file` to reuse the same domain scope and both per-repeat seed lists exactly:
 
 ```console
 python -m src.temper.entrypoints.main split \
@@ -120,6 +123,10 @@ For a fresh run, set the two per-repeat seed lists to `null`. A fixed nonnegativ
 seed. For an exact replay, provide both lists (as the reproduction file does). Their
 lengths must equal `split_repeats`; supplied values are validated and used unchanged,
 not regenerated from `seed`.
+
+Likewise, rerunning an original configuration with `"domains": null` discovers the
+current domain directories again. Replaying its reproduction file uses the explicit
+domain list captured by the earlier run instead.
 
 ## Public workflow
 
