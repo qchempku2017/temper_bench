@@ -73,7 +73,9 @@ class SplitConfig(MSONableModel):
     quests_adapter_config: QuestsAdapterConfig
         Configuration for the Quests adapter. If not provided, will use
         all default settings. See src.temper.splitting.quests_adapter ``QuestsAdapterConfig``
-        for details.
+        for details. Its default ``device="auto"`` routing checks reported GPU
+        availability but does not preflight PyTorch kernel compatibility with
+        the GPU architecture.
     write_validation: bool
         Whether to materialize validation datasets.
     write_extra_tests: bool

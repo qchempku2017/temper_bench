@@ -35,7 +35,22 @@ PyTorch. For GPU execution, the recommended installation order is:
    python -c "import torch; print(torch.__version__, torch.version.cuda, torch.version.hip, torch.cuda.is_available())"
    ```
 
-   The final value must be `True` for the QUESTS GPU route.
+   The final value must be `True` for the QUESTS GPU route, but that result is
+   necessary rather than sufficient: it confirms device discovery, not that the
+   installed build contains kernels for the GPU architecture. Also run
+   a small operation to force a kernel launch:
+
+   ```console
+   python -c "import torch; x = torch.ones(1, device='cuda'); print((x + 1).cpu())"
+   ```
+
+   To diagnose an NVIDIA architecture mismatch, also report the device
+   capability and the architectures included in the PyTorch build:
+
+   ```console
+   python -c "import torch; print(torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0), torch.cuda.get_arch_list())"
+   ```
+
 3. Install TEMPER without the extra, so pip leaves the selected PyTorch build
    alone:
 
@@ -53,6 +68,14 @@ PyTorch. For GPU execution, the recommended installation order is:
 > CUDA 12.6 build). AMD GPUs need a compatible ROCm build rather than the
 > default CUDA build. Recheck the selector and compatibility information when
 > installing because PyTorch's defaults change between releases.
+>
+> A V100 is a Volta GPU with compute capability 7.0. With an incompatible
+> PyTorch build, `torch.cuda.is_available()` can still return `True`, while the
+> first real operation fails with `CUDA error: no kernel image is available for
+> execution on the device`. TEMPER's `device="auto"` route intentionally uses
+> the availability result only; it neither preflights kernel compatibility nor
+> falls back after a kernel-launch failure. Install a compatible PyTorch build,
+> or set `quests_adapter_config.device` to `cpu`.
 
 For systems where the current default PyPI PyTorch build is known to be
 compatible, the `gpu` extra remains a convenience:

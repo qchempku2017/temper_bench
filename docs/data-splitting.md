@@ -258,8 +258,24 @@ python -c "import torch; print(torch.__version__, torch.version.cuda, torch.vers
 python -m pip install .
 ```
 
-The final value printed by the first command must be `True`. PyTorch's ROCm
-build intentionally uses the `torch.cuda` API and `cuda` device spelling too.
+The final value printed by the first command must be `True`, but that is only an
+availability check. It confirms device discovery and does not prove that the
+installed PyTorch build contains kernels for the GPU architecture.
+Force a small kernel launch as a smoke test:
+
+```console
+python -c "import torch; x = torch.ones(1, device='cuda'); print((x + 1).cpu())"
+```
+
+On NVIDIA systems, inspect both the device capability and the architectures in
+the installed PyTorch build:
+
+```console
+python -c "import torch; print(torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0), torch.cuda.get_arch_list())"
+```
+
+PyTorch's ROCm build intentionally uses the `torch.cuda` API and `cuda` device
+spelling too.
 
 Do not assume that `pip install torch` detects the GPU. As documented in the
 [PyTorch 2.13 release notes](https://pytorch.org/blog/pytorch-2-13-release-blog/),
@@ -269,6 +285,11 @@ these GPUs need a compatible CUDA 12.x build (PyTorch 2.13 provides CUDA 12.6).
 AMD GPUs need an appropriate ROCm build. Consult the selector whenever
 installing because the default and compatibility matrix can change between
 PyTorch releases.
+
+A V100 is a Volta GPU with compute capability 7.0. An incompatible PyTorch
+build can therefore report `torch.cuda.is_available() == True` but fail at the
+first real operation with `CUDA error: no kernel image is available for
+execution on the device`.
 
 If the default PyPI PyTorch build is known to be suitable, the optional `gpu`
 extra is a convenience:
@@ -288,6 +309,12 @@ The `device` option controls routing:
   and otherwise falls back to the CPU; and
 - `gpu` requires the GPU route and raises an error instead of falling back when
   torch or a compatible accelerator is unavailable.
+
+`auto` is availability-based routing, not a kernel-compatibility preflight. It
+selects the GPU solely when `torch.cuda.is_available()` is true. TEMPER does not
+launch a probe kernel during routing and does not fall back to CPU if a later
+PyTorch/QUESTS kernel launch fails. In that case, install a PyTorch build that
+supports the GPU architecture or set `device` to `cpu`.
 
 Set `gpu_device` to a PyTorch device such as `cuda:0` when a specific device is
 required. PyTorch uses this `cuda` spelling for ROCm devices as well. The

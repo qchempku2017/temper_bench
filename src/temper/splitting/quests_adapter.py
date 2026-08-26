@@ -234,7 +234,7 @@ class QuestsAdapter:
         return self.config.gpu_device if self.config.gpu_device is not None else "cuda"
 
     def _assert_gpu_available(self) -> None:
-        """Raise unless the configured PyTorch GPU backend is available."""
+        """Raise unless torch reports a GPU; do not launch a compatibility probe."""
         try:
             import torch  # noqa: PLC0415
         except ImportError as exc:
@@ -282,8 +282,11 @@ class QuestsAdapter:
             ``"cpu"`` when ``config.device == "cpu"``; ``"gpu"`` when
             ``config.device == "gpu"`` (raising
             :class:`QuestsUnavailableError` if the GPU is unavailable); and, for
-            ``config.device == "auto"``, ``"gpu"`` when a GPU is available with
-            a documented fallback to ``"cpu"`` otherwise.
+            ``config.device == "auto"``, ``"gpu"`` when
+            ``torch.cuda.is_available()`` is true with a documented fallback to
+            ``"cpu"`` otherwise. This availability check does not verify that
+            the installed PyTorch build contains kernels compatible with the
+            GPU architecture; later kernel-launch errors propagate.
 
         Raises
         ------

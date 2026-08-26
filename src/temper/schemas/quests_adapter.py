@@ -40,9 +40,11 @@ class QuestsAdapterConfig(MSONableModel):
             use. ``"cpu"`` never imports or initializes a torch GPU backend;
             ``"gpu"`` requires an available CUDA/ROCm PyTorch device and raises
             :class:`src.temper.splitting.quests.QuestsUnavailableError`
-            otherwise; ``"auto"`` uses the GPU route when a PyTorch GPU is
-            available and falls back to the CPU route otherwise (documented
-            fallback).
+            otherwise; ``"auto"`` uses the GPU route when
+            ``torch.cuda.is_available()`` is true and falls back to the CPU
+            route otherwise. This availability-only check does not preflight
+            PyTorch kernel support for the GPU architecture, and a later
+            kernel-launch failure does not trigger a CPU fallback.
         gpu_device (str | None): Optional torch device string (e.g.
             ``"cuda:0"``) used by the GPU route. ROCm builds use the same
             ``"cuda"`` spelling. Must be ``None`` when ``device == "cpu"``.

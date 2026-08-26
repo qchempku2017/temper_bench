@@ -1,6 +1,7 @@
 """Deterministic unit tests for split partitioning, selectors, and orchestration."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -84,7 +85,11 @@ def test_selector_helpers_validate_pool_membership_and_rank_entropy_gain() -> No
         selectors.selector_class_factory("other")
 
 
-def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_split_config_and_orchestration_preserve_partitions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     domain_dir = tmp_path / "demo"
     domain_dir.mkdir()
     write(domain_dir / "frames.extxyz", [make_frame("H", -float(index), str(index)) for index in range(10)], format="extxyz")
@@ -96,6 +101,9 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
     grouped = GroupedDomain(domain="demo", info_entries=[info], grouping_strategy="all", groups={"all": ["frames.extxyz"]})
 
     class ComputeAdapter(_EntropyAdapter):
+        def resolve_device(self) -> str:
+            return "gpu"
+
         def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
             return _storage(len(frames))
 
@@ -103,8 +111,15 @@ def test_split_config_and_orchestration_preserve_partitions(monkeypatch: pytest.
     monkeypatch.setattr(split_module, "QuestsAdapter", ComputeAdapter)
     monkeypatch.setattr(selectors, "QuestsAdapter", _EntropyAdapter)
     config = SplitConfig(root_path=tmp_path, split_repeats=1, seed=7, test_ratio=0.2, requested_train_ratios=[0.25, 0.5], max_train_size=4, train_val_split_method="random")
-    result = split_grouped_domain(grouped, config)
+    with caplog.at_level(logging.INFO, logger="temper.splitting.split"):
+        result = split_grouped_domain(grouped, config)
     assert len(result) == 1
+    assert any(
+        "entropy=GPU (auto-selected because torch.cuda.is_available() returned "
+        "True; PyTorch kernel compatibility with the GPU architecture was not "
+        "checked)" in record.getMessage()
+        for record in caplog.records
+    )
     split = result[0]
     trajectory = split.train_val_split_trajectory
     assert len(split.test_set) == 2

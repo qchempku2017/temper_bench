@@ -193,15 +193,28 @@ def split_grouped_domain(
         resolved_device = adapter.resolve_device()
     else:
         resolved_device = config.quests_adapter_config.device
+    backend_notes = []
+    if resolved_device == "gpu":
+        if config.quests_adapter_config.gpu_device:
+            backend_notes.append(
+                f"device={config.quests_adapter_config.gpu_device}"
+            )
+        if config.quests_adapter_config.device == "auto":
+            backend_notes.append(
+                "auto-selected because torch.cuda.is_available() returned True"
+            )
+        else:
+            backend_notes.append("requested explicitly")
+        backend_notes.append(
+            "PyTorch kernel compatibility with the GPU architecture was not "
+            "checked"
+        )
+    backend_note = f" ({'; '.join(backend_notes)})" if backend_notes else ""
     logger.info(
         "QUESTS backends for strategy %r: descriptors=CPU, entropy=%s%s.",
         grouped_domain.grouping_strategy,
         resolved_device.upper(),
-        (
-            f" ({config.quests_adapter_config.gpu_device})"
-            if resolved_device == "gpu" and config.quests_adapter_config.gpu_device
-            else ""
-        ),
+        backend_note,
     )
     with progress_task(
         logger,
