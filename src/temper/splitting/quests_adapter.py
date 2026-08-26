@@ -514,7 +514,7 @@ class QuestsAdapter:
 
         if self.resolve_device() == "cpu":
             _, entropy_module = self._import_cpu_backend()
-            value = entropy_module.get_entropy(
+            value = entropy_module.entropy(
                 matrix,
                 h=self.config.entropy_bandwidth,
                 batch_size=self.config.entropy_batch_size,
@@ -523,7 +523,7 @@ class QuestsAdapter:
         else:
             entropy_module = self._import_gpu_entropy()
             tensor = self._to_tensor(matrix)
-            value = entropy_module.get_entropy(
+            value = entropy_module.entropy(
                 tensor,
                 h=self.config.entropy_bandwidth,
                 batch_size=self.config.entropy_batch_size,
