@@ -27,11 +27,11 @@ DEFAULT_REGEX_AND_GROUP_NAMES = {
         "composition_{0}"
     ),
     "u_specification": (
-        r".*_(u|no_u)_.*",
+        r"(?:^|_)(no_u|u)(?=_|$)",
         "{0}"
     ),
     "mag_specification": (
-        r".*_(mag|no_mag)_.*",
+        r"(?:^|_)(no_mag|mag)(?=_|$)",
         "{0}"
     ),
 }

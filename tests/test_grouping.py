@@ -48,6 +48,22 @@ def test_regex_and_property_grouping_cover_strict_and_non_strict_modes() -> None
         group_by_property(files, "unknown")
 
 
+def test_property_grouping_distinguishes_negative_specifications() -> None:
+    files = [
+        "lanio_chemsys_no_u_no_mag.extxyz",
+        "lanio_chemsys_u_mag.extxyz",
+    ]
+
+    assert group_by_property(files, "u_specification") == {
+        "no_u": ["lanio_chemsys_no_u_no_mag.extxyz"],
+        "u": ["lanio_chemsys_u_mag.extxyz"],
+    }
+    assert group_by_property(files, "mag_specification") == {
+        "no_mag": ["lanio_chemsys_no_u_no_mag.extxyz"],
+        "mag": ["lanio_chemsys_u_mag.extxyz"],
+    }
+
+
 def test_neb_generalization_groups_endpoints_midpoints_and_intermediates() -> None:
     files = [
         "reaction_a_fp_00.extxyz", "reaction_a_fp_01.extxyz", "reaction_a_fp_02.extxyz", "reaction_a_fp_03.extxyz", "reaction_a_fp_04.extxyz",
