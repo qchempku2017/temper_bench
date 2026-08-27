@@ -330,6 +330,46 @@ configuration requires the first GPU device:
 }
 ```
 
+### Numerical precision and entropy batching
+
+> [!IMPORTANT]
+> QUESTS entropy uses Gaussian kernels followed by logarithms. Finite input
+> descriptors can therefore still produce non-finite entropy or differential
+> entropy when limited-precision distance calculations are inaccurate or all
+> kernel contributions underflow to zero. The defaults
+> `descriptor_dtype: "float64"` and `entropy_batch_size: 4000` prioritize
+> numerical reliability while retaining reasonably large compute tiles.
+
+`descriptor_dtype` controls both the stored descriptors and the dtype used by
+the CPU or GPU entropy backend. `float64` substantially reduces cancellation in
+pairwise distance calculations and extends the range of representable Gaussian
+kernel values. Its trade-offs are approximately twice the descriptor and
+distance-matrix memory of `float32`, lower throughput on many consumer GPUs,
+and potentially longer runtimes. Select `float32` only after checking that all
+entropy results remain finite and sufficiently close to a `float64` reference
+for representative data.
+
+`entropy_batch_size` is the maximum side length of the distance-matrix tiles;
+it is not a statistical minibatch and does not approximate or subsample the
+calculation. Larger tiles can improve BLAS/GPU utilization and reduce dispatch
+overhead, but their raw storage grows quadratically. A square float64 tile uses
+about 128 MB at a batch size of 4000 and 3.2 GB at 20000, before accounting for
+the additional temporary arrays used by the backend. Large batches can also
+reduce CPU tile-level parallelism and expose backend-dependent floating-point
+rounding. Smaller batches reduce peak memory and are often numerically safer,
+at the cost of more loop, kernel-launch, synchronization, or transfer overhead.
+
+In exact arithmetic, changing `entropy_batch_size` would not change the result.
+Treat a material batch-dependent difference or a non-finite result as numerical
+instability: retain `float64`, lower the batch size, and compare again. Changing
+`entropy_bandwidth` can also prevent kernel underflow, but it changes the KDE
+and therefore the scientific meaning and selection ordering; recalibrate it for
+the dataset instead of using it only as a numerical workaround.
+
+These are defaults, not migrations. Existing configurations and reproduction
+files that explicitly specify `descriptor_dtype` or `entropy_batch_size` retain
+their stored values.
+
 ## Cross-test assignments
 
 Each split result records `extra_tested_groups`. If the input grouped domain has `specify_cross_tests`, the splitter uses that explicit mapping regardless of `add_extra_cross_tests`, after removing each source group's self-reference and deduplicating its targets. Otherwise, when `add_extra_cross_tests` is `True`, every group is assigned every other group as an extra test group; when it is `False`, no extra cross tests are assigned. The automatically generated other-group target ordering is not guaranteed because it is derived from sets. Extra group datasets remain separate from `SplitGroup.test_set` and are reconstructed for export through `extra_tested_groups`. See [Data format and grouping](raw-data-format.md#implemented-cross-test-behavior) for the metadata details.

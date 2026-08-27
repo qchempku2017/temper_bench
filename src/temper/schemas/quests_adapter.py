@@ -27,7 +27,11 @@ class QuestsAdapterConfig(MSONableModel):
             descriptor weight function. Must be positive.
         descriptor_dtype (Literal["float32", "float64"]): Floating-point dtype
             of the computed descriptors and, for the GPU route, of the torch
-            tensors passed to the QUESTS backend.
+            tensors passed to the QUESTS backend. Defaults to ``"float64"``
+            to reduce distance-cancellation error and Gaussian-kernel
+            underflow. ``"float32"`` uses less memory and may be faster,
+            especially on GPUs with limited float64 throughput, but is more
+            susceptible to non-finite entropy results.
         compute_descriptor_chunk_size (int): Number of frames processed at a
             time when computing descriptors. Must be positive. This
             allows chunked computation and prevents memory overflow. Defaults
@@ -36,6 +40,10 @@ class QuestsAdapterConfig(MSONableModel):
             by the QUESTS entropy adapter. Must be positive.
         entropy_batch_size (int): Maximum batch size used by the QUESTS
             backend when batching distance computations. Must be positive.
+            Defaults to 4000 as a compromise between compute utilization,
+            quadratic distance-tile memory, and numerical stability. Larger
+            batches can reduce dispatch overhead but require substantially
+            more memory.
         device (Literal["cpu", "gpu", "auto"]): Which QUESTS backend route to
             use. ``"cpu"`` never imports or initializes a torch GPU backend;
             ``"gpu"`` requires an available CUDA/ROCm PyTorch device and raises
@@ -58,10 +66,10 @@ class QuestsAdapterConfig(MSONableModel):
 
     descriptor_k: int = Field(default=32, ge=2)
     descriptor_cutoff: float = Field(default=5.0, gt=0)
-    descriptor_dtype: Literal["float32", "float64"] = "float32"
+    descriptor_dtype: Literal["float32", "float64"] = "float64"
     compute_descriptor_chunk_size: int = Field(default=200, gt=0)
     entropy_bandwidth: float = Field(default=0.015, gt=0)
-    entropy_batch_size: int = Field(default=20000, gt=0)
+    entropy_batch_size: int = Field(default=4000, gt=0)
     device: Literal["cpu", "gpu", "auto"] = "auto"
     gpu_device: str | None = None
     numba_threads: int = Field(

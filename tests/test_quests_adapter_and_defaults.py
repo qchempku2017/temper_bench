@@ -100,19 +100,19 @@ def test_adapter_chunks_descriptors_and_validates_entropy_results(monkeypatch: p
     class Descriptor:
         @staticmethod
         def get_descriptors(frames, *, k, cutoff, concat, dtype):
-            assert (k, cutoff, concat, dtype) == (32, 5.0, True, "float32")
+            assert (k, cutoff, concat, dtype) == (32, 5.0, True, "float64")
             calls.append(len(frames))
-            return np.full((sum(len(frame) for frame in frames), 2), len(calls), dtype=np.float32)
+            return np.full((sum(len(frame) for frame in frames), 2), len(calls), dtype=np.float64)
 
     class Entropy:
         @staticmethod
         def entropy(matrix, *, h, batch_size):
-            assert (h, batch_size) == (0.015, 20000)
+            assert (h, batch_size) == (0.015, 4000)
             return 1.25
 
         @staticmethod
         def delta_entropy(candidate, reference, *, h, batch_size):
-            assert (h, batch_size) == (0.015, 20000)
+            assert (h, batch_size) == (0.015, 4000)
             return np.arange(len(candidate), dtype=float)
 
     monkeypatch.setattr(adapter, "_configure_numba_cpu_threads", lambda: None)
@@ -151,14 +151,14 @@ def test_adapter_uses_quests_gpu_entropy_api(monkeypatch: pytest.MonkeyPatch) ->
         @staticmethod
         def entropy(matrix, *, h, batch_size, device):
             assert matrix == (2, 3)
-            assert (h, batch_size, device) == (0.015, 20000, "cuda:2")
+            assert (h, batch_size, device) == (0.015, 4000, "cuda:2")
             return TensorResult(1.5)
 
         @staticmethod
         def delta_entropy(candidate, reference, *, h, batch_size, device):
             assert candidate == (2, 3)
             assert reference == (1, 3)
-            assert (h, batch_size, device) == (0.015, 20000, "cuda:2")
+            assert (h, batch_size, device) == (0.015, 4000, "cuda:2")
             return TensorResult(np.array([0.25, 0.75]))
 
     monkeypatch.setattr(adapter, "resolve_device", lambda: "gpu")
