@@ -71,6 +71,29 @@ def test_random_selector_maps_full_pool_indices_and_nested_profile(monkeypatch: 
     assert [point.training_size for point in profile.points] == [1, 2, 3, 4]
 
 
+def test_selector_preserves_infinite_entropy_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    class InfiniteEntropyAdapter(_EntropyAdapter):
+        def get_entropy(self, descriptors: np.ndarray) -> float:
+            return float("inf")
+
+    monkeypatch.setattr(selectors, "QuestsAdapter", InfiniteEntropyAdapter)
+    selector = selectors.RandomIndicesSelector(
+        _storage(5), [0, 1, 2, 3, 4], requested_train_ratios=[0.6],
+        max_train_size=3, seed=14, num_selected_per_step=1,
+    )
+    _, _, profile = selector.run()
+    assert [point.cumulative_entropy for point in profile.points] == [
+        float("inf"),
+        float("inf"),
+        float("inf"),
+    ]
+    assert [point.information_gain for point in profile.points] == [
+        float("inf"),
+        float("inf"),
+        float("inf"),
+    ]
+
+
 def test_selector_helpers_validate_pool_membership_and_rank_entropy_gain() -> None:
     storage = _storage(4)
 
@@ -79,6 +102,16 @@ def test_selector_helpers_validate_pool_membership_and_rank_entropy_gain() -> No
             return candidate[:, 0]
 
     assert selectors.greedy_select_frame_indices_by_entropy_gain(storage, Adapter(), [0], 2, [0, 1, 2, 3]) == [3, 2]
+
+    class InfiniteAdapter:
+        def delta_entropy(self, candidate: np.ndarray, reference: np.ndarray) -> np.ndarray:
+            deltas = candidate[:, 0].copy()
+            deltas[0] = float("inf")
+            return deltas
+
+    assert selectors.greedy_select_frame_indices_by_entropy_gain(
+        storage, InfiniteAdapter(), [0], 2, [0, 1, 2, 3]
+    ) == [1, 3]
     with pytest.raises(ValueError, match="not all within"):
         selectors.select_frame_indices_at_random([4], 1, [0, 1], np.random.default_rng(1))
     with pytest.raises(ValueError, match="Unknown"):

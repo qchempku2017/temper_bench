@@ -19,13 +19,14 @@ class EntropyProfilePoint(MSONableModel):
     Attributes:
         training_size (int): Number of training frames selected at this point.
         cumulative_entropy (float): Cumulative QUESTS entropy of the training
-            set at this point. Must be finite; the QUESTS entropy normalizes
-            by the set size, so it is not guaranteed to be non-decreasing as
-            frames are added. Nonnegativity is validated with a configurable
-            tolerance by :class:`EntropyProfile`.
+            set at this point. May be infinite when QUESTS kernel values
+            underflow, but must not be NaN. The QUESTS entropy normalizes by
+            the set size, so it is not guaranteed to be non-decreasing as
+            frames are added.
         information_gain (float): QUESTS information gain contributed by
             the chunk of frames added at this point, computed with the same
-            ``delta_entropy`` objective used for selection. Must be finite.
+            ``delta_entropy`` objective used for selection. May be infinite
+            when the corresponding entropy is infinite, but must not be NaN.
             The QUESTS ``delta_entropy`` is an unnormalized differential
             entropy (``-log(p)``) that is not bounded below by zero, so this
             value may legitimately be negative for redundant chunks.
@@ -45,10 +46,10 @@ class EntropyProfilePoint(MSONableModel):
 
     @field_validator("cumulative_entropy", "information_gain")
     @classmethod
-    def validate_finite(cls, value: float) -> float:
-        """Reject NaN and infinite entropy values."""
-        if not math.isfinite(value):
-            raise ValueError(f"Entropy values must be finite, got {value}.")
+    def validate_not_nan(cls, value: float) -> float:
+        """Reject NaN while retaining signed infinite entropy sentinels."""
+        if math.isnan(value):
+            raise ValueError("Entropy values must not be NaN.")
         return value
 
 
@@ -57,10 +58,10 @@ class EntropyProfile(MSONableModel):
 
     A trajectory may be persisted before evaluation with no profile
     (``entropy_profile=None``). When a profile is present it must be complete:
-    the points must be ordered by strictly increasing ``training_size`` and all
-    entropy values must be finite. Profile points represent the owning
-    trajectory's selection steps, so one point may represent a multi-frame
-    chunk.
+    the points must be ordered by strictly increasing ``training_size``.
+    Profile points represent the owning trajectory's selection steps, so one
+    point may represent a multi-frame chunk. Signed infinite values are
+    retained as numerical saturation sentinels; NaN values are rejected.
 
     Validation is deliberately restricted to what the QUESTS objective
     guarantees (verified against ``quests==2026.2.22``):
@@ -69,8 +70,8 @@ class EntropyProfile(MSONableModel):
       decrease as frames are added; no monotonicity or nonnegativity check is
       applied.
     - ``information_gain`` is a differential entropy (``-log(p)`` with an
-      unnormalized kernel sum ``p``) and may legitimately be negative; only
-      finiteness is enforced.
+      unnormalized kernel sum ``p``) and may legitimately be negative or
+      positive infinite; only NaN is rejected.
 
     Attributes:
         points (list[EntropyProfilePoint]): Ordered entropy profile points.

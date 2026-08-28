@@ -22,6 +22,13 @@ from temper.logging import PerformanceWarning, format_elapsed, progress_task
 logger = logging.getLogger(__name__)
 
 
+def _entropy_difference(current: float, previous: float) -> float:
+    """Subtract profile entropies without turning equal infinities into NaN."""
+    if current == previous and np.isinf(current):
+        return current
+    return current - previous
+
+
 class BaseIndicesSelector(ABC):
     """Base selector that defines shared training frame selection mechanism from the trainval set.
 
@@ -172,8 +179,9 @@ class BaseIndicesSelector(ABC):
                     EntropyProfilePoint(
                         training_size=len(selected_frame_indices),
                         cumulative_entropy=entropy,
-                        information_gain=(
-                            entropy - entropy_trace[-1].cumulative_entropy
+                        information_gain=_entropy_difference(
+                            entropy,
+                            entropy_trace[-1].cumulative_entropy,
                         ),
                     )
                 )

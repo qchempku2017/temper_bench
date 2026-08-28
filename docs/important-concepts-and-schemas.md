@@ -97,7 +97,7 @@ A [`TrainValSplitTrajectory`](../src/temper/schemas/split.py:155) represents the
 
 The checkpoints are therefore **nested**: a smaller training set is an ordered prefix of every later one, and all checkpoints share the same test set. [`get_train_set`](../src/temper/schemas/split.py:256) and [`get_val_set`](../src/temper/schemas/split.py:274) expose these reference lists. A required non-`None` trajectory seed records the selector's randomized initialization; random selection also uses it at later increments.
 
-The optional [`EntropyProfile`](../src/temper/schemas/split.py:112) records ordered QUESTS entropy points for selection steps. A point can cover multiple selected frames, so profile points do not necessarily coincide one-for-one with requested training checkpoints. Cumulative entropy and information gain must be finite, but neither is constrained to be nonnegative or monotonic because of the QUESTS quantities represented.
+The optional [`EntropyProfile`](../src/temper/schemas/split.py:112) records ordered QUESTS entropy points for selection steps. A point can cover multiple selected frames, so profile points do not necessarily coincide one-for-one with requested training checkpoints. Cumulative entropy and information gain may be signed infinite when QUESTS kernel values underflow, allowing a warned selection to continue and be persisted; `NaN` is rejected. Neither quantity is constrained to be nonnegative or monotonic because of the QUESTS quantities represented.
 
 ### `SplitGroup`: provenance for a group-repeat result
 

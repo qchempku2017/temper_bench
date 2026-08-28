@@ -14,7 +14,12 @@ import numpy as np
 from ase import Atoms
 
 from temper.schemas.quests_adapter import QuestsAdapterConfig
-from temper.logging import BackendFallbackWarning, format_elapsed, progress_task
+from temper.logging import (
+    BackendFallbackWarning,
+    DataQualityWarning,
+    format_elapsed,
+    progress_task,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -47,10 +52,11 @@ class QuestsUnavailableError(RuntimeError):
 class QuestsNumericalError(RuntimeError):
     """Raised when the QUESTS backend returns invalid numerical output.
 
-    Raised when ``entropy``/``delta_entropy`` return non-finite values
-    (``NaN``/``inf``), which the QUESTS kernel can produce when the bandwidth
-    is too small relative to the descriptor distances, or when a backend
-    result has an unexpected shape.
+    Raised when descriptor computation returns a non-finite value, when
+    ``entropy``/``delta_entropy`` return ``NaN``, or when a backend result has
+    an unexpected shape. Infinite entropy values are retained with a
+    :class:`temper.logging.DataQualityWarning` because positive infinite
+    differential entropy remains meaningful for maximum-information selection.
     """
 
 
@@ -182,9 +188,9 @@ class QuestsAdapter:
 
     Wraps the verified ``quests`` import surface behind typed methods that
     resolve the configured device route, deliberately convert arrays/tensors,
-    and reject non-finite backend output. All ``quests`` imports are lazy and
-    performed only when a concrete route is used, so the CPU route never
-    imports torch/CUDA.
+    reject NaN backend output, and warn while retaining infinite entropy
+    output. All ``quests`` imports are lazy and performed only when a concrete
+    route is used, so the CPU route never imports torch/CUDA.
 
     Attributes:
         config (QuestsAdapterConfig): The persistent configuration for the
@@ -464,23 +470,55 @@ class QuestsAdapter:
         )
 
     @staticmethod
-    def _require_scalar_finite(value: float, what: str) -> None:
-        """Raise unless a scalar backend result is finite."""
-        if not math.isfinite(value):
+    def _validate_scalar_entropy_result(value: float, what: str) -> None:
+        """Reject NaN and warn without rejecting an infinite scalar result."""
+        if math.isnan(value):
             raise QuestsNumericalError(
-                f"QUESTS {what} returned a non-finite value {value}; "
-                "adjust entropy_bandwidth/descriptor parameters."
+                f"QUESTS {what} returned NaN; the value cannot be ranked or "
+                "persisted reliably."
+            )
+        if math.isinf(value):
+            infinity = "+inf" if value > 0 else "-inf"
+            warnings.warn(
+                f"QUESTS {what} returned an infinite scalar value "
+                f"({infinity}). The value will be retained so selection can "
+                "continue. Inspect the dataset for unusually dissimilar or "
+                "malformed structures. To reduce numerical kernel underflow, "
+                "consider a wider entropy_bandwidth, "
+                "descriptor_dtype='float64', or a smaller "
+                "entropy_batch_size; changing entropy_bandwidth changes the "
+                "KDE and selection objective.",
+                DataQualityWarning,
+                stacklevel=3,
             )
 
     @staticmethod
-    def _require_array_finite(values: np.ndarray, what: str) -> None:
-        """Raise unless all entries of a backend result array are finite."""
-        if not np.all(np.isfinite(values)):
+    def _validate_array_entropy_result(values: np.ndarray, what: str) -> None:
+        """Reject NaN and warn without rejecting infinite array entries."""
+        nan_count = int(np.count_nonzero(np.isnan(values)))
+        if nan_count:
             raise QuestsNumericalError(
-                f"QUESTS {what} returned non-finite values "
-                f"({int(np.count_nonzero(~np.isfinite(values)))} of "
-                f"{values.size}); adjust entropy_bandwidth/descriptor "
-                "parameters."
+                f"QUESTS {what} returned NaN values ({nan_count} of "
+                f"{values.size}); NaN values cannot be ranked reliably."
+            )
+
+        positive_count = int(np.count_nonzero(np.isposinf(values)))
+        negative_count = int(np.count_nonzero(np.isneginf(values)))
+        infinite_count = positive_count + negative_count
+        if infinite_count:
+            warnings.warn(
+                f"QUESTS {what} returned {infinite_count} infinite value(s) "
+                f"out of {values.size} ({positive_count} +inf, "
+                f"{negative_count} -inf). The values will be retained; +inf "
+                "differential entropy is ranked as maximally informative. "
+                "You may inspect the dataset for "
+                "unusually dissimilar or malformed structures. To reduce "
+                "numerical kernel underflow, consider a wider "
+                "entropy_bandwidth, descriptor_dtype='float64', or a smaller "
+                "entropy_batch_size; changing entropy_bandwidth changes the "
+                "KDE and selection objective.",
+                DataQualityWarning,
+                stacklevel=3,
             )
 
     def get_entropy(self, descriptors: np.ndarray) -> float:
@@ -502,7 +540,11 @@ class QuestsAdapter:
         ValueError
             If ``descriptors`` is not a 2D matrix or is empty.
         QuestsNumericalError
-            If the backend returns a non-finite value.
+            If the backend returns NaN.
+        Warns
+        -----
+        DataQualityWarning
+            If the backend returns an infinite value. The value is retained.
         """
         matrix = np.ascontiguousarray(
             np.asarray(descriptors, dtype=self.config.descriptor_dtype)
@@ -534,7 +576,7 @@ class QuestsAdapter:
             )
             result = float(value.detach().cpu().item())
 
-        self._require_scalar_finite(result, "entropy")
+        self._validate_scalar_entropy_result(result, "entropy")
         return result
 
     def delta_entropy(
@@ -567,7 +609,11 @@ class QuestsAdapter:
             If either matrix is not 2D, is empty, or has a different feature
             dimension than the other.
         QuestsNumericalError
-            If the backend returns non-finite values or an unexpected shape.
+            If the backend returns NaN values or an unexpected shape.
+        Warns
+        -----
+        DataQualityWarning
+            If the backend returns infinite values. They are retained.
         """
         candidate_matrix = np.ascontiguousarray(
             np.asarray(candidate, dtype=self.config.descriptor_dtype)
@@ -623,7 +669,7 @@ class QuestsAdapter:
                 "QUESTS delta_entropy returned shape "
                 f"{result.shape}, expected {(candidate_matrix.shape[0],)}."
             )
-        self._require_array_finite(result, "delta_entropy")
+        self._validate_array_entropy_result(result, "delta_entropy")
         return result
 
 
@@ -649,13 +695,13 @@ def compute_information_gain_per_candidate_frame(
 
     Returns
     -------
-    float
-        The QUESTS information gain of the chunk (can be negative).
+    np.ndarray
+        Per-frame QUESTS information gains, which may be negative or infinite.
 
     Raises
     ------
     QuestsNumericalError
-        If the backend returns non-finite values.
+        If the backend returns NaN values.
     """
     candidate_descriptors = descriptors.get_multiple_frames(candidate_frame_indices)
 

@@ -194,7 +194,9 @@ def test_grouped_domain_generates_frame_references_and_validates_group_filenames
         GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"one": ["first.extxyz", "first.extxyz"]})
 
 
-def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions() -> None:
+def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions(
+    tmp_path: Path,
+) -> None:
     refs = references()
     trajectory = TrainValSplitTrajectory(method="random", seed=4, requested_train_sizes=[1, 2], selected_frames=refs[:3], additional_trainval_frames=[])
     assert trajectory.get_train_set(1) == refs[:2]
@@ -208,6 +210,22 @@ def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions() -> No
         SplitGroup(domain="domain", grouping_strategy="all", group_name="all", test_set=[], extra_tested_groups=[], test_ratio=0.25, trainval_test_split_seed=1, train_val_split_trajectory=trajectory)
     with pytest.raises(ValidationError, match="strictly increasing"):
         EntropyProfile(points=[EntropyProfilePoint(training_size=2, cumulative_entropy=0, information_gain=0), EntropyProfilePoint(training_size=1, cumulative_entropy=0, information_gain=0)])
+    infinite = EntropyProfilePoint(
+        training_size=1,
+        cumulative_entropy=float("inf"),
+        information_gain=float("inf"),
+    )
+    assert infinite.cumulative_entropy == infinite.information_gain == float("inf")
+    infinite_profile_path = tmp_path / "infinite-entropy-profile.json"
+    dumpfn(EntropyProfile(points=[infinite]), infinite_profile_path, indent=2)
+    restored_infinite_profile = loadfn(infinite_profile_path)
+    assert restored_infinite_profile.points[0] == infinite
+    with pytest.raises(ValidationError, match="must not be NaN"):
+        EntropyProfilePoint(
+            training_size=1,
+            cumulative_entropy=float("nan"),
+            information_gain=0.0,
+        )
 
 
 def test_split_identity_is_deterministic_and_tracks_split_provenance(

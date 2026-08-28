@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from ase import Atoms
 
+from temper.logging import DataQualityWarning
 from temper.splitting.quests_adapter import QuestsAdapter, QuestsAdapterConfig, QuestsDescriptorsStorage, QuestsNumericalError, compute_information_gain_per_candidate_frame
 
 
@@ -123,8 +124,38 @@ def test_adapter_chunks_descriptors_and_validates_entropy_results(monkeypatch: p
     assert adapter.get_entropy(np.ones((2, 2))) == 1.25
     assert adapter.delta_entropy(np.ones((2, 2)), np.ones((1, 2))).tolist() == [0.0, 1.0]
     monkeypatch.setattr(adapter, "_import_cpu_backend", lambda: (Descriptor, SimpleNamespace(entropy=lambda *_args, **_kwargs: float("nan"))))
-    with pytest.raises(QuestsNumericalError, match="non-finite"):
+    with pytest.raises(QuestsNumericalError, match="returned NaN"):
         adapter.get_entropy(np.ones((1, 2)))
+
+
+def test_adapter_warns_and_preserves_infinite_entropy_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = QuestsAdapter(QuestsAdapterConfig(device="cpu"))
+
+    entropy_backend = SimpleNamespace(
+        entropy=lambda *_args, **_kwargs: float("inf"),
+        delta_entropy=lambda *_args, **_kwargs: np.array(
+            [float("inf"), 0.25, -float("inf")]
+        ),
+    )
+    monkeypatch.setattr(adapter, "_import_cpu_backend", lambda: (None, entropy_backend))
+
+    with pytest.warns(DataQualityWarning, match=r"infinite scalar value \(\+inf\)"):
+        assert adapter.get_entropy(np.ones((1, 2))) == float("inf")
+    with pytest.warns(
+        DataQualityWarning,
+        match=r"2 infinite value\(s\) out of 3 \(1 \+inf, 1 -inf\)",
+    ):
+        result = adapter.delta_entropy(np.ones((3, 2)), np.ones((1, 2)))
+    assert result.tolist() == [float("inf"), 0.25, -float("inf")]
+
+    nan_backend = SimpleNamespace(
+        delta_entropy=lambda *_args, **_kwargs: np.array([0.0, float("nan")])
+    )
+    monkeypatch.setattr(adapter, "_import_cpu_backend", lambda: (None, nan_backend))
+    with pytest.raises(QuestsNumericalError, match=r"NaN values \(1 of 2\)"):
+        adapter.delta_entropy(np.ones((2, 2)), np.ones((1, 2)))
 
 
 def test_adapter_uses_quests_gpu_entropy_api(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -340,6 +340,24 @@ configuration requires the first GPU device:
 > `descriptor_dtype: "float64"` and `entropy_batch_size: 4000` prioritize
 > numerical reliability while retaining reasonably large compute tiles.
 
+When all Gaussian-kernel contributions for a candidate environment underflow
+to zero, its differential entropy is `+inf`. This means QUESTS found no
+representable similarity to the selected reference environments. TEMPER emits
+a `DataQualityWarning`, retains the value, and continues: `+inf` sorts above
+finite differential entropy, so a frame containing such an environment is
+selected first by maximum-information selection. The warning reports how many
+array entries are infinite, including separate `+inf` and `-inf` counts.
+
+Scalar infinite entropy is also retained with a warning. Unlike differential
+entropy, ordinary entropy compares every environment with itself and should
+therefore remain finite in exact arithmetic. An infinite scalar entropy is a
+stronger reason to inspect the dataset and numerical configuration. `NaN`
+remains a hard error for both scalar and array results because it has no
+meaningful ordering. Entropy profiles allow signed infinity so warned runs can
+be persisted; if consecutive cumulative entropies are the same infinity, the
+profile preserves that infinity as the gain instead of computing undefined
+`inf - inf`.
+
 `descriptor_dtype` controls both the stored descriptors and the dtype used by
 the CPU or GPU entropy backend. `float64` substantially reduces cancellation in
 pairwise distance calculations and extends the range of representable Gaussian
@@ -360,8 +378,9 @@ rounding. Smaller batches reduce peak memory and are often numerically safer,
 at the cost of more loop, kernel-launch, synchronization, or transfer overhead.
 
 In exact arithmetic, changing `entropy_batch_size` would not change the result.
-Treat a material batch-dependent difference or a non-finite result as numerical
-instability: retain `float64`, lower the batch size, and compare again. Changing
+When TEMPER warns about infinity, inspect the dataset for unusually dissimilar
+or malformed structures. To distinguish intended dissimilarity from numerical
+underflow, retain `float64`, lower the batch size, and compare again. A wider
 `entropy_bandwidth` can also prevent kernel underflow, but it changes the KDE
 and therefore the scientific meaning and selection ordering; recalibrate it for
 the dataset instead of using it only as a numerical workaround.
