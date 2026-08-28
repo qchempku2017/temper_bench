@@ -80,7 +80,7 @@ class BaseIndicesSelector(ABC):
         self.requested_train_sizes = get_requested_train_sizes_from_ratios(
             self.n_trainval, self.requested_train_ratios, max_train_size=max_train_size
         )
-        self.num_selected_per_step = num_selected_per_step or max(1, self.n_trainval // 20)
+        self.num_selected_per_step = num_selected_per_step or max(1, self.n_trainval // 40)
         if self.num_selected_per_step > max(self.requested_train_sizes):
             raise ValueError(
                 f"Number of selected frames per step ({self.num_selected_per_step}) "
