@@ -377,7 +377,7 @@ def load_frames_test(
     root_path = Path(root_path).expanduser().resolve()
     if resolver is None or resolver.root_path != root_path:
         resolver = FrameReferenceResolver(root_path)
-    return _load_frames_with_resolver(schema.test_set, resolver), resolver
+    return _load_frames_with_resolver(list(schema.test_set), resolver), resolver
 
 
 def load_frames_train_validation(
@@ -627,6 +627,11 @@ def write_atoms_list_to_extxyz(
     return target
 
 
+def _count_frames_and_atoms(atoms_list: List[Atoms]) -> Tuple[int, int]:
+    """Return frame and total-atom counts for an in-memory dataset."""
+    return len(atoms_list), sum(len(atoms) for atoms in atoms_list)
+
+
 def write_all_sets_in_split_group_to_extxyz(
     split_group: SplitGroup,
     root_path: Path | str = DEFAULT_DATA_DIR,
@@ -697,12 +702,19 @@ def write_all_sets_in_split_group_to_extxyz(
     train_files: List[str] = []
     val_files: List[str | None] = []
     test_files: List[str] = []
+    train_frame_counts: List[int] = []
+    val_frame_counts: List[int] = []
+    train_atom_counts: List[int] = []
+    val_atom_counts: List[int] = []
 
     # Write training sets and optionally validation sets.
     for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
         atoms_train, atoms_val, resolver = load_frames_train_validation(
             split_group, i, root_path=root_path, resolver=resolver
         )
+        train_n_frames, train_n_atoms = _count_frames_and_atoms(atoms_train)
+        train_frame_counts.append(train_n_frames)
+        train_atom_counts.append(train_n_atoms)
         train_files.append(write_atoms_list_to_extxyz(
             atoms_list=atoms_train,
             domain=split_group.domain,
@@ -714,7 +726,10 @@ def write_all_sets_in_split_group_to_extxyz(
             output_dir=output_path / split_group.domain,
         ).name)
         val_file = None
+        val_n_frames = 0
+        val_n_atoms = 0
         if write_validation and atoms_val:
+            val_n_frames, val_n_atoms = _count_frames_and_atoms(atoms_val)
             val_file = write_atoms_list_to_extxyz(
                 atoms_list=atoms_val,
                 domain=split_group.domain,
@@ -726,10 +741,13 @@ def write_all_sets_in_split_group_to_extxyz(
                 output_dir=output_path / split_group.domain,
             ).name
         val_files.append(val_file)
+        val_frame_counts.append(val_n_frames)
+        val_atom_counts.append(val_n_atoms)
     # Write the testing set of the current group.
     atoms_test, resolver = load_frames_test(
         split_group, root_path, resolver=resolver
     )
+    test_n_frames, test_n_atoms = _count_frames_and_atoms(atoms_test)
     test_files.append(write_atoms_list_to_extxyz(
         atoms_list=atoms_test,
         domain=split_group.domain,
@@ -762,10 +780,15 @@ def write_all_sets_in_split_group_to_extxyz(
                     repeat_id=other_group.repeat_id,
                 )
                 filepath = (output_path / other_group.domain / filename).resolve()
+                atoms_test, resolver = load_frames_test(
+                    other_group, root_path, resolver=resolver
+                )
+                extra_test_n_frames, extra_test_n_atoms = _count_frames_and_atoms(
+                    atoms_test
+                )
+                test_n_frames += extra_test_n_frames
+                test_n_atoms += extra_test_n_atoms
                 if not filepath.exists():  # Other group's file not yet written.
-                    atoms_test, resolver = load_frames_test(
-                        other_group, root_path, resolver=resolver
-                    )
                     test_files.append(write_atoms_list_to_extxyz(
                         atoms_list=atoms_test,
                         domain=other_group.domain,
@@ -783,14 +806,19 @@ def write_all_sets_in_split_group_to_extxyz(
         TrainingUnit(
             train_set=train_files[i],
             val_set=val_files[i],
-            test_sets=test_files,
+            test_sets=tuple(test_files),
             root_path=output_path,
             domain=split_group.domain,
             group_name=split_group.group_name,
             grouping_strategy=split_group.grouping_strategy,
             method=split_group.train_val_split_trajectory.method,
             repeat_id=split_group.repeat_id,
-            n_train=split_group.train_val_split_trajectory.requested_train_sizes[i],
+            train_n_frames=train_frame_counts[i],
+            val_n_frames=val_frame_counts[i],
+            test_n_frames=test_n_frames,
+            train_n_atoms=train_atom_counts[i],
+            val_n_atoms=val_atom_counts[i],
+            test_n_atoms=test_n_atoms,
             split_id=split_group.split_id,
         )
         for i in range(len(train_files))

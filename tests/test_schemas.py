@@ -325,19 +325,33 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     for name in ("train.extxyz", "val.extxyz", "test.extxyz"):
         (domain_root / name).write_text("", encoding="utf-8")
     split_id = UUID("70f7b0c5-1894-5964-8e7c-89454fb0f52a")
-    unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, split_id=split_id, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=root)
+    unit = TrainingUnit(
+        domain="domain", grouping_strategy="all", group_name="all", method="random",
+        repeat_id=0, train_n_frames=1, val_n_frames=1, test_n_frames=1,
+        train_n_atoms=2, val_n_atoms=3, test_n_atoms=4, split_id=split_id,
+        train_set="train.extxyz", val_set="val.extxyz",
+        test_sets=["test.extxyz"], root_path=root,
+    )
     original_training_unit_id = unit.training_unit_id
     assert "training_unit_id" in TrainingUnit.model_fields
     assert unit.training_unit_id.version == 5
-    assert unit.training_unit_id == UUID("83586d3e-01ff-5bd6-b440-be69cfb8b803")
-    unit.n_train = 2
-    assert unit.n_train == 2
+    assert unit.training_unit_id == UUID("ac8aab5e-4679-5bc8-a91e-99167ed36cd9")
+    unit.train_n_frames = 2
+    assert unit.train_n_frames == 2
     assert unit.training_unit_id != original_training_unit_id
     updated_training_unit_id = unit.training_unit_id
     with pytest.raises(ValidationError):
-        unit.n_train = 0
-    assert unit.n_train == 2
+        unit.train_n_frames = 0
+    assert unit.train_n_frames == 2
     assert unit.training_unit_id == updated_training_unit_id
+    for derived_metric in (
+        "val_n_frames", "test_n_frames", "train_n_atoms", "val_n_atoms",
+        "test_n_atoms",
+    ):
+        changed_metric = unit.model_copy(
+            update={derived_metric: getattr(unit, derived_metric) + 1}
+        )
+        assert changed_metric.training_unit_id == unit.training_unit_id
     with pytest.raises(AttributeError, match="system-managed"):
         unit.training_unit_id = original_training_unit_id
     with pytest.raises(AttributeError):
@@ -365,18 +379,44 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     )
     assert other_split.training_unit_id != unit.training_unit_id
 
-    legacy_unit = TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="train.extxyz", val_set="val.extxyz", test_sets=["test.extxyz"], root_path=moved_root)
-    assert legacy_unit.split_id is None
-    legacy_payload = legacy_unit.model_dump()
-    legacy_payload.pop("training_unit_id")
-    assert TrainingUnit.model_validate(legacy_payload).training_unit_id == legacy_unit.training_unit_id
+    parentless_unit = TrainingUnit(
+        domain="domain", grouping_strategy="all", group_name="all", method="random",
+        repeat_id=0, train_n_frames=1, val_n_frames=1, test_n_frames=1,
+        train_n_atoms=2, val_n_atoms=3, test_n_atoms=4,
+        train_set="train.extxyz", val_set="val.extxyz",
+        test_sets=["test.extxyz"], root_path=moved_root,
+    )
+    assert parentless_unit.split_id is None
+    parentless_payload = parentless_unit.model_dump()
+    parentless_payload.pop("training_unit_id")
+    assert (
+        TrainingUnit.model_validate(parentless_payload).training_unit_id
+        == parentless_unit.training_unit_id
+    )
+
+    v1_payload = parentless_unit.model_dump()
+    for metric in (
+        "train_n_frames", "val_n_frames", "test_n_frames", "train_n_atoms",
+        "val_n_atoms", "test_n_atoms",
+    ):
+        v1_payload.pop(metric)
+    v1_payload["n_train"] = 1
+    v1_payload.pop("training_unit_id")
+    with pytest.raises(ValidationError):
+        TrainingUnit.model_validate(v1_payload)
 
     tampered_payload = unit.model_dump(mode="json")
-    tampered_payload["n_train"] = 3
+    tampered_payload["train_n_frames"] = 3
     with pytest.raises(ValidationError, match="does not match training-unit contents"):
         TrainingUnit.model_validate(tampered_payload)
     with pytest.raises(ValidationError, match="does not exist"):
-        TrainingUnit(domain="domain", grouping_strategy="all", group_name="all", method="random", repeat_id=0, n_train=1, train_set="missing.extxyz", test_sets=[], root_path=root)
+        TrainingUnit(
+            domain="domain", grouping_strategy="all", group_name="all",
+            method="random", repeat_id=0, train_n_frames=1, val_n_frames=0,
+            test_n_frames=0, train_n_atoms=1, val_n_atoms=0,
+            test_n_atoms=0, train_set="missing.extxyz", test_sets=[],
+            root_path=root,
+        )
 
     stored_id = unit.training_unit_id
 

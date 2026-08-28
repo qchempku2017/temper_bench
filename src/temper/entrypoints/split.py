@@ -142,6 +142,7 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> int:
         )
         # Write train, val and test sets to files.
         training_units = []
+        resolver = None
         logger.info(
             "%s Exporting split datasets for %d split group(s).",
             domain_context,
@@ -163,11 +164,12 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> int:
                         f"repeat {getattr(split_group, 'repeat_id', '?')}"
                     )
                 )
-                training_units_local, _ = write_all_sets_in_split_group_to_extxyz(
+                training_units_local, resolver = write_all_sets_in_split_group_to_extxyz(
                     split_group, root_path, output_path,
                     write_validation=split_config.write_validation,
                     write_extra_tests=split_config.write_extra_tests,
                     all_split_groups=split_groups,
+                    resolver=resolver,
                 )
                 training_units.extend(training_units_local)
                 progress.advance()

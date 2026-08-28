@@ -74,17 +74,29 @@ def test_resolver_cache_preserves_reference_order_and_rejects_escapes(monkeypatc
 def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path) -> None:
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
-    write(source / "frames.extxyz", [make_frame("H", -float(index), str(index)) for index in range(10)], format="extxyz")
+    symbols = ["H", "He2", "Li3", "Be4", "B5", "C6", "N7", "O8", "F9", "Ne10"]
+    write(
+        source / "frames.extxyz",
+        [make_frame(symbol, -float(index), str(index)) for index, symbol in enumerate(symbols)],
+        format="extxyz",
+    )
     output = tmp_path / "out"
     split_group = _split_group()
     units, resolver = write_all_sets_in_split_group_to_extxyz(
         split_group, root_path=source.parent, output_path=output,
         write_validation=True, write_extra_tests=False,
-    )  # TODO: add test cases where extra_tests are correctly treated.
+    )
     assert len(units) == 2
     assert all(unit.split_id == split_group.split_id for unit in units)
     assert len({unit.training_unit_id for unit in units}) == 2
-    assert [(unit.n_train, unit.val_set is not None) for unit in units] == [(2, True), (4, True)]
+    assert [
+        (unit.train_n_frames, unit.val_n_frames, unit.test_n_frames)
+        for unit in units
+    ] == [(2, 6, 2), (4, 4, 2)]
+    assert [
+        (unit.train_n_atoms, unit.val_n_atoms, unit.test_n_atoms)
+        for unit in units
+    ] == [(3, 33, 19), (10, 26, 19)]
     assert [len(read(output / unit.domain / unit.train_set, index=":")) for unit in units] == [2, 4]
     assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in units if unit.val_set] == [6, 4]
     assert len(read(output / units[0].domain / units[0].test_sets[0], index=":")) == 2
@@ -101,8 +113,8 @@ def test_export_includes_cross_tests_only_when_requested(
 ) -> None:
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
-    for filename in ("frames.extxyz", "other.extxyz"):
-        write(source / filename, [make_frame("H", -float(index), f"{filename}-{index}") for index in range(10)], format="extxyz")
+    for filename, symbols in (("frames.extxyz", "H"), ("other.extxyz", "He2")):
+        write(source / filename, [make_frame(symbols, -float(index), f"{filename}-{index}") for index in range(10)], format="extxyz")
     main = _split_group().model_copy(update={"extra_tested_groups": ["other"]})
     other = _other_split_group()
 
@@ -110,6 +122,9 @@ def test_export_includes_cross_tests_only_when_requested(
         main, root_path=source.parent, output_path=tmp_path / "without-extra", write_extra_tests=False,
     )
     assert all(len(unit.test_sets) == 1 for unit in without_extra)
+    assert all(unit.val_set is None for unit in without_extra)
+    assert all(unit.val_n_frames == 0 and unit.val_n_atoms == 0 for unit in without_extra)
+    assert all(unit.test_n_frames == 2 and unit.test_n_atoms == 2 for unit in without_extra)
 
     with_extra_output = tmp_path / "with-extra"
     write_all_sets_in_split_group_to_extxyz(
@@ -118,18 +133,27 @@ def test_export_includes_cross_tests_only_when_requested(
     )
     import temper.splitting.io as io_module
     original_write = io_module.write_atoms_list_to_extxyz
+    original_read = io_module.read
     written_groups: list[str] = []
+    read_paths: list[Path] = []
 
     def tracked_write(*args, **kwargs):
         written_groups.append(kwargs["group_name"])
         return original_write(*args, **kwargs)
 
+    def tracked_read(path, *args, **kwargs):
+        read_paths.append(Path(path).resolve())
+        return original_read(path, *args, **kwargs)
+
     monkeypatch.setattr(io_module, "write_atoms_list_to_extxyz", tracked_write)
+    monkeypatch.setattr(io_module, "read", tracked_read)
     with_extra, _ = write_all_sets_in_split_group_to_extxyz(
         main, root_path=source.parent, output_path=with_extra_output, write_extra_tests=True,
         all_split_groups=[main, other],
     )
     assert all(len(unit.test_sets) == 2 for unit in with_extra)
+    assert all(unit.test_n_frames == 4 and unit.test_n_atoms == 6 for unit in with_extra)
     assert any("__other__" in filename for filename in with_extra[0].test_sets)
     assert "other" not in written_groups  # Reuse the test file already written for the other group.
+    assert all(not path.is_relative_to(with_extra_output.resolve()) for path in read_paths)
     assert all((tmp_path / "with-extra" / "demo" / filename).is_file() for filename in with_extra[0].test_sets)

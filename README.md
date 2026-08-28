@@ -121,7 +121,7 @@ Split records store frame references rather than embedded structures or descript
 
 ## Current scope
 
-Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, `extxyz` export, and the end-to-end split CLI are implemented. Training jobs, benchmark execution, result uploading, and metrics are not implemented features.
+Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, `extxyz` export, and the end-to-end split CLI are implemented. Exported training units record dataset frame and atom totals. Training jobs, benchmark execution, result uploading, and model-quality metrics are not implemented features.
 
 ## Documentation
 

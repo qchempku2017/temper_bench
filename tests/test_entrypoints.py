@@ -181,6 +181,7 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     partition_calls: list[tuple] = []
     split_configs = []
     export_calls: list[tuple] = []
+    returned_resolvers: list[object] = []
     artifact_dumps: list[tuple[object, Path]] = []
     actual_dumpfn = entrypoint.dumpfn
     reproduce_path = tmp_path / "custom_reproduce.json"
@@ -191,11 +192,13 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
 
     def split(grouped_domain, config):
         split_configs.append(config)
-        return ["split-group"]
+        return ["split-group-1", "split-group-2"]
 
     def export(split_group, root_path, output_path, **kwargs):
         export_calls.append((split_group, root_path, output_path, kwargs))
-        return ["training-unit"], None
+        returned_resolver = object()
+        returned_resolvers.append(returned_resolver)
+        return ["training-unit"], returned_resolver
 
     def record_dump(obj, path, indent):
         path = Path(path)
@@ -220,9 +223,13 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     assert split_configs[0].output_path == output_root
     assert split_configs[0].trainval_test_split_seeds == requested_trainval_test_seeds
     assert split_configs[0].train_val_split_seeds == requested_train_val_seeds
-    assert export_calls[0][:3] == ("split-group", data_root, output_root)
+    assert export_calls[0][:3] == ("split-group-1", data_root, output_root)
     assert export_calls[0][3]["write_validation"] is True
     assert export_calls[0][3]["write_extra_tests"] is False
+    assert export_calls[0][3]["resolver"] is None
+    assert export_calls[1][3]["resolver"] is returned_resolvers[0]
+    assert export_calls[2][3]["resolver"] is None
+    assert export_calls[3][3]["resolver"] is returned_resolvers[2]
     assert [path for _, path in artifact_dumps] == [
         output_root / "ignored" / "grouped_domains.json",
         output_root / "ignored" / "split_groups.json",

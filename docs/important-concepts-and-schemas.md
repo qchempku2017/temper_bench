@@ -154,19 +154,20 @@ This design makes a split reproducible only relative to the source data tree and
 
 Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is the exported unit corresponding to **one MLFF training attempt**:
 
-- It identifies one domain, grouping strategy, group, splitting method, repeat, and `n_train` checkpoint.
+- It identifies one domain, grouping strategy, group, splitting method, repeat, and `train_n_frames` checkpoint.
 - It points to exactly one training `.extxyz` file, an optional validation `.extxyz` file, and one or more test `.extxyz` files.
+- It records `train_n_frames`, `val_n_frames`, and `test_n_frames`, together with the corresponding `*_n_atoms` totals. Test totals cover every file in `test_sets`; validation totals are zero when `val_set` is absent.
 - It records the `split_id` of the `SplitGroup` that produced it and stores its own system-managed, deterministic `training_unit_id`.
-- Its fields remain mutable through validated reassignment. Reassigning an identity-defining field regenerates `training_unit_id`; changing only `root_path` does not.
+- Its fields remain mutable through validated reassignment. Among the size counters, only `train_n_frames` defines identity; changing another derived total or `root_path` does not regenerate `training_unit_id`.
 - Its validation ensures that every referenced dataset file exists beneath `root_path / domain` and has the `.extxyz` extension.
 
 All `TrainingUnit` objects made from a given `SplitGroup` share that split's own test file and any selected extra-test files, but differ in their nested training checkpoint and optional validation file. The class describes input datasets for a future training run; it does not create, execute, or evaluate that run.
 
-The `training_unit_id` fingerprints the parent split identity and the unit's dataset contract, but deliberately excludes `root_path`; moving an exported tree therefore does not rename its logical units. The stored value is verified once during loading and reused afterward. Older manifests without IDs remain loadable and receive stable identities from their existing fields, but only newly exported units can distinguish identical coordinates produced by different split definitions.
+The `training_unit_id` fingerprints the parent split identity and the unit's dataset contract, but deliberately excludes `root_path`; moving an exported tree therefore does not rename its logical units. The stored value is verified once during loading and reused afterward. Schema-v2 manifests without IDs receive stable identities from their fields. Version-1 manifests containing only `n_train` do not satisfy the required version-2 counter schema and must be regenerated or explicitly migrated.
 
 ## Implemented scope versus roadmap
 
-The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. Training-job creation, MLFF training orchestration, benchmark evaluation, and metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). Therefore, `TrainingUnit` should be read as an exported training-data contract, not as evidence that TEMPER currently schedules or performs MLFF training.
+The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. `TrainingUnit` includes dataset-size counters, but training-job creation, MLFF training orchestration, benchmark evaluation, and model-quality metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). Therefore, `TrainingUnit` should be read as an exported training-data contract, not as evidence that TEMPER currently schedules or performs MLFF training.
 
 ## Further reading
 

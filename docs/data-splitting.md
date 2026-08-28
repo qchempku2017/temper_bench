@@ -240,7 +240,9 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 - `write_extra_tests=True` by default. In that mode, `all_split_groups` is required so the exporter can find and write the test sets of groups named in `extra_tested_groups`.
 - Extra test files are recorded alongside the ordinary test file in each returned `TrainingUnit`; they are not added to `SplitGroup.test_set` itself.
 - Each `TrainingUnit.root_path` is the shared results root, and its file validation resolves datasets beneath `root_path / domain`.
-- Each newly exported unit records its parent `split_id` and stores a deterministic UUIDv5 `training_unit_id`. Validated reassignment regenerates that ID, while relocating the excluded `root_path` leaves it unchanged.
+- Each unit records frame totals in `train_n_frames`, `val_n_frames`, and `test_n_frames`, plus matching `train_n_atoms`, `val_n_atoms`, and `test_n_atoms` totals. Test totals aggregate every file in `test_sets`; validation totals are zero when no validation file is exported.
+- Each newly exported unit records its parent `split_id` and stores a deterministic UUIDv5 `training_unit_id`. `train_n_frames` is identity-defining, while the other derived counters and `root_path` are excluded from identity.
+- `TrainingUnit` schema v2 replaces `n_train` with the six required counters. Version-1 manifests require regeneration or explicit migration.
 
 ## QUESTS backend
 

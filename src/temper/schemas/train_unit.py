@@ -27,7 +27,7 @@ class TrainingUnit(ManagedIdentityModel):
         - A specific train-val split method.
         - A specific repeat_id among independent train-val-test splits on the group using the method.
             (The level of SplitGroup)
-        - A specific N_train (number of requested training structures) in one independent train-val-test split.
+        - A specific training-frame checkpoint in one independent train-val-test split.
 
     The unit contains extxyz file paths containing labeled data:
         - A training set (a single file path)
@@ -53,8 +53,21 @@ class TrainingUnit(ManagedIdentityModel):
             Name of the train-val split method.
         repeat_id: int
             Repeat id of the independent train-val-test split.
-        n_train: int
-            Number of training structures.
+        train_n_frames: int
+            Number of frames in the training dataset.
+        val_n_frames: int
+            Number of frames in the exported validation dataset, or zero when
+            no validation dataset is exported.
+        test_n_frames: int
+            Total number of frames across all exported test datasets.
+        train_n_atoms: int
+            Total number of atoms across all frames in the training dataset.
+        val_n_atoms: int
+            Total number of atoms across all frames in the exported validation
+            dataset, or zero when no validation dataset is exported.
+        test_n_atoms: int
+            Total number of atoms across all frames in all exported test
+            datasets.
         split_id: UUID | None
             Identity of the SplitGroup that produced this unit. ``None`` is
             accepted for training-unit manifests written before split
@@ -83,13 +96,13 @@ class TrainingUnit(ManagedIdentityModel):
         "group_name",
         "method",
         "repeat_id",
-        "n_train",
+        "train_n_frames",
         "train_set",
         "test_sets",
         "val_set",
     )
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _TRAINING_UNIT_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.training-unit.v1"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.training-unit.v2"
     _IDENTITY_LABEL: ClassVar[str] = "training-unit"
 
     domain: str
@@ -101,8 +114,24 @@ class TrainingUnit(ManagedIdentityModel):
         ge=0,
     )
 
-    n_train: int = Field(
+    train_n_frames: int = Field(
         ge=1,
+    )
+    val_n_frames: int = Field(
+        ge=0,
+    )
+    test_n_frames: int = Field(
+        ge=0,
+    )
+
+    train_n_atoms: int = Field(
+        ge=0,
+    )
+    val_n_atoms: int = Field(
+        ge=0,
+    )
+    test_n_atoms: int = Field(
+        ge=0,
     )
 
     split_id: UUID | None = None
