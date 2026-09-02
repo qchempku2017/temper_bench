@@ -160,6 +160,10 @@ training_units, resolver = write_all_sets_in_split_group_to_extxyz(
     output_path=config.output_path,
     all_split_groups=split_groups,
 )
+
+# For N requested training checkpoints, the result contains N fine-tuning
+# units followed by one zero-shot unit. Pass create_zeroshot_unit=False to
+# return only the fine-tuning records; dataset export is otherwise unchanged.
 ```
 
 [`partition_domain_into_groups`](../src/temper/grouping/group.py) reads the domain metadata and produces one grouped domain per grouping definition. [`split_grouped_domain`](../src/temper/splitting/split.py) splits **every group** in its input for **every repeat**, returning a flat `list[SplitGroup]`. A [`SplitConfig`](../src/temper/schemas/split.py) selects one train/validation method per call: `random` or `quests`.
@@ -232,17 +236,20 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 
 ## Export
 
-[`write_all_sets_in_split_group_to_extxyz`](../src/temper/splitting/io.py:608) reconstructs and writes every requested training checkpoint plus the group's own test set. It returns a list of [`TrainingUnit`](../src/temper/schemas/train_unit.py:9) records and the reusable resolver.
+[`write_all_sets_in_split_group_to_extxyz`](../src/temper/splitting/io.py:608) reconstructs and writes every requested training checkpoint plus the group's own test set. It returns the fine-tuning [`TrainingUnit`](../src/temper/schemas/train_unit.py:9) records in checkpoint order, one zero-shot unit by default, and the reusable resolver.
 
 - Exported names are deterministic and include domain, grouping strategy, group, method, role, frame count, and repeat ID.
 - Dataset files are written under `output_path / split_group.domain`; writes atomically replace existing generated files.
 - `write_validation=False` by default; set it to `True` to write non-empty validation datasets.
 - `write_extra_tests=True` by default. In that mode, `all_split_groups` is required so the exporter can find and write the test sets of groups named in `extra_tested_groups`.
 - Extra test files are recorded alongside the ordinary test file in each returned `TrainingUnit`; they are not added to `SplitGroup.test_set` itself.
+- `create_zeroshot_unit=True` appends one schema record with no training or validation dataset. Setting it to `False` changes only the returned records; it does not alter any dataset write.
+- The own-group and configured cross-group test files are exported or resolved once and shared by every fine-tuning checkpoint and the zero-shot unit. Zero-shot support creates no empty files or duplicate test exports.
 - Each `TrainingUnit.root_path` is the shared results root, and its file validation resolves datasets beneath `root_path / domain`.
-- Each unit records frame totals in `train_n_frames`, `val_n_frames`, and `test_n_frames`, plus matching `train_n_atoms`, `val_n_atoms`, and `test_n_atoms` totals. Test totals aggregate every file in `test_sets`; validation totals are zero when no validation file is exported.
+- Dataset shape determines the runtime `unit_type`: a non-`None` `train_set` is `finetune`, while `train_set=None` is `zeroshot`. Zero-shot requires zero train/validation counts and no validation file. The property is derived at runtime and is not serialized.
+- Each unit records frame totals in `train_n_frames`, `val_n_frames`, and `test_n_frames`, plus matching `train_n_atoms`, `val_n_atoms`, and `test_n_atoms` totals. Test totals aggregate every file in `test_sets`.
 - Each newly exported unit records its parent `split_id` and stores a deterministic UUIDv5 `training_unit_id`. `train_n_frames` is identity-defining, while the other derived counters and `root_path` are excluded from identity.
-- `TrainingUnit` schema v2 replaces `n_train` with the six required counters. Version-1 manifests require regeneration or explicit migration.
+- The identity schema remains `temper.training-unit.v2`: `train_set` and `train_n_frames` already distinguish the two shapes, so existing fine-tuning IDs remain stable. Valid version-2 manifests load as fine-tuning units without migration; version-1 manifests containing only `n_train` remain unsupported.
 
 ## QUESTS backend
 

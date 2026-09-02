@@ -11,7 +11,7 @@ TEMPER's implemented workflow turns labeled source structures into reproducible,
 | Source domain | A directory with `metadata.json` and top-level `.extxyz` files | Labeled ASE-readable frames plus human-authored metadata | One [`InfoEntry`](../src/temper/schemas/info.py:20) per source file |
 | Grouping | [`GroupedDomain`](../src/temper/schemas/group.py:17) | Domain inventory, grouping strategy, and a mapping from group names to source filenames | One ordered frame pool per group |
 | Splitting | [`SplitGroup`](../src/temper/schemas/split.py:299) | Provenance, one train/validation trajectory, own-group test references, and cross-test assignments | Nested checkpoints for one group and repeat |
-| Reconstruction / export | [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) and exported `.extxyz` files | Reconstructed labeled frames | One [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) per training checkpoint |
+| Reconstruction / export | [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) and exported `.extxyz` files | Reconstructed labeled frames | Fine-tuning [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) records plus one zero-shot unit per split group |
 
 ```text
 Domain directory
@@ -32,7 +32,7 @@ SplitGroup (one group × one repeat)
 reference resolution and extxyz export
           │
           ▼
-TrainingUnit (one MLFF training attempt)
+TrainingUnit records (fine-tuning checkpoints plus zero-shot evaluation)
 ```
 
 ## 1. Domain source data and `InfoEntry`
@@ -152,22 +152,21 @@ This design makes a split reproducible only relative to the source data tree and
 
 [`write_all_sets_in_split_group_to_extxyz`](../src/temper/splitting/io.py:575) materializes every requested training checkpoint from one `SplitGroup`. It writes one training file per checkpoint, optionally writes each non-empty validation file, writes the current group's test file, and can include exported tests from its assigned extra groups. Names are deterministic and writes atomically replace generated artifacts.
 
-Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is the exported unit corresponding to **one MLFF training attempt**:
+Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is a persisted benchmark data unit describing the datasets required for either one fine-tuning-and-evaluation experiment or one zero-shot evaluation experiment:
 
-- It identifies one domain, grouping strategy, group, splitting method, repeat, and `train_n_frames` checkpoint.
-- It points to exactly one training `.extxyz` file, an optional validation `.extxyz` file, and one or more test `.extxyz` files.
-- It records `train_n_frames`, `val_n_frames`, and `test_n_frames`, together with the corresponding `*_n_atoms` totals. Test totals cover every file in `test_sets`; validation totals are zero when `val_set` is absent.
-- It records the `split_id` of the `SplitGroup` that produced it and stores its own system-managed, deterministic `training_unit_id`.
-- Its fields remain mutable through validated reassignment. Among the size counters, only `train_n_frames` defines identity; changing another derived total or `root_path` does not regenerate `training_unit_id`.
-- Its validation ensures that every referenced dataset file exists beneath `root_path / domain` and has the `.extxyz` extension.
+- Dataset shape is authoritative. A non-`None` `train_set` makes the unit `finetune` and requires positive training frame and atom counts. A `None` `train_set` makes it `zeroshot` and requires zero training counts, no validation file, and zero validation counts.
+- `unit_type` is a read-only runtime property derived from that shape. It is not a serialized field and cannot disagree with the persisted dataset references.
+- A fine-tuning unit points to one training `.extxyz` file, an optional validation file, and the evaluation files in `test_sets`. A zero-shot unit points only to the evaluation files.
+- Frame and atom counters describe train, validation, and aggregate test data. Test totals cover every file in `test_sets`.
+- Every unit records the producing `split_id` and a system-managed deterministic `training_unit_id`; referenced files must exist beneath `root_path / domain` and use the `.extxyz` extension.
 
-All `TrainingUnit` objects made from a given `SplitGroup` share that split's own test file and any selected extra-test files, but differ in their nested training checkpoint and optional validation file. The class describes input datasets for a future training run; it does not create, execute, or evaluate that run.
+For a `SplitGroup` with `N` requested training checkpoints, export returns the `N` fine-tuning units in checkpoint order followed by one zero-shot unit. All `N + 1` records share the split's own test file and any configured cross-group test files, including identical aggregate test counts. Zero-shot support creates no empty train/validation placeholders and performs no additional dataset export.
 
-The `training_unit_id` fingerprints the parent split identity and the unit's dataset contract, but deliberately excludes `root_path`; moving an exported tree therefore does not rename its logical units. The stored value is verified once during loading and reused afterward. Schema-v2 manifests without IDs receive stable identities from their fields. Version-1 manifests containing only `n_train` do not satisfy the required version-2 counter schema and must be regenerated or explicitly migrated.
+The `training_unit_id` fingerprints the parent split identity and the persisted dataset contract. Dataset shape already distinguishes fine-tuning from zero-shot through the identity-defining `train_set` and `train_n_frames`, so the derived property adds no separate identity input and the identity schema remains `temper.training-unit.v2`. Existing valid fine-tuning IDs therefore remain stable. `root_path` remains excluded, allowing an exported tree to move without changing logical identity. Version-1 manifests containing only `n_train` remain unsupported.
 
 ## Implemented scope versus roadmap
 
-The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. `TrainingUnit` includes dataset-size counters, but training-job creation, MLFF training orchestration, benchmark evaluation, and model-quality metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). Therefore, `TrainingUnit` should be read as an exported training-data contract, not as evidence that TEMPER currently schedules or performs MLFF training.
+The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. `TrainingUnit` describes fine-tuning or zero-shot benchmark datasets, but training-job creation, MLFF training orchestration, inference, benchmark evaluation, and model-quality metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). A `TrainingUnit` is a data contract, not evidence that TEMPER schedules, trains, or evaluates an MLFF.
 
 ## Further reading
 

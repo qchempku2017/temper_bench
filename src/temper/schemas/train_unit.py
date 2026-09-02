@@ -1,6 +1,6 @@
-"""Defines the schema for a written training unit and the extxyz train, validation, and test files it references."""
+"""Defines persisted benchmark data units and their extxyz references."""
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from pathlib import Path
 from uuid import UUID
 
@@ -18,7 +18,13 @@ _TRAINING_UNIT_ID_NAMESPACE = UUID("a219bd97-5b63-5dc1-8543-38d74c746ecf")
 
 
 class TrainingUnit(ManagedIdentityModel):
-    """Schema to define a unit containing a training set, validation set (optional) and test sets.
+    """Persisted datasets for one fine-tuning or zero-shot benchmark.
+
+    ``unit_type`` is derived from dataset shape rather than stored separately:
+    a unit with ``train_set`` is ``"finetune"`` and a unit without one is
+    ``"zeroshot"``. Fine-tuning units require a non-empty training dataset.
+    Zero-shot units contain no training or validation dataset and reuse the
+    same evaluation datasets as fine-tuning units from their ``SplitGroup``.
 
     A unit belongs to:
         - A specific data domain
@@ -27,15 +33,16 @@ class TrainingUnit(ManagedIdentityModel):
         - A specific train-val split method.
         - A specific repeat_id among independent train-val-test splits on the group using the method.
             (The level of SplitGroup)
-        - A specific training-frame checkpoint in one independent train-val-test split.
+        - Either a specific training-frame checkpoint or the zero-shot
+          evaluation derived from one independent train-val-test split.
 
     The unit contains extxyz file paths containing labeled data:
-        - A training set (a single file path)
-        - A validation set (a single file path, optional)
+        - A training set (a single file path, fine-tuning only)
+        - A validation set (a single file path, optional and fine-tuning only)
         - A test set (a list of file paths, each corresponding to a tested group)
 
     Usually produced by src.temper.splitting.io ``write_all_sets_in_split_group_to_extxyz``.
-    Can be used to reference files when prepraing for MLFF training.
+    It describes benchmark input data; it does not train or evaluate an MLFF.
 
     Fields remain mutable through validated reassignment. The system-managed
     ``training_unit_id`` is stored, verified when loaded, and regenerated when
@@ -53,15 +60,18 @@ class TrainingUnit(ManagedIdentityModel):
             Name of the train-val split method.
         repeat_id: int
             Repeat id of the independent train-val-test split.
+        unit_type: Literal["finetune", "zeroshot"]
+            Read-only mode derived from whether ``train_set`` is present.
         train_n_frames: int
-            Number of frames in the training dataset.
+            Number of frames in the training dataset, or zero for zero-shot.
         val_n_frames: int
             Number of frames in the exported validation dataset, or zero when
             no validation dataset is exported.
         test_n_frames: int
             Total number of frames across all exported test datasets.
         train_n_atoms: int
-            Total number of atoms across all frames in the training dataset.
+            Total number of atoms across all training frames, or zero for
+            zero-shot.
         val_n_atoms: int
             Total number of atoms across all frames in the exported validation
             dataset, or zero when no validation dataset is exported.
@@ -76,8 +86,8 @@ class TrainingUnit(ManagedIdentityModel):
             Stored, system-managed identity. ``None`` is accepted only as
             construction input for legacy records and is populated before a
             valid model is returned.
-        train_set : str
-            Filename of the training set.
+        train_set : str | None
+            Filename of the training set, or ``None`` for zero-shot.
         test_sets : tuple[str, ...]
             Filenames of the test sets.
         val_set : str | None
@@ -86,7 +96,8 @@ class TrainingUnit(ManagedIdentityModel):
             Root path to the train, val and test files. Should be able to load from:
             rootpath / domain / train_set, rootpath / domain / val_set,
             rootpath / domain / test_sets.
-            Defaults to ``DEFAULT_SPLIT_DATA_DIR``. See src.temper.utils.defaults.
+            Defaults to ``DEFAULT_SPLIT_RESULTS_DIR``. See
+            src.temper.utils.defaults.
     """
     _IDENTITY_FIELD_NAME: ClassVar[str] = "training_unit_id"
     _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]] = (
@@ -115,7 +126,7 @@ class TrainingUnit(ManagedIdentityModel):
     )
 
     train_n_frames: int = Field(
-        ge=1,
+        ge=0,
     )
     val_n_frames: int = Field(
         ge=0,
@@ -136,7 +147,7 @@ class TrainingUnit(ManagedIdentityModel):
 
     split_id: UUID | None = None
 
-    train_set: str
+    train_set: str | None
 
     test_sets: tuple[str, ...]
 
@@ -147,6 +158,11 @@ class TrainingUnit(ManagedIdentityModel):
         validate_default=True,
     )
     training_unit_id: UUID | None = None
+
+    @property
+    def unit_type(self) -> Literal["finetune", "zeroshot"]:
+        """Return the benchmark mode implied by the training-set shape."""
+        return "finetune" if self.train_set is not None else "zeroshot"
 
     @field_serializer("root_path")
     def serialize_root_path(self, value: Path) -> str:
@@ -175,7 +191,38 @@ class TrainingUnit(ManagedIdentityModel):
         return value
 
     def _validate_before_identity(self) -> None:
-        """Validate referenced dataset files before finalizing identity."""
+        """Validate dataset shape and files before finalizing identity."""
+
+        if self.unit_type == "finetune":
+            if self.train_n_frames <= 0:
+                raise ValueError(
+                    "Fine-tuning TrainingUnit requires train_n_frames > 0."
+                )
+            if self.train_n_atoms <= 0:
+                raise ValueError(
+                    "Fine-tuning TrainingUnit requires train_n_atoms > 0."
+                )
+        else:
+            if self.train_n_frames != 0:
+                raise ValueError(
+                    "Zero-shot TrainingUnit requires train_n_frames == 0."
+                )
+            if self.train_n_atoms != 0:
+                raise ValueError(
+                    "Zero-shot TrainingUnit requires train_n_atoms == 0."
+                )
+            if self.val_set is not None:
+                raise ValueError(
+                    "Zero-shot TrainingUnit cannot reference a validation set."
+                )
+            if self.val_n_frames != 0:
+                raise ValueError(
+                    "Zero-shot TrainingUnit requires val_n_frames == 0."
+                )
+            if self.val_n_atoms != 0:
+                raise ValueError(
+                    "Zero-shot TrainingUnit requires val_n_atoms == 0."
+                )
 
         def _check_extxyz_file(f: str) -> None:
             file_path = self.root_path / self.domain / f
@@ -191,7 +238,8 @@ class TrainingUnit(ManagedIdentityModel):
                     f"Dataset file does not exist: {file_path}."
                 )
 
-        _check_extxyz_file(self.train_set)
+        if self.train_set is not None:
+            _check_extxyz_file(self.train_set)
 
         if self.val_set is not None:
             _check_extxyz_file(self.val_set)

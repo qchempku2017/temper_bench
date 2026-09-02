@@ -86,21 +86,46 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
         split_group, root_path=source.parent, output_path=output,
         write_validation=True, write_extra_tests=False,
     )
-    assert len(units) == 2
+    assert len(units) == 3
+    assert [unit.unit_type for unit in units] == [
+        "finetune",
+        "finetune",
+        "zeroshot",
+    ]
     assert all(unit.split_id == split_group.split_id for unit in units)
-    assert len({unit.training_unit_id for unit in units}) == 2
+    assert len({unit.training_unit_id for unit in units}) == 3
     assert [
         (unit.train_n_frames, unit.val_n_frames, unit.test_n_frames)
         for unit in units
-    ] == [(2, 6, 2), (4, 4, 2)]
+    ] == [(2, 6, 2), (4, 4, 2), (0, 0, 2)]
     assert [
         (unit.train_n_atoms, unit.val_n_atoms, unit.test_n_atoms)
         for unit in units
-    ] == [(3, 33, 19), (10, 26, 19)]
-    assert [len(read(output / unit.domain / unit.train_set, index=":")) for unit in units] == [2, 4]
-    assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in units if unit.val_set] == [6, 4]
+    ] == [(3, 33, 19), (10, 26, 19), (0, 0, 19)]
+    finetune_units = units[:-1]
+    zeroshot_unit = units[-1]
+    assert zeroshot_unit.train_set is None
+    assert zeroshot_unit.val_set is None
+    assert all(unit.test_sets == units[0].test_sets for unit in units)
+    assert all(unit.test_n_frames == units[0].test_n_frames for unit in units)
+    assert all(unit.test_n_atoms == units[0].test_n_atoms for unit in units)
+    assert [
+        len(read(output / unit.domain / unit.train_set, index=":"))
+        for unit in finetune_units
+        if unit.train_set is not None
+    ] == [2, 4]
+    assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in finetune_units if unit.val_set] == [6, 4]
     assert len(read(output / units[0].domain / units[0].test_sets[0], index=":")) == 2
-    assert all("__n" in filename and filename.endswith(".extxyz") for unit in units for filename in [unit.train_set, *unit.test_sets])
+    assert all(
+        "__n" in filename and filename.endswith(".extxyz")
+        for unit in units
+        for filename in unit.test_sets
+    )
+    assert all(
+        "__n" in unit.train_set and unit.train_set.endswith(".extxyz")
+        for unit in finetune_units
+        if unit.train_set is not None
+    )
     assert resolver.root_path == source.parent.resolve()
     assert build_export_filename("d /", "g", None, "random", "train", 2, 3) == "d____unknown_grouping__g__random__train__n2__repeat3.extxyz"
     with pytest.raises(ValueError, match="role"):
@@ -154,6 +179,72 @@ def test_export_includes_cross_tests_only_when_requested(
     assert all(len(unit.test_sets) == 2 for unit in with_extra)
     assert all(unit.test_n_frames == 4 and unit.test_n_atoms == 6 for unit in with_extra)
     assert any("__other__" in filename for filename in with_extra[0].test_sets)
+    assert with_extra[-1].unit_type == "zeroshot"
+    assert with_extra[-1].test_sets == with_extra[0].test_sets
+    assert with_extra[-1].test_n_frames == with_extra[0].test_n_frames
+    assert with_extra[-1].test_n_atoms == with_extra[0].test_n_atoms
     assert "other" not in written_groups  # Reuse the test file already written for the other group.
     assert all(not path.is_relative_to(with_extra_output.resolve()) for path in read_paths)
     assert all((tmp_path / "with-extra" / "demo" / filename).is_file() for filename in with_extra[0].test_sets)
+
+
+def test_zeroshot_toggle_changes_only_returned_schema_objects(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source" / "demo"
+    source.mkdir(parents=True)
+    write(
+        source / "frames.extxyz",
+        [make_frame("H", -float(index), str(index)) for index in range(10)],
+        format="extxyz",
+    )
+    import temper.splitting.io as io_module
+
+    original_write = io_module.write_atoms_list_to_extxyz
+    written_roles: list[str] = []
+
+    def tracked_write(*args, **kwargs):
+        written_roles.append(kwargs["role"])
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(io_module, "write_atoms_list_to_extxyz", tracked_write)
+    with_zeroshot_output = tmp_path / "with-zeroshot"
+    with_zeroshot, _ = write_all_sets_in_split_group_to_extxyz(
+        _split_group(),
+        root_path=source.parent,
+        output_path=with_zeroshot_output,
+        write_extra_tests=False,
+    )
+    with_zeroshot_writes = tuple(written_roles)
+    written_roles.clear()
+
+    without_zeroshot_output = tmp_path / "without-zeroshot"
+    without_zeroshot, _ = write_all_sets_in_split_group_to_extxyz(
+        _split_group(),
+        root_path=source.parent,
+        output_path=without_zeroshot_output,
+        write_extra_tests=False,
+        create_zeroshot_unit=False,
+    )
+
+    assert [unit.unit_type for unit in with_zeroshot] == [
+        "finetune",
+        "finetune",
+        "zeroshot",
+    ]
+    assert [unit.unit_type for unit in without_zeroshot] == [
+        "finetune",
+        "finetune",
+    ]
+    assert [unit.training_unit_id for unit in without_zeroshot] == [
+        unit.training_unit_id for unit in with_zeroshot[:-1]
+    ]
+    assert tuple(written_roles) == with_zeroshot_writes == (
+        "train",
+        "train",
+        "test",
+    )
+    assert sorted(path.name for path in with_zeroshot_output.rglob("*.extxyz")) == sorted(
+        path.name for path in without_zeroshot_output.rglob("*.extxyz")
+    )

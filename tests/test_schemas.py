@@ -332,10 +332,22 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
         train_set="train.extxyz", val_set="val.extxyz",
         test_sets=["test.extxyz"], root_path=root,
     )
+    zeroshot_unit = TrainingUnit(
+        domain="domain", grouping_strategy="all", group_name="all", method="random",
+        repeat_id=0, train_n_frames=0, val_n_frames=0, test_n_frames=1,
+        train_n_atoms=0, val_n_atoms=0, test_n_atoms=4, split_id=split_id,
+        train_set=None, val_set=None, test_sets=["test.extxyz"], root_path=root,
+    )
     original_training_unit_id = unit.training_unit_id
     assert "training_unit_id" in TrainingUnit.model_fields
+    assert "unit_type" not in TrainingUnit.model_fields
+    assert TrainingUnit._IDENTITY_SCHEMA == "temper.training-unit.v2"
+    assert unit.unit_type == "finetune"
+    assert zeroshot_unit.unit_type == "zeroshot"
+    assert "unit_type" not in unit.model_dump()
     assert unit.training_unit_id.version == 5
     assert unit.training_unit_id == UUID("ac8aab5e-4679-5bc8-a91e-99167ed36cd9")
+    assert zeroshot_unit.training_unit_id != unit.training_unit_id
     unit.train_n_frames = 2
     assert unit.train_n_frames == 2
     assert unit.training_unit_id != original_training_unit_id
@@ -344,6 +356,8 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
         unit.train_n_frames = 0
     assert unit.train_n_frames == 2
     assert unit.training_unit_id == updated_training_unit_id
+    with pytest.raises(ValidationError, match="train_n_atoms"):
+        unit.model_copy(update={"train_n_atoms": 0})
     for derived_metric in (
         "val_n_frames", "test_n_frames", "train_n_atoms", "val_n_atoms",
         "test_n_atoms",
@@ -364,15 +378,29 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     unit.root_path = moved_root
     assert unit.root_path == moved_root
     assert unit.training_unit_id == updated_training_unit_id
+    zeroshot_id = zeroshot_unit.training_unit_id
+    zeroshot_unit.root_path = moved_root
+    assert zeroshot_unit.training_unit_id == zeroshot_id
 
     manifest = tmp_path / "training_unit.json"
     dumpfn(unit, manifest, indent=2)
     serialized = json.loads(manifest.read_text(encoding="utf-8"))
     assert serialized["split_id"] == str(split_id)
     assert serialized["training_unit_id"] == str(updated_training_unit_id)
+    assert "unit_type" not in serialized
     loaded = loadfn(manifest)
     assert loaded.split_id == split_id
     assert loaded.training_unit_id == updated_training_unit_id
+    assert loaded.unit_type == "finetune"
+
+    zeroshot_manifest = tmp_path / "zeroshot_training_unit.json"
+    dumpfn(zeroshot_unit, zeroshot_manifest, indent=2)
+    assert "unit_type" not in json.loads(
+        zeroshot_manifest.read_text(encoding="utf-8")
+    )
+    loaded_zeroshot = loadfn(zeroshot_manifest)
+    assert loaded_zeroshot.unit_type == "zeroshot"
+    assert loaded_zeroshot.training_unit_id == zeroshot_id
 
     other_split = unit.model_copy(
         update={"split_id": UUID("fcb30cc1-5e4c-5bb4-9c08-e932938b3c50")}
@@ -418,6 +446,17 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
             root_path=root,
         )
 
+    converted = unit.model_copy(update={
+        "train_set": None,
+        "val_set": None,
+        "train_n_frames": 0,
+        "val_n_frames": 0,
+        "train_n_atoms": 0,
+        "val_n_atoms": 0,
+    })
+    assert converted.unit_type == "zeroshot"
+    assert converted.training_unit_id != unit.training_unit_id
+
     stored_id = unit.training_unit_id
 
     def unexpected_recomputation(_: TrainingUnit) -> UUID:
@@ -430,6 +469,98 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     )
     assert unit.training_unit_id == stored_id
     assert unit.model_dump(mode="json")["training_unit_id"] == str(stored_id)
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        (
+            {"train_set": "train.extxyz", "train_n_atoms": 1},
+            "train_n_frames",
+        ),
+        (
+            {"train_set": "train.extxyz", "train_n_frames": 1},
+            "train_n_atoms",
+        ),
+        ({"train_n_frames": 1}, "train_n_frames"),
+        ({"train_n_atoms": 1}, "train_n_atoms"),
+        ({"val_set": "val.extxyz"}, "validation set"),
+        ({"val_n_frames": 1}, "val_n_frames"),
+        ({"val_n_atoms": 1}, "val_n_atoms"),
+    ],
+)
+def test_training_unit_rejects_inconsistent_dataset_shapes(
+    updates: dict[str, object],
+    message: str,
+    tmp_path: Path,
+) -> None:
+    domain_root = tmp_path / "domain"
+    domain_root.mkdir()
+    for name in ("train.extxyz", "val.extxyz", "test.extxyz"):
+        (domain_root / name).write_text("", encoding="utf-8")
+    data: dict[str, object] = {
+        "domain": "domain",
+        "grouping_strategy": "all",
+        "group_name": "all",
+        "method": "random",
+        "repeat_id": 0,
+        "train_n_frames": 0,
+        "val_n_frames": 0,
+        "test_n_frames": 1,
+        "train_n_atoms": 0,
+        "val_n_atoms": 0,
+        "test_n_atoms": 1,
+        "train_set": None,
+        "val_set": None,
+        "test_sets": ["test.extxyz"],
+        "root_path": tmp_path,
+    }
+    data.update(updates)
+
+    with pytest.raises(ValidationError, match=message):
+        TrainingUnit(**data)
+
+
+def test_training_unit_checks_every_referenced_dataset_file(
+    tmp_path: Path,
+) -> None:
+    domain_root = tmp_path / "domain"
+    domain_root.mkdir()
+    for name in ("train.extxyz", "val.xyz", "test.extxyz", "test.xyz"):
+        (domain_root / name).write_text("", encoding="utf-8")
+    base = {
+        "domain": "domain",
+        "grouping_strategy": "all",
+        "group_name": "all",
+        "method": "random",
+        "repeat_id": 0,
+        "train_n_frames": 0,
+        "val_n_frames": 0,
+        "test_n_frames": 1,
+        "train_n_atoms": 0,
+        "val_n_atoms": 0,
+        "test_n_atoms": 1,
+        "train_set": None,
+        "val_set": None,
+        "test_sets": ["test.extxyz"],
+        "root_path": tmp_path,
+    }
+
+    assert TrainingUnit(**base).unit_type == "zeroshot"
+    with pytest.raises(ValidationError, match="does not exist"):
+        TrainingUnit(**(base | {"test_sets": ["test.extxyz", "missing.extxyz"]}))
+    with pytest.raises(ValidationError, match="extension"):
+        TrainingUnit(**(base | {"test_sets": ["test.xyz"]}))
+    with pytest.raises(ValidationError, match="extension"):
+        TrainingUnit(**(
+            base
+            | {
+                "train_set": "train.extxyz",
+                "train_n_frames": 1,
+                "train_n_atoms": 1,
+                "val_set": "val.xyz",
+            }
+        ))
 
 
 def test_managed_identity_subclass_is_declarative_and_uses_validation_hook() -> None:

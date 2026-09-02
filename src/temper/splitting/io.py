@@ -640,10 +640,14 @@ def write_all_sets_in_split_group_to_extxyz(
     write_extra_tests: bool = True,
     all_split_groups: List[SplitGroup] | None = None,
     resolver: FrameReferenceResolver | None = None,
+    create_zeroshot_unit: bool = True,
 ) -> Tuple[List[TrainingUnit], FrameReferenceResolver]:
-    """Export training and testing sets, optionally including validation sets.
+    """Export benchmark datasets and build their persisted data units.
 
     Extra testing sets from other groups will also be written if required.
+    Fine-tuning units reference the exported training checkpoints. One
+    zero-shot unit is appended by default and references only the already
+    exported shared test datasets.
 
     Parameters
     ----------
@@ -675,15 +679,17 @@ def write_all_sets_in_split_group_to_extxyz(
         shared cache reuse. Will not reuse if not provided or its
         ``root_path`` attribute does not match the provided ``root_path``
         after expanduser and resolve.
+    create_zeroshot_unit : bool, optional
+        Whether to append a zero-shot ``TrainingUnit``. This controls only
+        schema construction and never writes an additional dataset file.
+        Defaults to ``True``.
 
     Returns
     -------
     List[TrainingUnit], FrameReferenceResolver
-        A list of training unit objects, each containing the path to the training
-        set, the path to the validation set (if any), and the path to the test
-        set within a unitary training process, for future reference.
-        Then returns the resolver used to load
-        the frames, whose internal cache might be reused to save loading time.
+        The fine-tuning units in checkpoint order, followed by the optional
+        zero-shot unit, and the resolver used to load the frames. The
+        resolver's internal cache may be reused to avoid repeated loading.
 
     Raises
     ------
@@ -707,7 +713,7 @@ def write_all_sets_in_split_group_to_extxyz(
     train_atom_counts: List[int] = []
     val_atom_counts: List[int] = []
 
-    # Write training sets and optionally validation sets.
+    # Phase 1: write training sets and optionally validation sets.
     for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
         atoms_train, atoms_val, resolver = load_frames_train_validation(
             split_group, i, root_path=root_path, resolver=resolver
@@ -743,7 +749,7 @@ def write_all_sets_in_split_group_to_extxyz(
         val_files.append(val_file)
         val_frame_counts.append(val_n_frames)
         val_atom_counts.append(val_n_atoms)
-    # Write the testing set of the current group.
+    # Phase 2: write the testing set of the current group.
     atoms_test, resolver = load_frames_test(
         split_group, root_path, resolver=resolver
     )
@@ -801,12 +807,14 @@ def write_all_sets_in_split_group_to_extxyz(
                     ).name)
                 else:  # Already written, just record file name.
                     test_files.append(filename)
-    # Build TrainingUnit objects. All units share the same test sets.
+    # Phase 3: build fine-tuning units in checkpoint order. All units share
+    # the same immutable test-set references and aggregate counts.
+    shared_test_sets = tuple(test_files)
     training_units: List[TrainingUnit] = [
         TrainingUnit(
             train_set=train_files[i],
             val_set=val_files[i],
-            test_sets=tuple(test_files),
+            test_sets=shared_test_sets,
             root_path=output_path,
             domain=split_group.domain,
             group_name=split_group.group_name,
@@ -823,6 +831,29 @@ def write_all_sets_in_split_group_to_extxyz(
         )
         for i in range(len(train_files))
     ]
+
+    # Phase 4: append a schema-only zero-shot unit. No dataset is written here.
+    if create_zeroshot_unit:
+        training_units.append(
+            TrainingUnit(
+                train_set=None,
+                val_set=None,
+                test_sets=shared_test_sets,
+                root_path=output_path,
+                domain=split_group.domain,
+                group_name=split_group.group_name,
+                grouping_strategy=split_group.grouping_strategy,
+                method=split_group.train_val_split_trajectory.method,
+                repeat_id=split_group.repeat_id,
+                train_n_frames=0,
+                val_n_frames=0,
+                test_n_frames=test_n_frames,
+                train_n_atoms=0,
+                val_n_atoms=0,
+                test_n_atoms=test_n_atoms,
+                split_id=split_group.split_id,
+            )
+        )
 
     return training_units, resolver
 
