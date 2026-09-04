@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import List
 
 from ase import Atoms
@@ -11,25 +11,90 @@ from ase import Atoms
 from temper.logging import DataQualityWarning
 
 
-def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
-    """Check if the frames have energy, forces, and stress correctly loaded.
+def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
+    """Validate a portable path that is safe to place below a submit directory.
 
-      Implemented as checking whether the frames have SinglePointCalculators correctly loaded
-    and callable.
-    Parameters:
-    -----------
-    frames : Atoms | list[Atoms]
-        List of ASE Atoms objects.
+    Submit bundles are created locally and may later be copied to a different
+    operating system. Their stored paths therefore use POSIX ``/`` separators
+    and must be relative to the bundle root. This helper rejects absolute paths,
+    Windows drive paths, traversal, redundant segments, and other forms whose
+    meaning could change after transport.
 
-    Returns:
-    --------
-    bool
-        True if the frames have stress information.
+    Parameters
+    ----------
+    value : str
+        Path to validate, written with POSIX separators. It may contain
+        subdirectories, for example ``"datasets/train.extxyz"``.
+    label : str, optional
+        Human-readable name used in validation errors. It does not affect the
+        returned path.
 
-    Raises:
+    Returns
     -------
+    str
+        ``value`` unchanged after validation.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` or ``label`` is not a string.
     ValueError
-        If the frames do not have energy or forces information.
+        If ``value`` is empty, absolute, drive-qualified, uses backslashes, or
+        contains empty, current-directory, parent-directory, or unnormalized
+        path segments.
+    """
+    if not isinstance(value, str):
+        raise TypeError(f"{label} must be a string, got {type(value).__name__}.")
+    if not isinstance(label, str):
+        raise TypeError(f"label must be a string, got {type(label).__name__}.")
+    if not value:
+        raise ValueError(f"{label} must be a non-empty string.")
+    if "\\" in value:
+        raise ValueError(f"{label} must use '/' separators, got {value!r}.")
+
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if posix.is_absolute() or windows.is_absolute() or windows.drive:
+        raise ValueError(f"{label} must be relative, got {value!r}.")
+    if not posix.parts or any(
+        part in {"", ".", ".."} for part in posix.parts
+    ):
+        raise ValueError(
+            f"{label} must not contain empty, '.' or '..' segments: {value!r}."
+        )
+    if str(posix) != value:
+        raise ValueError(f"{label} must be normalized, got {value!r}.")
+    return value
+
+
+def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
+    """Check required labels and report whether every frame includes stress.
+
+    Energy, forces, and stress are queried through ASE rather than by inspecting
+    Calculator internals, so any Calculator implementing the standard methods
+    is accepted. Missing energy or forces is invalid; missing stress is reported
+    as a data-quality warning and a false return value.
+
+    Parameters
+    ----------
+    frames : Atoms | list[Atoms]
+        One ASE structure or a list of structures whose labels should be
+        checked.
+
+    Returns
+    -------
+    bool
+        True when every supplied frame provides stress, otherwise False.
+
+    Raises
+    ------
+    ValueError
+        If any frame does not provide energy or forces.
+
+    Warns
+    -----
+    DataQualityWarning
+        If one or more frames does not provide stress.
     """
     if isinstance(frames, Atoms):
         frames = [frames]

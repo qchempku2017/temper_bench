@@ -1,7 +1,11 @@
-"""Defines default file-system locations and splitting parameters used across TemPER. Values are read from environment variables at import time when provided."""
+"""Environment-configurable defaults used by TEMPER.
+
+All values are read once, when this module is imported.
+"""
 from __future__ import annotations
 
 import os
+from pathlib import PurePosixPath, PureWindowsPath
 
 
 def _env_float(name: str, default: float) -> float:
@@ -76,6 +80,31 @@ def _env_int(name: str, default: int) -> int:
         ) from exc
 
 
+def _env_submit_directory(name: str, default: str) -> str:
+    """Read and validate one submit-relative directory setting."""
+    value = os.environ.get(name, default)
+    if not value or "\\" in value:
+        raise ValueError(
+            f"Environment variable {name!r} must be a non-empty relative "
+            "POSIX directory, got {value!r}."
+        )
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or not posix.parts
+        or any(part in {"", ".", ".."} for part in posix.parts)
+        or str(posix) != value
+    ):
+        raise ValueError(
+            f"Environment variable {name!r} must be a normalized relative "
+            f"POSIX directory, got {value!r}."
+        )
+    return value
+
+
 ##################################
 # Default values for data storage.
 ##################################
@@ -94,6 +123,29 @@ DEFAULT_GROUPED_DOMAIN_FILE: str = os.environ.get("DEFAULT_GROUPED_DOMAIN_FILE",
 DEFAULT_SPLIT_GROUPS_FILE: str = os.environ.get("DEFAULT_SPLIT_GROUPS_FILE", "split_groups.json")
 # Default name of the output file to save training units in a domain.
 DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get("DEFAULT_TRAINING_UNITS_FILE", "training_units.json")
+
+# MLFF source artifacts and fixed submit-folder directories.
+DEFAULT_MLFF_PRETRAINED_MODELS_DIR: str = os.environ.get(
+    "DEFAULT_MLFF_PRETRAINED_MODELS_DIR", "./pretrained_models"
+)
+DEFAULT_MLFF_DATASETS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_DATASETS_DIR", "datasets"
+)
+DEFAULT_MLFF_MODELS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_MODELS_DIR", "models"
+)
+DEFAULT_MLFF_TRAINING_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_TRAINING_DIR", "training"
+)
+DEFAULT_MLFF_RUNTIME_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_RUNTIME_DIR", "runtime"
+)
+DEFAULT_MLFF_ARTIFACTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_ARTIFACTS_DIR", "artifacts"
+)
+DEFAULT_MLFF_OUTPUTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_OUTPUTS_DIR", "outputs"
+)
 
 ##################################
 # Default values for creating experiments from extxyz data.
@@ -122,17 +174,21 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 __all__ = [
     "DEFAULT_DATA_DIR",
-    "DEFAULT_SPLIT_RESULTS_DIR",
-    "DEFAULT_SPLIT_CONFIG_FILE",
-    "DEFAULT_METADATA_FILE",
+    "DEFAULT_GROUPED_DOMAIN_FILE",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",
+    "DEFAULT_MLFF_ARTIFACTS_DIR",
+    "DEFAULT_MLFF_DATASETS_DIR",
+    "DEFAULT_MLFF_MODELS_DIR",
+    "DEFAULT_MLFF_OUTPUTS_DIR",
+    "DEFAULT_MLFF_PRETRAINED_MODELS_DIR",
+    "DEFAULT_MLFF_RUNTIME_DIR",
+    "DEFAULT_MLFF_TRAINING_DIR",
+    "DEFAULT_SPLIT_CONFIG_FILE",
+    "DEFAULT_SPLIT_GROUPS_FILE",
+    "DEFAULT_SPLIT_REPEATS",
+    "DEFAULT_SPLIT_RESULTS_DIR",
     "DEFAULT_TEST_RATIO",
     "DEFAULT_TRAIN_RATIOS",
-    "DEFAULT_SPLIT_REPEATS",
-    "DEFAULT_GROUPED_DOMAIN_FILE",
-    "DEFAULT_SPLIT_GROUPS_FILE",
     "DEFAULT_TRAINING_UNITS_FILE",
-    "_env_float",
-    "_env_int",
 ]
