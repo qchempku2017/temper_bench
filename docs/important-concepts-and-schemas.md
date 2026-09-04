@@ -2,7 +2,7 @@
 
 [Back to the project overview](../README.md) · [Raw data format and grouping](raw-data-format.md) · [Data splitting](data-splitting.md) · [Roadmap](roadmap.md)
 
-TEMPER's implemented workflow turns labeled source structures into reproducible, exported datasets. It deliberately separates **data identity and provenance** from the atomic structures themselves: metadata records describe source files, split records store lightweight frame references, and export materializes the referenced frames into `extxyz` files. This guide explains the objects at each layer and the relationships between them.
+TEMPER's implemented workflow turns labeled source structures into reproducible exported datasets and local MLFF experiment folders. It deliberately separates **data identity and provenance** from the atomic structures themselves: metadata records describe source files, split records store lightweight frame references, export materializes those references into `extxyz`, and MLFF bundles keep referring to the exported files until an explicit local write. This guide explains the objects at each layer and the relationships between them.
 
 ## Workflow at a glance
 
@@ -12,6 +12,7 @@ TEMPER's implemented workflow turns labeled source structures into reproducible,
 | Grouping | [`GroupedDomain`](../src/temper/schemas/group.py:17) | Domain inventory, grouping strategy, and a mapping from group names to source filenames | One ordered frame pool per group |
 | Splitting | [`SplitGroup`](../src/temper/schemas/split.py:299) | Provenance, one train/validation trajectory, own-group test references, and cross-test assignments | Nested checkpoints for one group and repeat |
 | Reconstruction / export | [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) and exported `.extxyz` files | Reconstructed labeled frames | Fine-tuning [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) records plus one zero-shot unit per split group |
+| MLFF specification / bundling | `MLFFSpec` and `MLFFTrainBundle` | One versioned model recipe paired with exactly one TrainingUnit | A self-contained local folder written through `write_submit_folder()` |
 
 ```text
 Domain directory
@@ -33,6 +34,12 @@ reference resolution and extxyz export
           │
           ▼
 TrainingUnit records (fine-tuning checkpoints plus zero-shot evaluation)
+          │
+          ▼
+TrainingUnit × MLFFSpec → MLFFTrainBundle
+          │
+          ▼
+local self-contained submit folder
 ```
 
 ## 1. Domain source data and `InfoEntry`
@@ -164,13 +171,24 @@ For a `SplitGroup` with `N` requested training checkpoints, export returns the `
 
 The `training_unit_id` fingerprints the parent split identity and the persisted dataset contract. Dataset shape already distinguishes fine-tuning from zero-shot through the identity-defining `train_set` and `train_n_frames`, so the derived property adds no separate identity input and the identity schema remains `temper.training-unit.v2`. Existing valid fine-tuning IDs therefore remain stable. `root_path` remains excluded, allowing an exported tree to move without changing logical identity. Version-1 manifests containing only `n_train` remain unsupported.
 
+## 6. Local MLFF specifications and bundles
+
+An [`MLFFSpec`](../src/temper/schemas/mlff_spec.py) persists a plain-string MLFF family, pinned implementation versions, content-addressed local pretrained files, optional native training parameters, and flat Calculator keyword arguments without containing TrainingUnit data. Its deterministic identity excludes relocatable source paths while including artifact keys and hashes.
+
+An [`MLFFTrainBundle`](../src/temper/schemas/mlff_train_bundle.py) pairs exactly one TrainingUnit with one MLFFSpec. Its `unit_type` is derived from the nested TrainingUnit rather than stored again. Constructing or serializing a bundle does not copy the potentially large exported datasets.
+
+Calling `write_submit_folder()` copies those references into a local, caller-owned directory. A fine-tuning unit receives the package's native training configuration/command followed by TEMPER's common ASE test runner. A zero-shot unit tests the local pretrained model directly. Every directory contains the generic `runtime/run_test.py` and exactly one selected adapter copied as `runtime/calculator.py`; the runner has no MLFF dispatch logic and does not import TEMPER. Cross-group test datasets remain separate and produce separate standardized prediction files.
+
+See [Local MLFF specifications and submit bundles](mlff-bundles.md) for the public construction API, identity rules, pinned integrations, fixed copy behavior, runtime contract, prediction format, and package-specific limitations.
+
 ## Implemented scope versus roadmap
 
-The implemented Python API and split CLI cover metadata loading, file grouping, repeatable reference-based splitting, QUESTS-backed selection and provenance capture, reconstruction, and `extxyz` export. `TrainingUnit` describes fine-tuning or zero-shot benchmark datasets, but training-job creation, MLFF training orchestration, inference, benchmark evaluation, and model-quality metrics calculation are **not implemented**. They are explicitly planned capabilities in the [Roadmap](roadmap.md). A `TrainingUnit` is a data contract, not evidence that TEMPER schedules, trains, or evaluates an MLFF.
+The implemented Python API and split CLI cover metadata loading, grouping, repeatable splitting, QUESTS-backed selection, reconstruction, and `extxyz` export. The MLFF API additionally defines model recipes and materializes local folders containing native training instructions and standardized ASE evaluation scripts. Folder writing does not execute those scripts. Remote submission/orchestration, run records, result retrieval, and model-quality metrics are **not implemented** and remain in the [Roadmap](roadmap.md).
 
 ## Further reading
 
 - [Project overview](../README.md) — implemented workflow and scope.
 - [Raw data format and grouping](raw-data-format.md) — domain layout, `metadata.json`, `InfoEntry`, grouping strategies, and cross-test configuration.
 - [Data splitting](data-splitting.md) — public Python workflow, configuration, reconstruction, export, and QUESTS backend details.
+- [Local MLFF bundles](mlff-bundles.md) — local MLFF specifications, submit-folder writers, and ASE prediction outputs.
 - [Roadmap](roadmap.md) — capabilities that remain planned rather than implemented.

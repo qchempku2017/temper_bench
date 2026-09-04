@@ -1,6 +1,6 @@
 # TEMPER benchmark
 
-TEMPER provides the implemented data-preparation layer for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, organizes each domain into groups, creates reproducible train/validation/test splits, and exports referenced frames back to `extxyz` files.
+TEMPER provides the data-preparation and local experiment-bundling layers for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and writes self-contained local submit folders. It does not submit those folders to remote systems.
 
 ## What is implemented
 
@@ -10,6 +10,9 @@ The workflow is available through both the CLI and Python API:
 2. Call [`partition_domain_into_groups`](src/temper/grouping/group.py) to load the metadata and produce one grouped domain per configured grouping strategy.
 3. Call [`split_grouped_domain`](src/temper/splitting/split.py) with a [`SplitConfig`](src/temper/schemas/split.py) to split every group for every configured repeat.
 4. Persist models with Monty serialization, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
+5. Build a package-specific [`MLFFSpec`](src/temper/schemas/mlff_spec.py) with one of the six concrete spec builders.
+6. Combine TrainingUnits and specifications with [`build_mlff_train_bundles`](src/temper/mlff/bundle_builder.py), producing one atomic `MLFFTrainBundle` per Cartesian-product pair.
+7. Call `bundle.write_submit_folder()` to create a local directory containing the referenced datasets, native training files when applicable, a uniform `run.sh`, and the standardized ASE evaluation runtime.
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 
@@ -121,10 +124,14 @@ Split records store frame references rather than embedded structures or descript
 
 ## Current scope
 
-Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, `extxyz` export, and the end-to-end split CLI are implemented. Exported `TrainingUnit` records describe either a fine-tuning checkpoint or a zero-shot evaluation; both reuse the same own-group and configured cross-group test exports. Training jobs, inference, benchmark execution, result uploading, and model-quality metrics are not implemented features.
+Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, `extxyz` export, and the end-to-end split CLI are implemented. Exported `TrainingUnit` records describe either a fine-tuning checkpoint or a zero-shot evaluation. The local MLFF layer supports DPA-4, DPA-4C, MatterSim, MACE, SevenNet, and NEP-89 specifications and writes complete fine-tune-plus-test or zero-shot-test folders using ordinary file copies.
+
+The generated `run.sh` uses each package's native training workflow and a common ASE Calculator test runner, but TEMPER does not execute it as part of folder writing. Remote upload, hosts, schedulers, job monitoring, result download, retries, `MLFFTrainRun`, and benchmark metric calculation remain outside the implemented scope.
 
 ## Documentation
 
 - [Data format and grouping](docs/raw-data-format.md) — required domain layout and metadata, inventory autodetection, grouping strategies, and cross-test behavior.
 - [Data splitting](docs/data-splitting.md) — split configuration, result schemas, Python API, QUESTS configuration, reference-based reconstruction, and export.
+- [Local MLFF bundles](docs/mlff-bundles.md) — specifications, identities, pinned integrations, bundle writing, and standardized ASE prediction files.
+- [Default variables](docs/default_variables.md) — every environment-configurable default and its import-time behavior.
 - [Roadmap](docs/roadmap.md) — clearly marked planned capabilities.

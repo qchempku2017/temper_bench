@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "temper-bench"
 version = "0.1.0"
-description = "Data preparation and splitting tools for the TEMPER MLFF benchmark"
+description = "Data preparation and fine-tuning evaluation tools for the TEMPER MLFF benchmark"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
