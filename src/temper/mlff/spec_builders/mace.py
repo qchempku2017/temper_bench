@@ -20,17 +20,17 @@ _TRAINING_DEFAULTS: dict[str, Any] = {
     "multiheads_finetuning": False,
     "valid_fraction": 0.05,
     "energy_weight": 1.0,
-    "forces_weight": 1.0,
+    "forces_weight": 1.0,  # Comment: Default stress training should also be handled here.
     "E0s": "average",
     "lr": 0.01,
     "scaling": "rms_forces_scaling",
-    "batch_size": 2,
+    "batch_size": 2,  # Comment: can often use a larger one. 4 is pretty safe here.
     "max_num_epochs": 100,
     "patience": 101,
     "ema": True,
     "ema_decay": 0.99,
     "amsgrad": True,
-    "default_dtype": "float64",
+    "default_dtype": "float64",  # Comment: Is float32 possible? It would be faster. Consider using float32 as default.
     "seed": 3,
 }
 

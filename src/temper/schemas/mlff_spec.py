@@ -39,7 +39,8 @@ class MLFFImplementation(MSONableModel):
     version: str = Field(min_length=1)
     kind: Literal["python_distribution", "executable"] = "python_distribution"
 
-
+# Comment: This had better be moved to a separate schema definition python file
+# like src/temper/schemas/artifact.py and be referenced from there, since it may be used in other contexts as well.
 class LocalArtifactRef(MSONableModel):
     """Reference a local pretrained-model or any input file by location and content hash.
 
@@ -198,6 +199,9 @@ class MLFFSpec(ManagedIdentityModel):
     mlff_type: str = Field(min_length=1)
     implementations: tuple[MLFFImplementation, ...] = Field(min_length=1)
     pretrained_model: PretrainedMLFFSpec
+    # Comment: consider rename `training` field into `training_parameters` to be more explicit about its purpose
+    #   and avoid confusion with other training-related attributes or methods. Rename `testing` field into `testing_parameters`
+    #   for the same reason.
     training: dict[str, Any] | None = None
     testing: dict[str, Any] = Field(default_factory=dict)
     mlff_spec_id: UUID | None = None

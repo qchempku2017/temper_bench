@@ -16,6 +16,9 @@ from temper.schemas.mlff_spec import (
 from temper.utils.defaults import DEFAULT_MLFF_PRETRAINED_MODELS_DIR
 
 
+# Comment: Fine-tuning of DPA4 and DPA4C usually have recommended default starting learning rate and
+#    ending learning rate. Consider looking these up on the AIS Square's model release page.
+#    Other recommended default fine-tuning parameters may also be found there.
 _TRAINING_DEFAULTS: dict[str, Any] = {
     "numb_epoch": 100,
     "save_freq": 1000,
@@ -39,6 +42,9 @@ def _default_path(filename: str) -> Path:
     return Path(DEFAULT_MLFF_PRETRAINED_MODELS_DIR) / filename
 
 
+# Comment: unify your implementation habit here. You did not write such a `_build` function for
+#   mace.py and other spec builders. Neither should this be written here.
+#   Just implement the `build` method in each spec builder class.
 def _build(
     *,
     mlff_type: str,
@@ -85,7 +91,13 @@ def _build(
         testing=deepcopy(testing) if testing is not None else {},
     )
 
-
+# Comment: If the only difference of SpecBuilder classes is the model and config filenames,
+#   consider creating an abstract base class for BaseSpecBuilder and then creating subclasses to only override
+#   the model and config filenames. This would reduce code duplication and make it easier to add new models
+#   in the future. The same suggestion applies to all SpecBuilder classes in the src/temper/mlff/spec_builders/
+#   module.
+#   Also, when you implement the base class, be sure to make child-class definition as simple as possible, ideally,
+#   I hope one will only need to edit several class variables to create a new spec builder.
 class DPA4SpecBuilder:
     """Build a DeepMD-kit 3.2.0 DPA-4 specification from local files.
 
@@ -116,6 +128,12 @@ class DPA4SpecBuilder:
         self.pretrained_config_path = pretrained_config_path
         self.training_parameters = training_parameters
         self.testing_parameters = testing_parameters
+        # Comment: I recommend exposing `model_filename` and `config_filename` as attributes
+        #   rather than exposing `pretrained_model_path` and `pretrained_config_path`.
+        #   This is because file names can often change between releases, but the storage
+        #   folder of the files is usually stable. Also, the path attributes should point
+        #   to the folders that contain files, not the files themselves. This way, users
+        #   can easily switch.
 
     def build(self) -> MLFFSpec:
         """Build the content-addressed DPA-4 specification.
