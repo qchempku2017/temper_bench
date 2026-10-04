@@ -51,6 +51,37 @@ class MACEBundleWriter(BaseMLFFBundleWriter):
                 "stress_weight": 1.0 if training_stress else 0.0,
             }
         )
+        # Comment: These settings do not comply with the MACE documentation. Refer to:
+        #  https://mace-docs.readthedocs.io/en/latest/guide/finetuning.html#naive-fine-tuning
+        # One example here is:
+        # mace_run_train \
+        #     --name="MACE" \
+        #     --foundation_model="small" \
+        #     --multiheads_finetuning=False \
+        #     --train_file="train.xyz" \
+        #     --valid_fraction=0.05 \
+        #     --test_file="test.xyz" \
+        #     --energy_weight=10.0 \
+        #     --forces_weight=10.0 \
+        #     --E0s="estimated" \
+        #     --lr=0.001 \
+        #     --weight_decay=0.0 \
+        #     --scaling="rms_forces_scaling" \
+        #     --batch_size=2 \
+        #     --max_num_epochs=6 \
+        #     --ema \
+        #     --ema_decay=0.999 \
+        #     --amsgrad \
+        #     --clip_grad=1.0 \
+        #     --default_dtype="float64" \
+        #     --device=cuda \
+        #     --seed=42
+
+        # No need to change model name, foundation and file paths.
+        # Just consider reusing the training parameters from the spec.
+        # Notice: do not use early stopping.
+
+
         if self.unit.val_set is not None:
             config["valid_file"] = (
                 f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz"

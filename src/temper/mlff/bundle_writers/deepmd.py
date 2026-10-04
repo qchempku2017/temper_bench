@@ -60,7 +60,7 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
             "num_epochs",
             "num_epoch",
             "numb_epochs",
-        }
+        }  # Comment: fix to 60 epochs for DPA4. DPA4C may use 100 epochs.
         training = dict(config.get("training", {}))
         for key in length_aliases | {"numb_epoch"}:
             training.pop(key, None)
@@ -80,20 +80,20 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
         training.update(overrides)
         training["training_data"] = {
             "systems": [f"{DEFAULT_MLFF_TRAINING_DIR}/data/train"],
-            "batch_size": "auto",
+            "batch_size": "auto",  # Comment: use "auto:128"
         }
         if self.unit.val_set is None:
             training.pop("validation_data", None)
         else:
             training["validation_data"] = {
                 "systems": [f"{DEFAULT_MLFF_TRAINING_DIR}/data/validation"],
-                "batch_size": "auto",
+                "batch_size": "auto",  # Comment: use "auto:128"
             }
-        training["save_ckpt"] = f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt"
+        training["save_ckpt"] = f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt"  # Comment: typically named model.ckpt.pt.
         config["training"] = training
 
-        loss = dict(config.get("loss", {}))
-        stress_weight = 0.1 if training_stress else 0.0
+        loss = dict(config.get("loss", {}))  # Comment: Fix 'loss' to use type 'ener', "loss_func" to be "mae", and "f_use_norm" to true.
+        stress_weight = 0.1 if training_stress else 0.0  # Comment: Change energy and force weights to 20.0, and stress weight to 5.0, when applicable.
         loss["start_pref_e"] = 1.0
         loss["limit_pref_e"] = 1.0
         loss["start_pref_f"] = 1.0
@@ -101,6 +101,19 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
         loss["start_pref_v"] = stress_weight
         loss["limit_pref_v"] = stress_weight
         config["loss"] = loss
+
+        # Comment: optimizer settings must be fixed as well. Use:
+        #   "optimizer": {
+        #     "type": "HybridMuon",
+        #     "weight_decay": 0.001
+        #   },
+
+        # Comment: fix gradient clipping settings to: "gradient_max_norm": 1.0.
+
+        # Comment: fix saving and loss display frequencies to: "save_freq": 400, "disp_freq": 100,
+
+        # Comment: fix training seed to "seed": 42.
+
         return {
             f"{DEFAULT_MLFF_TRAINING_DIR}/input.json": (
                 json.dumps(config, indent=2, sort_keys=True) + "\n"
@@ -173,6 +186,8 @@ class DPA4BundleWriter(_DeepMDBundleWriter):
     backend_flag = "--pt"
     model_filenames = {"model": "dpa4.pt", "config": "dpa4.json"}
     trained_model_filename = "dpa4.pt2"
+    # Comment: make sure that model.ckpt.pt is also returned, as it is needed for deploying the model
+    #  on other hardwares. Models that are already frozen cannot be used on other machines.
 
 
 class DPA4CBundleWriter(_DeepMDBundleWriter):

@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 
+# Comment: These subclass may instead take a @register decorator to manage. You may refer to dpdata's registry mechanism.
+#  Subclasses are registered into the base class's registry dict, and can be retrieved by name.
 _WRITERS = {
     "dpa4": DPA4BundleWriter,
     "dpa4c": DPA4CBundleWriter,
@@ -33,6 +35,8 @@ def _write_submit_folder(
     target_dir: str | Path | None,
 ) -> Path:
     """Select the concrete writer and create one local submit folder."""
+    # Comment: Make this method public as it will be used elsewhere. Meanwhile,
+    #  improve the docstring to explain what it does and what the parameters are.
     try:
         writer = _WRITERS[bundle.mlff_spec.mlff_type]
     except KeyError as error:

@@ -59,7 +59,8 @@ def command(*arguments: Any) -> str:
 
 class BaseMLFFBundleWriter:
     """Copy common inputs and let a concrete writer add native training files."""
-
+    # Comment: documentation is not sufficiently written. Explain the purpose and meaning of all
+    #  attributes in this class in the class doc string.
     mlff_type: str
     calculator_resource: str
     model_filenames: dict[str, str]
@@ -75,6 +76,7 @@ class BaseMLFFBundleWriter:
 
     @property
     def unit(self):
+        # Comment: better rename to `training_unit` to be self-explanatory.
         """Return the nested benchmark data unit."""
         return self.bundle.training_unit
 
@@ -143,6 +145,8 @@ class BaseMLFFBundleWriter:
 
     @staticmethod
     def _dataset_has_stress(source: Path) -> bool:
+        # Comment: this had better be a method or attribute of TrainingUnit.
+        #  Do not compute this every time here.
         has_stress: bool | None = None
         frame_count = 0
         for frame_index, atoms in enumerate(iread(source, index=":")):
@@ -179,6 +183,9 @@ class BaseMLFFBundleWriter:
 
     def inspect_datasets(self) -> tuple[bool | None, list[bool]]:
         """Validate labels and return training and per-test stress availability."""
+        # Comment: docstring has to explain return values. same apply for the rest of this project.
+        #  I will not mention this requirement again.
+        #  Meanwhile, whether the datasets have stress should be attributes of TrainingUnit.
         training_stress: bool | None = None
         if self.bundle.unit_type == "finetune":
             assert self.unit.train_set is not None
@@ -202,6 +209,8 @@ class BaseMLFFBundleWriter:
 
     def validate_bundle(self) -> None:
         """Apply the few invariants shared by every concrete writer."""
+        # Comment: no need to do such validation as MLFFBundleWriter is only called after the bundle is built internally by temper_bench.
+        #  This is redundant.
         if self.spec.mlff_type != self.mlff_type:
             raise ValueError(
                 f"{type(self).__name__} cannot write {self.spec.mlff_type!r}."
@@ -216,14 +225,17 @@ class BaseMLFFBundleWriter:
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
         """Return package-native configurations keyed by submit-relative path."""
+        # Comment: Make this abstract method.
         return {}
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
         """Return shell lines that fine-tune and place the standardized model."""
+        # Comment: Make this abstract method.
         raise NotImplementedError
 
     def extra_runtime_resources(self) -> dict[str, str]:
         """Map extra runtime destination names to packaged resource paths."""
+        # Comment: Make this abstract method.
         return {}
 
     def test_config(self, test_stress: list[bool]) -> dict[str, Any]:
@@ -270,6 +282,8 @@ class BaseMLFFBundleWriter:
 
     def run_script(self, training_stress: bool) -> str:
         """Render the fixed entry script and any package-native training stage."""
+        # Comment: better rename to `generate_run_script` to be self-explanatory. The current name seem to
+        #  imply that it runs the script, which is not the case.
         lines = [
             "#!/usr/bin/env bash",
             "set -euo pipefail",
