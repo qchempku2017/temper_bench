@@ -17,7 +17,7 @@ from temper.utils.defaults import (
 
 
 def _nep_architecture(path: Path) -> tuple[list[str], set[str]]:
-    """Translate a GPUMD NEP4 header into TorchNEP ``nep.in`` lines."""
+    """Translate a GPUMD NEP4 header into TorchNEP ``nep.in`` lines (architecture-relevant sections)."""
     with path.open(encoding="utf-8") as stream:
         rows = [stream.readline().split() for _ in range(7)]
 
@@ -170,6 +170,7 @@ class NEP89BundleWriter(BaseMLFFBundleWriter):
         return symbols
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+        # Comment: improve documentations! Currently no documentation at all.
         model_path = self._verify_artifact(self.artifact("model"))
         architecture, model_symbols = _nep_architecture(model_path)
         missing = sorted(self._training_symbols() - model_symbols)

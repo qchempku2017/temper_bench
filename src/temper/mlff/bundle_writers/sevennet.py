@@ -50,6 +50,11 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
     trained_model_filename = "sevennet.pth"
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+        # Comment: improve documentations. Currently, no documentations at all.
+        # Comment: besides, this seems to only implement sevennet training from scratch rather than fine-tuning.
+        #  Are you sure this is really the fine-tuning? Please check:
+        #  https://github.com/MDIL-SNU/sevennet_tutorial/blob/main/notebooks/SevenNet_finetune_tutorial.ipynb
+        #  for a real example of fine-tuning.
         parameters = dict(self.spec.training or {})
         epoch = parameters.get("epoch")
         if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch <= 0:
@@ -98,6 +103,7 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
         }
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
+        # Comment: again, check if this is really fine-tuning. If not, re-implement!
         del training_stress
         epoch = (self.spec.training or {})["epoch"]
         work = f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet"

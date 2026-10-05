@@ -52,11 +52,15 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
                 "MatterSim training parameter 'epochs' must be a positive integer."
             )
         parameters["early_stop_patience"] = epochs + 1
-        parameters["batch_size"] = 1
+        parameters["batch_size"] = 1  # Comment: too small. Can try 4.
         parameters["include_forces"] = True
         parameters["include_stresses"] = training_stress
         parameters["force_loss_ratio"] = 1.0
         parameters["stress_loss_ratio"] = 0.1 if training_stress else 0.0
+        # Comment: Should fix seed to 42.
+        # Comment: use 200 epochs rather than 1000 for mattersim.
+        # Comment: fix learning rate to 2e-4.
+        # Comment: fix learning rate scheduler step size to 10.
         device_script = f"{DEFAULT_MLFF_RUNTIME_DIR}/device.py"
         resolve = (
             'MLFF_DEVICE="$("$PYTHON_BIN" '
@@ -81,6 +85,9 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
             "--save_checkpoint",
             "--device",
             "$MLFF_DEVICE",
+            # Comment: no need to specify device, because we should always use GPU for training.
+            #  If anywhere else in this project you use this variable $MLFF_DEVICE, remove it and just use GPU.
+            #  Throw error if GPU is not available for training.
             *self._options(parameters),
         ]
         if self.unit.val_set is not None:
