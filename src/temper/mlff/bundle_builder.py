@@ -9,6 +9,8 @@ from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.schemas.train_unit import TrainingUnit
 
 
+# Comment: this function is useless, because bundles should only be built per training
+#  unit during submission. Remove it.
 def build_mlff_train_bundles(
     *,
     training_units: Iterable[TrainingUnit],

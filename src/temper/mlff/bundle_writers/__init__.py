@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 # Comment: These subclass may instead take a @register decorator to manage. You may refer to dpdata's registry mechanism.
 #  Subclasses are registered into the base class's registry dict, and can be retrieved by name.
+#  You can leave a handy subclass factory function here for convenience of retrieving the correct subclass by name.
 _WRITERS = {
     "dpa4": DPA4BundleWriter,
     "dpa4c": DPA4CBundleWriter,

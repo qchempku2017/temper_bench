@@ -92,6 +92,11 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
         training["save_ckpt"] = f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt"  # Comment: typically named model.ckpt.pt.
         config["training"] = training
 
+        # Comment: (major refractor) I don't think bundle writers should be responsible for setting fine-tuning parameters. These jobs have to be done
+        #  by spec builders. Bundle writers should only be responsible for writing the input files in submit folder using settings specified in MLFFSpecs.
+        #  Consider modification to bundle_writers
+        #  and spec_builders modules.
+
         loss = dict(config.get("loss", {}))  # Comment: Fix 'loss' to use type 'ener', "loss_func" to be "mae", and "f_use_norm" to true.
         stress_weight = 0.1 if training_stress else 0.0  # Comment: Change energy and force weights to 20.0, and stress weight to 5.0, when applicable.
         loss["start_pref_e"] = 1.0
