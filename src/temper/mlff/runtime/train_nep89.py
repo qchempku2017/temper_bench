@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import argparse
-from importlib import import_module
-
 
 def run(
     config: str,
@@ -15,7 +13,7 @@ def run(
     output_directory: str,
 ) -> None:
     """Fine-tune with fixed benchmark runtime controls."""
-    train_nep = getattr(import_module("torchnep"), "train_nep")
+    from torchnep import train_nep
 
     train_nep(
         config,

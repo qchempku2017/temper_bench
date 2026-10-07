@@ -153,6 +153,8 @@ def _evaluate_dataset(
     )
     _write_npz(prediction_path, arrays)
     wall_time = time.perf_counter() - started
+    # Comment: better create a new MLFFTestResult schema in temper.schemas as
+    #  serializable result file.
     result_metadata = {
         **common_metadata,
         "dataset_id": dataset["id"],

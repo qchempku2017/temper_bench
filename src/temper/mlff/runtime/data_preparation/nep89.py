@@ -48,6 +48,9 @@ def convert(
             energy=energy,
             forces=forces,
         )
+        # Comment: confirm that torchNEP really needs "virial" and that "stress"
+        #  won't work in torchNEP. Otherwise, such conversion may not be needed at all,
+        #  and the entire nep89 coversion should be redundant.
         if include_stress:
             stress = np.asarray(
                 atoms.get_stress(

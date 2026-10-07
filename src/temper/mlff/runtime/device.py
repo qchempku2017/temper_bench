@@ -17,6 +17,8 @@ def _cuda_hidden() -> bool:
 
 def torch_device(*, include_mps: bool = False) -> str:
     """Choose CUDA, optionally MPS, or CPU through the installed PyTorch."""
+    # Comment: major modification: should always only work with GPU. Raise error
+    #  for other devices.
     import torch
 
     if not _cuda_hidden() and torch.cuda.is_available():
@@ -68,6 +70,8 @@ def main() -> None:
 
     device = torch_device(include_mps=arguments.mps)
     if device == "cuda" and arguments.warn_mattersim:
+        # Comment: check if mattersim issue persists in the latest version. If not
+        #  remove this warning and allow larger batch sizes.
         print(
             "Warning: MatterSim 1.2.5 has known CUDA fine-tuning issues; "
             "batch_size remains fixed at 1.",

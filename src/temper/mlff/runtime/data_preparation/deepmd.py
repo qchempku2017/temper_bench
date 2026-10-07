@@ -19,7 +19,9 @@ def main() -> None:
     source = Path(arguments.input)
     destination = Path(arguments.output)
     destination.mkdir(parents=True, exist_ok=False)
-    systems = MultiSystems.from_file(str(source), fmt="extxyz")
+    # Dpdata does not read extxyz. Must specify ase/structure.
+    # File first converted into ase Atoms, then into MultiSystems.
+    systems = MultiSystems.from_file(str(source), fmt="ase/structure")
     systems.to("deepmd/npy", str(destination))
 
 
