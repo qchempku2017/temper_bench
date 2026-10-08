@@ -9,68 +9,43 @@ from temper.mlff.bundle_writers.base import (
 )
 from temper.utils.defaults import (
     DEFAULT_MLFF_DATASETS_DIR,
+    DEFAULT_MLFF_RUNTIME_DIR,
     DEFAULT_MLFF_TRAINING_DIR,
 )
 
 
-_MODEL = {
-    "chemical_species": "Auto",
-    "cutoff": 5.0,
-    "channel": 128,
-    "is_parity": False,
-    "lmax": 2,
-    "num_convolution_layer": 5,
-    "irreps_manual": [
-        "128x0e",
-        "128x0e+64x1e+32x2e",
-        "128x0e+64x1e+32x2e",
-        "128x0e+64x1e+32x2e",
-        "128x0e+64x1e+32x2e",
-        "128x0e",
-    ],
-    "weight_nn_hidden_neurons": [64, 64],
-    "radial_basis": {
-        "radial_basis_name": "bessel",
-        "bessel_basis_num": 8,
-    },
-    "cutoff_function": {
-        "cutoff_function_name": "XPLOR",
-        "cutoff_on": 4.5,
-    },
-    "self_connection_type": "linear",
-}
-
-
+@BaseMLFFBundleWriter.register(name="sevennet")
 class SevenNetBundleWriter(BaseMLFFBundleWriter):
     """Write fixed-layout SevenNet 0.13.0 train-and-test bundles."""
 
     mlff_type = "sevennet"
     calculator_resource = "calculators/sevennet.py"
     model_filenames = {"model": "sevennet.pth"}
-    trained_model_filename = "sevennet.pth"
+    trained_model_filename = "finetuned_sevennet.pth"
+
+    def extra_runtime_resources(self) -> dict[str, str]:
+        """Return the checkpoint-based native YAML preparation script."""
+        return {"prepare_sevennet.py": "data_preparation/sevennet.py"}
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
-        # Comment: improve documentations. Currently, no documentations at all.
-        # Comment: besides, this seems to only implement sevennet training from scratch rather than fine-tuning.
-        #  Are you sure this is really the fine-tuning? Please check:
-        #  https://github.com/MDIL-SNU/sevennet_tutorial/blob/main/notebooks/SevenNet_finetune_tutorial.ipynb
-        #  for a real example of fine-tuning.
-        parameters = dict(self.spec.training or {})
-        epoch = parameters.get("epoch")
-        if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch <= 0:
-            raise ValueError(
-                "SevenNet training parameter 'epoch' must be a positive integer."
-            )
-        model = dict(_MODEL)
+        """Return YAML that fine-tunes SevenNet-0 via train.continue.
+
+        The checkpoint supplies pretrained weights and species statistics;
+        optimizer, scheduler and epoch counters restart for this dataset.
+        The runner reads architecture from the checkpoint before training.
+        """
+        parameters = dict(self.spec.training_parameters or {})
+        model = {}
         model["train_shift_scale"] = parameters.pop("train_shift_scale")
         model["train_denominator"] = parameters.pop("train_denominator")
         batch_size = parameters.pop("batch_size")
         data_divide_ratio = parameters.pop("data_divide_ratio")
 
         train = parameters
+        train["device"] = "cuda"
         train["is_train_stress"] = training_stress
-        train["force_loss_weight"] = 1.0
-        train["stress_loss_weight"] = 0.01 if training_stress else 0.0
+        if not training_stress:
+            train["stress_loss_weight"] = 0.0
         train["error_record"] = [
             ["Energy", "RMSE"],
             ["Force", "RMSE"],
@@ -92,7 +67,7 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
                 f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz"
             ],
         }
-        if self.unit.val_set is not None:
+        if self.training_unit.val_set is not None:
             data["load_validset_path"] = [
                 f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz"
             ]
@@ -103,16 +78,22 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
         }
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
-        # Comment: again, check if this is really fine-tuning. If not, re-implement!
+        """Return the native continuation command and final checkpoint copy."""
         del training_stress
-        epoch = (self.spec.training or {})["epoch"]
+        epoch = (self.spec.training_parameters or {})["epoch"]
         work = f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet"
         return (
             command("mkdir", "-p", work),
             command(
+                "$PYTHON_BIN",
+                f"{DEFAULT_MLFF_RUNTIME_DIR}/prepare_sevennet.py",
+                "--config", f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet.yaml",
+                "--output", f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet_resolved.yaml",
+            ),
+            command(
                 "sevenn",
                 "train",
-                f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet.yaml",
+                f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet_resolved.yaml",
                 "-s",
                 "-w",
                 work,

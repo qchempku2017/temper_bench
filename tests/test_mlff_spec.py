@@ -20,8 +20,8 @@ from temper.mlff import (
     NEP89SpecBuilder,
     SevenNetSpecBuilder,
 )
+from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
-    LocalArtifactRef,
     MLFFImplementation,
     MLFFSpec,
     PretrainedMLFFSpec,
@@ -36,7 +36,7 @@ def test_only_six_concrete_builders_are_public() -> None:
     assert not hasattr(mlff, "ORBSpecBuilder")
     assert not hasattr(mlff, "MLFFType")
     assert not hasattr(mlff, "MLFFBundleLayout")
-    assert not hasattr(mlff, "get_mlff_spec_builder")
+    assert mlff.mlff_spec_builder_factory("mace") is MACESpecBuilder
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -46,7 +46,7 @@ def test_each_builder_records_fixed_implementations(
 ) -> None:
     spec = mlff_spec_factory(family)
     assert spec.mlff_type == family
-    assert spec.training is not None
+    assert spec.training_parameters is not None
     assert all(
         set(type(item).model_fields) == {"name", "version", "kind"}
         for item in spec.implementations
@@ -58,14 +58,14 @@ def test_model_paths_are_adjustable_and_content_addressed(tmp_path: Path) -> Non
     second = tmp_path / "second.model"
     first.write_bytes(b"same")
     second.write_bytes(b"same")
-    one = MACESpecBuilder(pretrained_model_path=first).build()
-    two = MACESpecBuilder(pretrained_model_path=second).build()
+    one = MACESpecBuilder(pretrained_model_dir=first.parent, model_filename=first.name).build()
+    two = MACESpecBuilder(pretrained_model_dir=second.parent, model_filename=second.name).build()
 
     assert one.pretrained_model.artifacts["model"].path == first
     assert one.mlff_spec_id == two.mlff_spec_id
 
     second.write_bytes(b"different")
-    changed = MACESpecBuilder(pretrained_model_path=second).build()
+    changed = MACESpecBuilder(pretrained_model_dir=second.parent, model_filename=second.name).build()
     assert changed.mlff_spec_id != one.mlff_spec_id
 
 
@@ -84,13 +84,6 @@ def test_default_model_paths_cover_every_family(
         "nep89.txt",
     ):
         (root / filename).write_bytes(filename.encode())
-    for filename in ("dpa4.json", "dpa4c.json"):
-        (root / filename).write_text(
-            json.dumps(
-                {"model": {"type_map": ["H"]}, "training": {}}
-            ),
-            encoding="utf-8",
-        )
     monkeypatch.chdir(tmp_path)
 
     specs = [
@@ -135,15 +128,15 @@ def test_none_means_zeroshot_and_empty_dict_enables_defaults(
 ) -> None:
     model = tmp_path / "mace.model"
     model.write_bytes(b"mace")
-    zero = MACESpecBuilder(pretrained_model_path=model).build()
+    zero = MACESpecBuilder(pretrained_model_dir=model.parent, model_filename=model.name).build()
     fine = MACESpecBuilder(
-        pretrained_model_path=model,
+        pretrained_model_dir=model.parent, model_filename=model.name,
         training_parameters={},
     ).build()
 
-    assert zero.training is None
-    assert fine.training is not None
-    assert fine.training["max_num_epochs"] == 100
+    assert zero.training_parameters is None
+    assert fine.training_parameters is not None
+    assert fine.training_parameters["max_num_epochs"] == 100
 
 
 @pytest.mark.parametrize(
@@ -157,13 +150,13 @@ def test_none_means_zeroshot_and_empty_dict_enables_defaults(
         ("nep89", "epoch"),
     ),
 )
-def test_every_gradient_trainer_defaults_to_one_hundred_epochs(
+def test_family_epoch_defaults(
     family: str,
     epoch_key: str,
     mlff_spec_factory,
 ) -> None:
     spec = mlff_spec_factory(family)
-    assert spec.training[epoch_key] == 100
+    assert spec.training_parameters[epoch_key] == {"dpa4": 60, "mattersim": 200}.get(family, 100)
 
 
 def test_early_stopping_is_disabled_for_exact_epoch_runs(
@@ -177,9 +170,9 @@ def test_early_stopping_is_disabled_for_exact_epoch_runs(
     )
     nep = mlff_spec_factory("nep89", training_parameters={"epoch": 7})
 
-    assert mace.training["patience"] == 8
-    assert mattersim.training["early_stop_patience"] == 8
-    assert nep.training["early_stop"] == 0
+    assert mace.training_parameters["patience"] == 8
+    assert mattersim.training_parameters["early_stop_patience"] == 8
+    assert nep.training_parameters["early_stop"] == 0
 
 
 @pytest.mark.parametrize(
@@ -246,7 +239,7 @@ def test_nep_uses_torchnep_only_for_finetuning(mlff_spec_factory) -> None:
 
 
 def test_nep_defaults_match_torchnep_1_0_2(mlff_spec_factory) -> None:
-    assert mlff_spec_factory("nep89").training == {
+    assert mlff_spec_factory("nep89").training_parameters == {
         "epoch": 100,
         "batch": 32,
         "lr": 0.01,
@@ -276,11 +269,11 @@ def test_parameter_dictionaries_are_plain_and_mutable(
         training_parameters={"custom": {"values": [1, 2]}},
         testing_parameters={"default_dtype": "float32"},
     )
-    assert isinstance(spec.training, dict)
-    assert isinstance(spec.testing, dict)
-    spec.training["custom"]["values"].append(3)
-    spec.testing["default_dtype"] = "float64"
-    assert spec.training["custom"]["values"] == [1, 2, 3]
+    assert isinstance(spec.training_parameters, dict)
+    assert isinstance(spec.testing_parameters, dict)
+    spec.training_parameters["custom"]["values"].append(3)
+    spec.testing_parameters["default_dtype"] = "float64"
+    assert spec.training_parameters["custom"]["values"] == [1, 2, 3]
 
 
 def test_schema_and_monty_round_trip(tmp_path: Path, mlff_spec_factory) -> None:

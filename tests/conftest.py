@@ -183,17 +183,6 @@ def mlff_spec_factory(tmp_path: Path):
         testing_parameters: dict | None = None,
     ):
         if family in {"dpa4", "dpa4c"}:
-            config_path = artifact_root / f"{family}-config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "model": {"type_map": ["H", "He"]},
-                        "training": {},
-                        "loss": {},
-                    }
-                ),
-                encoding="utf-8",
-            )
             builder_type = (
                 DPA4SpecBuilder
                 if family == "dpa4"
@@ -203,7 +192,6 @@ def mlff_spec_factory(tmp_path: Path):
                 "pretrained_model_path": artifact(
                     family, "model.pt", b"deepmd-checkpoint"
                 ),
-                "pretrained_config_path": config_path,
             }
         elif family == "mattersim":
             builder_type = MatterSimSpecBuilder
@@ -240,8 +228,13 @@ def mlff_spec_factory(tmp_path: Path):
             training = {} if training_parameters is None else training_parameters
         else:
             training = None
+        model_path = paths["pretrained_model_path"]
+        source = {
+            "pretrained_model_dir": model_path.parent,
+            "model_filename": model_path.name,
+        }
         return builder_type(
-            **paths,
+            **source,
             training_parameters=training,
             testing_parameters=testing_parameters,
         ).build()

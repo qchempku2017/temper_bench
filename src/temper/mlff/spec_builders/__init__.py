@@ -7,9 +7,15 @@ from temper.mlff.spec_builders.nep89 import NEP89SpecBuilder
 from temper.mlff.spec_builders.sevennet import SevenNetSpecBuilder
 
 
-# Comment: as I implied in the bundle_writers/__init__.py, you may consider using a registry mechanism to manage the spec builders, and leave a subclass factory here.
+from temper.mlff.spec_builders.base import BaseSpecBuilder
+
+
+def mlff_spec_builder_factory(mlff_type: str) -> type[BaseSpecBuilder]:
+    """Return the registered builder class for an MLFF family key."""
+    return BaseSpecBuilder.registry[mlff_type]
 
 __all__ = [
+    "mlff_spec_builder_factory",
     "DPA4CSpecBuilder",
     "DPA4SpecBuilder",
     "MACESpecBuilder",

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-from pathlib import Path
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, field_serializer, field_validator
+from pydantic import ConfigDict, Field
 
+from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.base import MSONableModel, ManagedIdentityModel
 
 
@@ -38,73 +37,6 @@ class MLFFImplementation(MSONableModel):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
     kind: Literal["python_distribution", "executable"] = "python_distribution"
-
-# Comment: This had better be moved to a separate schema definition python file
-# like src/temper/schemas/artifact.py and be referenced from there, since it may be used in other contexts as well.
-class LocalArtifactRef(MSONableModel):
-    """Reference a local pretrained-model or any input file by location and content hash.
-
-    The path tells the submit-folder writer where to copy the file. The SHA-256
-    digest protects against the source changing after a specification was
-    created and supplies the path-independent identity used by MLFFSpec.
-
-    Attributes
-    ----------
-    path : pathlib.Path
-        Absolute local location of the artifact.
-    sha256 : str
-        Lowercase hexadecimal SHA-256 digest of the file contents.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    path: Path
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-    @classmethod
-    def from_path(cls, path: str | Path) -> Self:
-        """Hash an existing file and return its local artifact reference.
-
-        Parameters
-        ----------
-        path : str or pathlib.Path
-            Existing file to reference. Tilde expansion and absolute path
-            resolution are applied before the file is opened.
-
-        Returns
-        -------
-        LocalArtifactRef
-            Reference containing path and its current SHA-256 digest.
-
-        Raises
-        ------
-        ValueError
-            If path does not identify a regular file.
-        OSError
-            If the file cannot be read.
-        """
-        local_path = Path(path).expanduser().resolve()
-        if not local_path.is_file():
-            raise ValueError(f"Local MLFF artifact does not exist: {local_path}.")
-        digest = hashlib.sha256()
-        with local_path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return cls(path=local_path, sha256=digest.hexdigest())
-
-    @field_validator("path", mode="before")
-    @classmethod
-    def _load_monty_path(cls, value: Any) -> Any:
-        """Accept paths serialized by both current and legacy Monty encoders."""
-        if isinstance(value, dict) and value.get("@module") == "pathlib":
-            return value.get("string", value)
-        return value
-
-    @field_serializer("path")
-    def _serialize_path(self, value: Path) -> str:
-        """Serialize the local path as a plain string."""
-        return str(value)
-
 
 class PretrainedMLFFSpec(MSONableModel):
     """Describe the local files that make up one pretrained model.
@@ -168,9 +100,9 @@ class MLFFSpec(ManagedIdentityModel):
         Exact packages and executables used by the integration.
     pretrained_model : PretrainedMLFFSpec
         Local, content-addressed pretrained model files.
-    training : dict[str, Any] or None
+    training_parameters : dict[str, Any] or None
         Package-native fine-tuning parameters. None means no training.
-    testing : dict[str, Any]
+    testing_parameters : dict[str, Any]
         Package-native ASE Calculator keyword arguments. Do not include device
         selection or evaluated properties; TEMPER manages them remotely.
     mlff_spec_id : UUID or None
@@ -185,30 +117,26 @@ class MLFFSpec(ManagedIdentityModel):
         "mlff_type",
         "implementations",
         "pretrained_model",
-        "training",
-        "testing",
+        "training_parameters",
+        "testing_parameters",
     )
     _IDENTITY_SOURCE_NORMALIZERS: ClassVar[dict[str, Any]] = {
         "implementations": _implementation_identity,
         "pretrained_model": _model_identity,
     }
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _MLFF_SPEC_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-spec.v2"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-spec.v3"
     _IDENTITY_LABEL: ClassVar[str] = "MLFF specification"
 
     mlff_type: str = Field(min_length=1)
     implementations: tuple[MLFFImplementation, ...] = Field(min_length=1)
     pretrained_model: PretrainedMLFFSpec
-    # Comment: consider rename `training` field into `training_parameters` to be more explicit about its purpose
-    #   and avoid confusion with other training-related attributes or methods. Rename `testing` field into `testing_parameters`
-    #   for the same reason.
-    training: dict[str, Any] | None = None
-    testing: dict[str, Any] = Field(default_factory=dict)
+    training_parameters: dict[str, Any] | None = None
+    testing_parameters: dict[str, Any] = Field(default_factory=dict)
     mlff_spec_id: UUID | None = None
 
 
 __all__ = [
-    "LocalArtifactRef",
     "MLFFImplementation",
     "MLFFSpec",
     "PretrainedMLFFSpec",

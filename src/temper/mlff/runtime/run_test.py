@@ -3,6 +3,13 @@
 
 from __future__ import annotations
 
+if __package__:
+    # temper_bench has been installed remotely.
+    from temper.schemas.mlff_test_result import MLFFTestResult
+else:
+    # temper_bench has not been installed remotely, only module file uploaded.
+    from result_schema import MLFFTestResult
+
 import argparse
 import json
 import os
@@ -153,9 +160,7 @@ def _evaluate_dataset(
     )
     _write_npz(prediction_path, arrays)
     wall_time = time.perf_counter() - started
-    # Comment: better create a new MLFFTestResult schema in temper.schemas as
-    #  serializable result file.
-    result_metadata = {
+    result_metadata = MLFFTestResult.from_dict({
         **common_metadata,
         "dataset_id": dataset["id"],
         "source_domain": dataset["source_domain"],
@@ -170,8 +175,8 @@ def _evaluate_dataset(
             "stress": "eV/Angstrom^3" if "stress" in properties else None,
         },
         "wall_time_seconds": wall_time,
-    }
-    _write_json(metadata_path, result_metadata)
+    })
+    _write_json(metadata_path, result_metadata.as_dict())
     return {
         "dataset_id": dataset["id"],
         "prediction_file": dataset["output"],

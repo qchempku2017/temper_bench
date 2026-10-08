@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import shlex
 from typing import Any
 
 from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter, command
 from temper.utils.defaults import (
     DEFAULT_MLFF_DATASETS_DIR,
-    DEFAULT_MLFF_RUNTIME_DIR,
     DEFAULT_MLFF_TRAINING_DIR,
 )
 
@@ -22,19 +20,26 @@ _BOOLEAN_OPTIONS = {
 }
 
 
+@BaseMLFFBundleWriter.register(name="mattersim")
 class MatterSimBundleWriter(BaseMLFFBundleWriter):
     """Write fixed-layout MatterSim 1.2.5 train-and-test bundles."""
 
     mlff_type = "mattersim"
     calculator_resource = "calculators/mattersim.py"
     model_filenames = {"model": "mattersim.pth"}
-    trained_model_filename = "mattersim.pth"
+    trained_model_filename = "finetuned_mattersim.pth"
 
     def extra_runtime_resources(self) -> dict[str, str]:
-        return {"device.py": "device.py"}
+        """Return no extra resources beyond the shared runtime."""
+        return {}
+
+    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+        """Return no config files: MatterSim accepts all controls on its CLI."""
+        return {}
 
     @staticmethod
     def _options(parameters: dict[str, Any]) -> list[str]:
+        """Return native CLI arguments, preserving false boolean switches."""
         result: list[str] = []
         for key, value in parameters.items():
             option = f"--{key}"
@@ -45,28 +50,12 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
         return result
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
-        parameters = dict(self.spec.training or {})
-        epochs = parameters.get("epochs")
-        if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs <= 0:
-            raise ValueError(
-                "MatterSim training parameter 'epochs' must be a positive integer."
-            )
-        parameters["early_stop_patience"] = epochs + 1
-        parameters["batch_size"] = 1  # Comment: too small. Can try 4.
+        """Return the CUDA launcher command with recipe options and data paths."""
+        parameters = dict(self.spec.training_parameters or {})
         parameters["include_forces"] = True
         parameters["include_stresses"] = training_stress
-        parameters["force_loss_ratio"] = 1.0
-        parameters["stress_loss_ratio"] = 0.1 if training_stress else 0.0
-        # Comment: Should fix seed to 42.
-        # Comment: use 200 epochs rather than 1000 for mattersim.
-        # Comment: fix learning rate to 2e-4.
-        # Comment: fix learning rate scheduler step size to 10.
-        device_script = f"{DEFAULT_MLFF_RUNTIME_DIR}/device.py"
-        resolve = (
-            'MLFF_DEVICE="$("$PYTHON_BIN" '
-            + shlex.quote(device_script)
-            + ' torch --warn-mattersim)"'
-        )
+        if not training_stress:
+            parameters["stress_loss_ratio"] = 0.0
         work = f"{DEFAULT_MLFF_TRAINING_DIR}/mattersim"
         arguments = [
             "$PYTHON_BIN",
@@ -84,13 +73,10 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
             work,
             "--save_checkpoint",
             "--device",
-            "$MLFF_DEVICE",
-            # Comment: no need to specify device, because we should always use GPU for training.
-            #  If anywhere else in this project you use this variable $MLFF_DEVICE, remove it and just use GPU.
-            #  Throw error if GPU is not available for training.
+            "cuda",
             *self._options(parameters),
         ]
-        if self.unit.val_set is not None:
+        if self.training_unit.val_set is not None:
             arguments.extend(
                 (
                     "--valid_data_path",
@@ -98,7 +84,6 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
                 )
             )
         return (
-            resolve,
             command("mkdir", "-p", work),
             command(*arguments),
             command(

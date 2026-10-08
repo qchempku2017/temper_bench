@@ -18,31 +18,26 @@ if TYPE_CHECKING:
     from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 
-# Comment: These subclass may instead take a @register decorator to manage. You may refer to dpdata's registry mechanism.
-#  Subclasses are registered into the base class's registry dict, and can be retrieved by name.
-#  You can leave a handy subclass factory function here for convenience of retrieving the correct subclass by name.
-_WRITERS = {
-    "dpa4": DPA4BundleWriter,
-    "dpa4c": DPA4CBundleWriter,
-    "mattersim": MatterSimBundleWriter,
-    "mace": MACEBundleWriter,
-    "sevennet": SevenNetBundleWriter,
-    "nep89": NEP89BundleWriter,
-}
+from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter
 
 
-def _write_submit_folder(
-    bundle: MLFFTrainBundle,
-    target_dir: str | Path | None,
-) -> Path:
-    """Select the concrete writer and create one local submit folder."""
-    # Comment: Make this method public as it will be used elsewhere. Meanwhile,
-    #  improve the docstring to explain what it does and what the parameters are.
+def mlff_bundle_writer_factory(mlff_type: str) -> type[BaseMLFFBundleWriter]:
+    """Return the writer class registered for a supported MLFF family."""
     try:
-        writer = _WRITERS[bundle.mlff_spec.mlff_type]
+        return BaseMLFFBundleWriter.registry[mlff_type]
     except KeyError as error:
-        raise ValueError(
-            f"Unsupported MLFF type {bundle.mlff_spec.mlff_type!r}; expected one "
-            f"of {sorted(_WRITERS)!r}."
-        ) from error
+        raise ValueError(f"Unsupported MLFF type {mlff_type!r}.") from error
+
+
+def write_submit_folder(
+    bundle: MLFFTrainBundle,
+    target_dir: str | Path | None = None,
+) -> Path:
+    """Write and return a complete submit folder for one dataset/recipe pair.
+
+    bundle supplies the source data and model artifacts. target_dir must not
+    exist; omitting it creates a caller-owned temporary directory. Files are
+    copied and the folder is removed if writing fails.
+    """
+    writer = mlff_bundle_writer_factory(bundle.mlff_spec.mlff_type)
     return writer(bundle).write_submit_folder(target_dir)

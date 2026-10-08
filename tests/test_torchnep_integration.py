@@ -5,6 +5,7 @@ from __future__ import annotations
 from importlib import import_module
 from pathlib import Path
 
+import numpy as np
 import pytest
 from ase.io import write
 
@@ -78,3 +79,19 @@ def test_one_epoch_finetune_writes_reloadable_gpumd_model(tmp_path: Path) -> Non
     calculator = getattr(import_module("torchnep.nep"), "NEPCalculator")
 
     assert calculator(str(trained)).type_names == ["H"]
+
+def test_pinned_reader_accepts_ase_stress_without_conversion(tmp_path: Path) -> None:
+    if torchnep.__version__ != "1.0.2":
+        pytest.skip("TEMPER's TorchNEP integration is pinned to 1.0.2")
+    from torchnep.data import read_xyz
+
+    atoms = make_frame("H2", -1.0, "stress", stress=True)
+    atoms.set_cell([10, 10, 10])
+    atoms.set_pbc(True)
+    source = tmp_path / "stress.extxyz"
+    write(source, atoms, format="extxyz")
+    frame = read_xyz(str(source))[0]
+    expected = -atoms.get_stress(voigt=False) * atoms.get_volume()
+    np.testing.assert_allclose(
+        np.asarray(frame["virial"]).reshape(3, 3), expected,
+    )

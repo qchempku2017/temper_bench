@@ -6,7 +6,7 @@ from math import isclose
 from pathlib import Path
 
 from ase.data import chemical_symbols
-from ase.io import iread
+from temper.utils.extxyz import iter_extxyz_metadata
 
 from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter, command
 from temper.utils.defaults import (
@@ -119,111 +119,86 @@ def _parameter_line(key: str, value: str | int | float | bool) -> str:
     return f"{key} {value}"
 
 
+@BaseMLFFBundleWriter.register(name="nep89")
 class NEP89BundleWriter(BaseMLFFBundleWriter):
     """Write fixed-layout TorchNEP 1.0.2 and calorine 3.5 bundles."""
 
     mlff_type = "nep89"
     calculator_resource = "calculators/nep89.py"
     model_filenames = {"model": "nep89.txt"}
-    trained_model_filename = "nep89.txt"
+    trained_model_filename = "finetuned_nep89.txt"
 
     @property
     def work_directory(self) -> str:
         """Return the TorchNEP working directory within the submit folder."""
         return f"{DEFAULT_MLFF_TRAINING_DIR}/torchnep"
 
-    def validate_bundle(self) -> None:
-        if "restart" in self.spec.pretrained_model.artifacts:
-            raise ValueError(
-                "NEP-89 TorchNEP fine-tuning no longer uses a restart artifact; "
-                "rebuild this MLFF specification."
-            )
-        super().validate_bundle()
-        if self.bundle.unit_type == "finetune" and self.unit.val_set is None:
-            raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
-
     def extra_runtime_resources(self) -> dict[str, str]:
+        """Return the TorchNEP launcher to copy into the standalone runtime."""
         return {
-            "device.py": "device.py",
-            "prepare_nep89.py": "data_preparation/nep89.py",
             "train_nep89.py": "train_nep89.py",
         }
 
-    def _training_symbols(self) -> set[str]:
-        assert self.unit.train_set is not None
-        filenames = [self.unit.train_set]
-        if self.unit.val_set is not None:
-            filenames.append(self.unit.val_set)
+    def _check_chemical_symbols(self, model_symbols: set[str]) -> None:
+        """Require periodic data whose species are covered by the pretrained model."""
+        assert self.training_unit.train_set is not None
+        filenames = [self.training_unit.train_set]
+        if self.training_unit.val_set is not None:
+            filenames.append(self.training_unit.val_set)
         symbols: set[str] = set()
         for filename in filenames:
-            source = self._dataset_source(filename)
-            for frame_index, atoms in enumerate(iread(source, index=":")):
-                if not all(bool(value) for value in atoms.pbc):
+            source = self.training_unit.dataset_source(filename)
+            for frame_index, frame in enumerate(iter_extxyz_metadata(source, read_symbols=True)):
+                if not frame.fully_periodic:
                     raise ValueError(
                         "NEP-89 fine-tuning requires fully periodic structures; "
                         f"frame {frame_index} in {source} is not periodic in "
                         "every direction."
                     )
-                symbols.update(
-                    chemical_symbols[int(number)] for number in atoms.numbers
-                )
-        return symbols
-
-    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
-        # Comment: improve documentations! Currently no documentation at all.
-        model_path = self._verify_artifact(self.artifact("model"))
-        architecture, model_symbols = _nep_architecture(model_path)
-        missing = sorted(self._training_symbols() - model_symbols)
+                symbols.update(frame.symbols)
+        missing = sorted(symbols - model_symbols)
         if missing:
             raise ValueError(
                 "NEP training data contains elements absent from the pretrained "
                 f"model: {missing!r}."
             )
 
-        parameters = dict(self.spec.training or {})
-        epoch = parameters.get("epoch")
-        if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch <= 0:
-            raise ValueError(
-                "TorchNEP training parameter 'epoch' must be a positive integer."
-            )
-        parameters["early_stop"] = 0
-        parameters["lambda_v"] = 0.01 if training_stress else 0.0
-        parameters["stage2_lambda_v"] = 0.1 if training_stress else 0.0
+    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+        """Return nep.in with checkpoint architecture and recipe controls.
+
+        The pretrained header determines species and network dimensions.
+        Dataset species must be covered, periodicity must be complete, and
+        validation data is required for selecting nep_best.txt.
+        """
+        if self.training_unit.val_set is None:
+            raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
+        model_path = self._verify_artifact(self.artifact("model"))
+        architecture, model_symbols = _nep_architecture(model_path)
+
+        self._check_chemical_symbols(model_symbols)
+
+        parameters = dict(self.spec.training_parameters or {})
+        if not training_stress:
+            parameters["lambda_v"] = 0.0
+            parameters["stage2_lambda_v"] = 0.0
         lines = architecture + [
             _parameter_line(key, value) for key, value in parameters.items()
         ]
         return {f"{self.work_directory}/nep.in": "\n".join(lines) + "\n"}
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
-        prepare = [
-            "$PYTHON_BIN",
-            f"{DEFAULT_MLFF_RUNTIME_DIR}/prepare_nep89.py",
-            "--train",
-            f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz",
-            "--validation",
-            f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz",
-            "--output-directory",
-            self.work_directory,
-        ]
-        if training_stress:
-            prepare.append("--stress")
+        """Return fine-tuning commands using the original labeled extxyz files."""
         output = f"{self.work_directory}/output"
         return (
-            command(
-                "$PYTHON_BIN",
-                f"{DEFAULT_MLFF_RUNTIME_DIR}/device.py",
-                "require-cuda",
-            ),
-            command(*prepare),
             command(
                 "$PYTHON_BIN",
                 f"{DEFAULT_MLFF_RUNTIME_DIR}/train_nep89.py",
                 "--config",
                 f"{self.work_directory}/nep.in",
                 "--train",
-                f"{self.work_directory}/train.xyz",
+                f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz",
                 "--validation",
-                f"{self.work_directory}/test.xyz",
+                f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz",
                 "--model",
                 self.artifact_path("model"),
                 "--output-directory",

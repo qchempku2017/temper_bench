@@ -16,20 +16,25 @@ from temper.mlff import (
     DPA4SpecBuilder,
     MLFFTrainBundle,
     NEP89SpecBuilder,
-    build_mlff_train_bundles,
 )
 import temper.mlff.bundle_writers.base as writer_base
 from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter
 from temper.mlff.bundle_writers.nep89 import _nep_architecture
-from temper.schemas.mlff_spec import LocalArtifactRef
 
 from conftest import make_frame
 
 
 FAMILIES = ("dpa4", "dpa4c", "mattersim", "mace", "sevennet", "nep89")
+DEEPMD_TYPE_MAP = (
+    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni "
+    "Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe "
+    "Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au "
+    "Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf "
+    "Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
+).split()
 MODEL_FILES = {
-    "dpa4": ("dpa4.pt", "dpa4.json"),
-    "dpa4c": ("dpa4c.pt", "dpa4c.json"),
+    "dpa4": ("dpa4.pt",),
+    "dpa4c": ("dpa4c.pt",),
     "mattersim": ("mattersim.pth",),
     "mace": ("mace.model",),
     "sevennet": ("sevennet.pth",),
@@ -63,24 +68,6 @@ def test_bundle_schema_contains_only_the_pair_and_identity(
         bundle.write_submit_folder
     ).parameters
     assert not hasattr(bundle, "materialize_submit_folder")
-
-
-def test_cartesian_product_preserves_input_order(
-    zeroshot_training_unit,
-    mlff_spec_factory,
-) -> None:
-    specs = [
-        mlff_spec_factory("mace", with_training=False),
-        mlff_spec_factory("sevennet", with_training=False),
-    ]
-    bundles = build_mlff_train_bundles(
-        training_units=[zeroshot_training_unit],
-        mlff_specs=specs,
-    )
-    assert [bundle.mlff_spec.mlff_type for bundle in bundles] == [
-        "mace",
-        "sevennet",
-    ]
 
 
 def test_bundle_identity_and_monty_round_trip(
@@ -172,6 +159,9 @@ def test_finetune_writes_native_training_and_automatic_stress(
     assert TRAINING_MARKERS[family] in run_script
     assert (target / "datasets" / "train.extxyz").is_file()
     assert (target / "datasets" / "validation.extxyz").is_file()
+    if family in {"mace", "mattersim", "sevennet", "nep89"}:
+        testing = json.loads((target / "test_config.json").read_text())
+        assert Path(testing["model"]).name.startswith("finetuned_")
     if family == "nep89":
         test_config = json.loads((target / "test_config.json").read_text())
         assert {
@@ -180,21 +170,17 @@ def test_finetune_writes_native_training_and_automatic_stress(
 
     if family in {"dpa4", "dpa4c"}:
         config = json.loads((target / "training" / "input.json").read_text())
-        assert config["loss"]["start_pref_v"] == 0.1
-        assert config["model"] == {
-            "type_map": ["H", "He"],
-            "descriptor": {},
-            "fitting_net": {},
-        }
-        assert config["training"]["numb_epoch"] == 100
+        assert config["loss"]["start_pref_v"] == 5.0
+        assert config["model"] == {"type_map": DEEPMD_TYPE_MAP}
+        assert config["training"]["numb_epoch"] == (60 if family == "dpa4" else 100)
         assert "--use-pretrain-script" in run_script
         assert "--output outputs/train_adapted.json" in run_script
         assert "model.ckpt.pt" in run_script
     elif family == "mattersim":
         assert "--include_stresses" in run_script
         assert "--batch_size 1" in run_script
-        assert "--epochs 100" in run_script
-        assert "--early_stop_patience 101" in run_script
+        assert "--epochs 200" in run_script
+        assert "--early_stop_patience 201" in run_script
     elif family == "mace":
         config = YAML(typ="safe").load(
             (target / "training" / "mace.yaml").read_text()
@@ -208,6 +194,10 @@ def test_finetune_writes_native_training_and_automatic_stress(
         )
         assert config["train"]["is_train_stress"] is True
         assert config["train"]["epoch"] == 100
+        assert set(config["model"]) == {"train_shift_scale", "train_denominator"}
+        assert (target / "runtime/prepare_sevennet.py").is_file()
+        assert run_script.index("runtime/prepare_sevennet.py") < run_script.index("sevenn train")
+        assert "sevenn train training/sevennet_resolved.yaml" in run_script
     else:
         config = (target / "training" / "torchnep" / "nep.in").read_text()
         assert "type 2 H He" in config
@@ -217,7 +207,7 @@ def test_finetune_writes_native_training_and_automatic_stress(
         assert "early_stop 0" in config
         assert "lambda_v 0.01" in config
         assert "--model models/nep89.txt" in run_script
-        assert "output/nep_best.txt artifacts/nep89.txt" in run_script
+        assert "output/nep_best.txt artifacts/finetuned_nep89.txt" in run_script
 
 
 def test_no_stress_is_omitted_from_training_and_each_test(
@@ -254,35 +244,17 @@ def test_no_stress_is_omitted_from_training_and_each_test(
     )
 
 
-def test_deepmd_uses_sidecar_only_as_a_nonarchitecture_template(
+def test_deepmd_uses_only_weights_and_full_element_type_map(
     tmp_path: Path,
     finetune_training_unit,
 ) -> None:
     model = tmp_path / "dpa4.pt"
     model.write_bytes(b"checkpoint")
-    sidecar = tmp_path / "dpa4.json"
-    sidecar.write_text(
-        json.dumps(
-            {
-                "model": {
-                    "type_map": ["H", "He"],
-                    "descriptor": {"type": "hardcoded"},
-                    "fitting_net": {"neuron": [1]},
-                },
-                "training": {
-                    "numb_steps": 999,
-                    "num_epochs": 999,
-                    "disp_freq": 12,
-                },
-                "learning_rate": {"type": "exp", "start_lr": 1e-4},
-                "loss": {},
-            }
-        ),
-        encoding="utf-8",
-    )
+    domain = finetune_training_unit.root_path / finetune_training_unit.domain
+    write(domain / "validation.extxyz", make_frame("He", -1.0, "validation"), format="extxyz")
     spec = DPA4SpecBuilder(
-        pretrained_model_path=model,
-        pretrained_config_path=sidecar,
+        pretrained_model_dir=model.parent,
+        model_filename=model.name,
         training_parameters={"numb_epoch": 7},
     ).build()
 
@@ -293,11 +265,9 @@ def test_deepmd_uses_sidecar_only_as_a_nonarchitecture_template(
     config = json.loads((target / "training" / "input.json").read_text())
     run_script = (target / "run.sh").read_text()
 
-    assert config["model"] == {
-        "type_map": ["H", "He"],
-        "descriptor": {},
-        "fitting_net": {},
-    }
+    assert config["model"] == {"type_map": DEEPMD_TYPE_MAP}
+    assert set(spec.pretrained_model.artifacts) == {"model"}
+    assert list((target / "models").iterdir()) == [target / "models/dpa4.pt"]
     assert config["training"]["numb_epoch"] == 7
     assert config["training"]["disp_freq"] == 100
     assert not {
@@ -315,26 +285,6 @@ def test_deepmd_uses_sidecar_only_as_a_nonarchitecture_template(
     assert "--output outputs/train_adapted.json" in run_script
     assert "-c training/deepmd/model.ckpt.pt" in run_script
 
-
-def test_deepmd_requires_type_map_in_sidecar(
-    tmp_path: Path,
-    finetune_training_unit,
-) -> None:
-    model = tmp_path / "dpa4.pt"
-    model.write_bytes(b"checkpoint")
-    sidecar = tmp_path / "dpa4.json"
-    sidecar.write_text(json.dumps({"model": {}, "training": {}}))
-    spec = DPA4SpecBuilder(
-        pretrained_model_path=model,
-        pretrained_config_path=sidecar,
-        training_parameters={},
-    ).build()
-
-    with pytest.raises(ValueError, match="model.type_map"):
-        MLFFTrainBundle(
-            training_unit=finetune_training_unit,
-            mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "missing-type-map")
 
 
 def test_nep_without_stress_disables_virial_losses(
@@ -365,7 +315,8 @@ def test_nep_rejects_unsupported_checkpoint_headers(
     model = tmp_path / "nep.txt"
     model.write_text("nep3 1 H\n", encoding="utf-8")
     spec = NEP89SpecBuilder(
-        pretrained_model_path=model,
+        pretrained_model_dir=model.parent,
+        model_filename=model.name,
         training_parameters={},
     ).build()
 
@@ -448,7 +399,8 @@ def test_nep_rejects_training_elements_absent_from_checkpoint(
         encoding="utf-8",
     )
     spec = NEP89SpecBuilder(
-        pretrained_model_path=model,
+        pretrained_model_dir=model.parent,
+        model_filename=model.name,
         training_parameters={},
     ).build()
 
@@ -457,25 +409,6 @@ def test_nep_rejects_training_elements_absent_from_checkpoint(
             training_unit=finetune_training_unit,
             mlff_spec=spec,
         ).write_submit_folder(tmp_path / "missing-nep-element")
-
-
-def test_nep_legacy_restart_artifact_has_migration_error(
-    tmp_path: Path,
-    finetune_training_unit,
-    mlff_spec_factory,
-) -> None:
-    spec = mlff_spec_factory("nep89")
-    restart = tmp_path / "nep.restart"
-    restart.write_bytes(b"legacy")
-    spec.pretrained_model.artifacts["restart"] = LocalArtifactRef.from_path(
-        restart
-    )
-
-    with pytest.raises(ValueError, match="rebuild this MLFF specification"):
-        MLFFTrainBundle(
-            training_unit=finetune_training_unit,
-            mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "legacy-nep")
 
 
 def test_mixed_stress_within_dataset_is_rejected(

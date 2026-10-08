@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 import hashlib
 import json
 import shlex
@@ -11,15 +13,12 @@ from copy import deepcopy
 from importlib import resources
 from io import StringIO
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from ase.calculators.calculator import PropertyNotImplementedError
-from ase.io import iread
 from ruamel.yaml import YAML
 
-from temper.schemas.mlff_spec import LocalArtifactRef
+from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.utils import (
-    validate_relative_extxyz_path,
     validate_submit_relative_path,
 )
 from temper.utils.defaults import (
@@ -32,6 +31,8 @@ from temper.utils.defaults import (
 
 if TYPE_CHECKING:
     from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+    from temper.schemas.mlff_spec import MLFFSpec
+    from temper.schemas.train_unit import TrainingUnit
 
 
 def yaml_text(value: dict[str, Any]) -> str:
@@ -44,23 +45,63 @@ def yaml_text(value: dict[str, Any]) -> str:
 
 
 def command(*arguments: Any) -> str:
-    """Quote a command while preserving the two writer-owned shell variables."""
+    """Quote a command while preserving the writer-owned Python shell variable."""
     return " ".join(
         (
             '"$PYTHON_BIN"'
             if argument == "$PYTHON_BIN"
-            else '"$MLFF_DEVICE"'
-            if argument == "$MLFF_DEVICE"
             else shlex.quote(str(argument))
         )
         for argument in arguments
     )
 
 
-class BaseMLFFBundleWriter:
-    """Copy common inputs and let a concrete writer add native training files."""
-    # Comment: documentation is not sufficiently written. Explain the purpose and meaning of all
-    #  attributes in this class in the class doc string.
+class BaseMLFFBundleWriter(ABC):
+    """Write one atomic bundle using a fixed portable directory layout.
+
+    Attributes
+    ----------
+    bundle : MLFFTrainBundle
+        Pair of a dataset unit and its reproducible MLFF recipe.
+    mlff_type : str
+        Family key used to register the concrete writer.
+    calculator_resource : str
+        Packaged runtime adapter path, relative to temper.mlff.runtime.
+    model_filenames : dict[str, str]
+        Artifact keys mapped to the filenames to be written within the submit
+        models directory. (Not the artifact's original filename before copying).
+    trained_model_filename : str
+        Trained model filename within the submit artifacts directory.
+    registry : dict
+        Concrete writers keyed by MLFF family.
+    """
+
+    registry: ClassVar[dict[str, type[BaseMLFFBundleWriter]]] = {}
+
+    @classmethod
+    def register(cls, name: str, alias: str | None = None):
+        """Return a decorator that registers a submit-folder writer.
+
+        Parameters
+        ----------
+        name : str
+            Primary key accepted by mlff_bundle_writer_factory.
+        alias : str or None, optional
+            Additional key referring to the same writer class.
+
+        Returns
+        -------
+        Callable
+            Decorator that records and returns the supplied class unchanged.
+        """
+        def decorate(subclass):
+            cls.registry[name] = subclass
+            if alias is not None:
+                cls.registry[alias] = subclass
+            return subclass
+
+        return decorate
+
     mlff_type: str
     calculator_resource: str
     model_filenames: dict[str, str]
@@ -70,13 +111,12 @@ class BaseMLFFBundleWriter:
         self.bundle = bundle
 
     @property
-    def spec(self):
+    def spec(self) -> MLFFSpec:
         """Return the nested MLFF specification."""
         return self.bundle.mlff_spec
 
     @property
-    def unit(self):
-        # Comment: better rename to `training_unit` to be self-explanatory.
+    def training_unit(self) -> TrainingUnit:
         """Return the nested benchmark data unit."""
         return self.bundle.training_unit
 
@@ -121,121 +161,19 @@ class BaseMLFFBundleWriter:
             )
         return path
 
-    def _dataset_source(self, filename: str) -> Path:
-        validate_relative_extxyz_path(filename)
-        domain = Path(self.unit.domain)
-        if (
-            domain.is_absolute()
-            or domain.root
-            or len(domain.parts) != 1
-            or ".." in domain.parts
-        ):
-            raise ValueError("TrainingUnit domain must be one safe directory name.")
-        domain_root = (self.unit.root_path / domain).resolve()
-        source = (domain_root / filename).resolve()
-        try:
-            source.relative_to(domain_root)
-        except ValueError as error:
-            raise ValueError(
-                f"TrainingUnit dataset escapes its domain root: {filename!r}."
-            ) from error
-        if not source.is_file():
-            raise ValueError(f"TrainingUnit dataset does not exist: {source}.")
-        return source
-
-    @staticmethod
-    def _dataset_has_stress(source: Path) -> bool:
-        # Comment: this had better be a method or attribute of TrainingUnit.
-        #  Do not compute this every time here.
-        has_stress: bool | None = None
-        frame_count = 0
-        for frame_index, atoms in enumerate(iread(source, index=":")):
-            frame_count += 1
-            try:
-                atoms.get_potential_energy()
-            except Exception as error:
-                raise ValueError(
-                    f"{source} frame {frame_index} is missing energy."
-                ) from error
-            try:
-                atoms.get_forces()
-            except Exception as error:
-                raise ValueError(
-                    f"{source} frame {frame_index} is missing forces."
-                ) from error
-            try:
-                atoms.get_stress()
-                frame_has_stress = True
-            except PropertyNotImplementedError:
-                frame_has_stress = False
-            except Exception as error:
-                raise ValueError(
-                    f"{source} frame {frame_index} has an invalid stress label."
-                ) from error
-            if has_stress is not None and frame_has_stress != has_stress:
-                raise ValueError(
-                    f"{source} mixes frames with and without stress labels."
-                )
-            has_stress = frame_has_stress
-        if frame_count == 0:
-            raise ValueError(f"MLFF dataset is empty: {source}.")
-        return bool(has_stress)
-
-    def inspect_datasets(self) -> tuple[bool | None, list[bool]]:
-        """Validate labels and return training and per-test stress availability."""
-        # Comment: docstring has to explain return values. same apply for the rest of this project.
-        #  I will not mention this requirement again.
-        #  Meanwhile, whether the datasets have stress should be attributes of TrainingUnit.
-        training_stress: bool | None = None
-        if self.bundle.unit_type == "finetune":
-            assert self.unit.train_set is not None
-            training_stress = self._dataset_has_stress(
-                self._dataset_source(self.unit.train_set)
-            )
-            if self.unit.val_set is not None:
-                validation_stress = self._dataset_has_stress(
-                    self._dataset_source(self.unit.val_set)
-                )
-                if validation_stress != training_stress:
-                    raise ValueError(
-                        "Training and validation datasets disagree on stress "
-                        "availability."
-                    )
-        test_stress = [
-            self._dataset_has_stress(self._dataset_source(filename))
-            for filename in self.unit.test_sets
-        ]
-        return training_stress, test_stress
-
-    def validate_bundle(self) -> None:
-        """Apply the few invariants shared by every concrete writer."""
-        # Comment: no need to do such validation as MLFFBundleWriter is only called after the bundle is built internally by temper_bench.
-        #  This is redundant.
-        if self.spec.mlff_type != self.mlff_type:
-            raise ValueError(
-                f"{type(self).__name__} cannot write {self.spec.mlff_type!r}."
-            )
-        expected = set(self.model_filenames)
-        actual = set(self.spec.pretrained_model.artifacts)
-        if actual != expected:
-            raise ValueError(
-                f"{self.mlff_type} pretrained artifacts must be "
-                f"{sorted(expected)!r}; got {sorted(actual)!r}."
-            )
-
+    @abstractmethod
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
         """Return package-native configurations keyed by submit-relative path."""
-        # Comment: Make this abstract method.
         return {}
 
+    @abstractmethod
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
         """Return shell lines that fine-tune and place the standardized model."""
-        # Comment: Make this abstract method.
         raise NotImplementedError
 
+    @abstractmethod
     def extra_runtime_resources(self) -> dict[str, str]:
         """Map extra runtime destination names to packaged resource paths."""
-        # Comment: Make this abstract method.
         return {}
 
     def test_config(self, test_stress: list[bool]) -> dict[str, Any]:
@@ -247,7 +185,7 @@ class BaseMLFFBundleWriter:
         )
         datasets = []
         for index, (filename, has_stress) in enumerate(
-            zip(self.unit.test_sets, test_stress, strict=True)
+            zip(self.training_unit.test_sets, test_stress, strict=True)
         ):
             stem = f"test_{index:03d}"
             properties = ["energy", "forces"]
@@ -257,7 +195,7 @@ class BaseMLFFBundleWriter:
                 {
                     "id": stem,
                     "path": f"{DEFAULT_MLFF_DATASETS_DIR}/{stem}.extxyz",
-                    "source_domain": self.unit.domain,
+                    "source_domain": self.training_unit.domain,
                     "source_filename": filename,
                     "properties": properties,
                     "output": f"{DEFAULT_MLFF_OUTPUTS_DIR}/{stem}.npz",
@@ -268,7 +206,7 @@ class BaseMLFFBundleWriter:
             "schema_version": 2,
             "calculator": {
                 "identifier": self.mlff_type,
-                "parameters": deepcopy(self.spec.testing),
+                "parameters": deepcopy(self.spec.testing_parameters),
             },
             "model": model_path,
             "test_datasets": datasets,
@@ -280,10 +218,8 @@ class BaseMLFFBundleWriter:
             ],
         }
 
-    def run_script(self, training_stress: bool) -> str:
+    def generate_run_script(self, training_stress: bool) -> str:
         """Render the fixed entry script and any package-native training stage."""
-        # Comment: better rename to `generate_run_script` to be self-explanatory. The current name seem to
-        #  imply that it runs the script, which is not the case.
         lines = [
             "#!/usr/bin/env bash",
             "set -euo pipefail",
@@ -296,6 +232,10 @@ class BaseMLFFBundleWriter:
                 DEFAULT_MLFF_OUTPUTS_DIR,
             ),
         ]
+        preflight = ["$PYTHON_BIN", f"{DEFAULT_MLFF_RUNTIME_DIR}/check_cuda.py"]
+        if self.mlff_type == "mattersim" and self.bundle.unit_type == "finetune":
+            preflight.append("--warn-mattersim")
+        lines.append(command(*preflight))
         if self.bundle.unit_type == "finetune":
             lines.append("{")
             lines.extend(f"  {line}" for line in self.training_lines(training_stress))
@@ -333,8 +273,12 @@ class BaseMLFFBundleWriter:
         selected = {
             "run_test.py": "run_test.py",
             "calculator.py": self.calculator_resource,
+            "check_cuda.py": "check_cuda.py",
             **self.extra_runtime_resources(),
         }
+        schema = resources.files("temper.schemas").joinpath("mlff_test_result.py")
+        with resources.as_file(schema) as source:
+            self._copy(source, root, f"{DEFAULT_MLFF_RUNTIME_DIR}/result_schema.py")
         for destination_name, resource_name in selected.items():
             resource = packaged.joinpath(resource_name)
             if not resource.is_file():
@@ -348,21 +292,21 @@ class BaseMLFFBundleWriter:
 
     def _copy_inputs(self, root: Path) -> None:
         if self.bundle.unit_type == "finetune":
-            assert self.unit.train_set is not None
+            assert self.training_unit.train_set is not None
             self._copy(
-                self._dataset_source(self.unit.train_set),
+                self.training_unit.dataset_source(self.training_unit.train_set),
                 root,
                 f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz",
             )
-            if self.unit.val_set is not None:
+            if self.training_unit.val_set is not None:
                 self._copy(
-                    self._dataset_source(self.unit.val_set),
+                    self.training_unit.dataset_source(self.training_unit.val_set),
                     root,
                     f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz",
                 )
-        for index, filename in enumerate(self.unit.test_sets):
+        for index, filename in enumerate(self.training_unit.test_sets):
             self._copy(
-                self._dataset_source(filename),
+                self.training_unit.dataset_source(filename),
                 root,
                 f"{DEFAULT_MLFF_DATASETS_DIR}/test_{index:03d}.extxyz",
             )
@@ -377,8 +321,8 @@ class BaseMLFFBundleWriter:
         self, target_dir: str | Path | None = None
     ) -> Path:
         """Create and return one complete submit directory using file copies."""
-        self.validate_bundle()
-        training_stress, test_stress = self.inspect_datasets()
+        training_stress = self.training_unit.training_has_stress
+        test_stress = self.training_unit.test_has_stress
         if target_dir is None:
             target = Path(tempfile.mkdtemp(prefix="temper-submit-"))
         else:
@@ -407,7 +351,7 @@ class BaseMLFFBundleWriter:
             self._write_text(
                 target,
                 "run.sh",
-                self.run_script(bool(training_stress)),
+                self.generate_run_script(bool(training_stress)),
             )
             (target / "run.sh").chmod(0o755)
         except Exception:

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import PurePosixPath
 
 from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter, command
+from ase.data import chemical_symbols
 from temper.utils.defaults import (
+    DEFAULT_MLFF_ARTIFACTS_DIR,
     DEFAULT_MLFF_DATASETS_DIR,
     DEFAULT_MLFF_OUTPUTS_DIR,
     DEFAULT_MLFF_RUNTIME_DIR,
@@ -19,105 +22,32 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
     backend_flag: str
 
     def extra_runtime_resources(self) -> dict[str, str]:
+        """Return the extxyz-to-DeepMD data converter resource mapping."""
         return {"prepare_deepmd.py": "data_preparation/deepmd.py"}
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
-        config_path = self._verify_artifact(self.artifact("config"))
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
-            raise ValueError(
-                f"Invalid DeepMD JSON configuration: {config_path}."
-            ) from error
-        if not isinstance(config, dict):
-            raise ValueError("DeepMD configuration must contain a JSON object.")
-
-        model = config.get("model")
-        if not isinstance(model, dict):
-            raise ValueError("DeepMD configuration must contain a model object.")
-        type_map = model.get("type_map")
-        if (
-            not isinstance(type_map, list)
-            or not type_map
-            or any(not isinstance(symbol, str) or not symbol for symbol in type_map)
-        ):
-            raise ValueError(
-                "DeepMD configuration model.type_map must be a nonempty list "
-                "of element symbols."
-            )
-        config["model"] = {
-            "type_map": type_map,
-            "descriptor": {},
-            "fitting_net": {},
+        """Return native inputs with all 118 elements in atomic-number order."""
+        training = deepcopy(self.spec.training_parameters)
+        config = {
+            "model": {"type_map": chemical_symbols[1:]},
+            "loss": training.pop("loss"),
+            "learning_rate": training.pop("learning_rate"),
         }
-
-        length_aliases = {
-            "numb_steps",
-            "stop_batch",
-            "num_step",
-            "num_steps",
-            "numb_step",
-            "num_epochs",
-            "num_epoch",
-            "numb_epochs",
-        }  # Comment: fix to 60 epochs for DPA4. DPA4C may use 100 epochs.
-        training = dict(config.get("training", {}))
-        for key in length_aliases | {"numb_epoch"}:
-            training.pop(key, None)
-        overrides = dict(self.spec.training or {})
-        disallowed = sorted(length_aliases & overrides.keys())
-        if disallowed:
-            raise ValueError(
-                "DeepMD training length must use canonical 'numb_epoch'; "
-                f"unsupported keys: {disallowed!r}."
-            )
-        epoch = overrides.get("numb_epoch")
-        if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch <= 0:
-            raise ValueError(
-                "DeepMD training parameter 'numb_epoch' must be a positive "
-                "integer."
-            )
-        training.update(overrides)
-        training["training_data"] = {
-            "systems": [f"{DEFAULT_MLFF_TRAINING_DIR}/data/train"],
-            "batch_size": "auto",  # Comment: use "auto:128"
-        }
-        if self.unit.val_set is None:
-            training.pop("validation_data", None)
+        if not training_stress:
+            config["loss"]["start_pref_v"] = 0.0
+            config["loss"]["limit_pref_v"] = 0.0
+        training["training_data"]["systems"] = [
+            f"{DEFAULT_MLFF_TRAINING_DIR}/data/train"
+        ]
+        if self.training_unit.val_set is not None:
+            training["validation_data"]["systems"] = [
+                f"{DEFAULT_MLFF_TRAINING_DIR}/data/validation"
+            ]
         else:
-            training["validation_data"] = {
-                "systems": [f"{DEFAULT_MLFF_TRAINING_DIR}/data/validation"],
-                "batch_size": "auto",  # Comment: use "auto:128"
-            }
-        training["save_ckpt"] = f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt"  # Comment: typically named model.ckpt.pt.
+            training.pop("validation_data", None)
+        # DeepMD appends .pt to save_ckpt; freeze takes the resulting filename.
+        training["save_ckpt"] = f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt"
         config["training"] = training
-
-        # Comment: (major refractor) I don't think bundle writers should be responsible for setting fine-tuning parameters. These jobs have to be done
-        #  by spec builders. Bundle writers should only be responsible for writing the input files in submit folder using settings specified in MLFFSpecs.
-        #  Consider modification to bundle_writers
-        #  and spec_builders modules.
-
-        loss = dict(config.get("loss", {}))  # Comment: Fix 'loss' to use type 'ener', "loss_func" to be "mae", and "f_use_norm" to true.
-        stress_weight = 0.1 if training_stress else 0.0  # Comment: Change energy and force weights to 20.0, and stress weight to 5.0, when applicable.
-        loss["start_pref_e"] = 1.0
-        loss["limit_pref_e"] = 1.0
-        loss["start_pref_f"] = 1.0
-        loss["limit_pref_f"] = 1.0
-        loss["start_pref_v"] = stress_weight
-        loss["limit_pref_v"] = stress_weight
-        config["loss"] = loss
-
-        # Comment: optimizer settings must be fixed as well. Use:
-        #   "optimizer": {
-        #     "type": "HybridMuon",
-        #     "weight_decay": 0.001
-        #   },
-
-        # Comment: fix gradient clipping settings to: "gradient_max_norm": 1.0.
-
-        # Comment: fix saving and loss display frequencies to: "save_freq": 400, "disp_freq": 100,
-
-        # Comment: fix training seed to "seed": 42.
 
         return {
             f"{DEFAULT_MLFF_TRAINING_DIR}/input.json": (
@@ -126,8 +56,10 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
         }
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
+        """Return CUDA training, freezing and portable-checkpoint copy commands."""
         del training_stress
         lines = [
+            "export DEVICE=cuda",
             command(
                 "$PYTHON_BIN",
                 f"{DEFAULT_MLFF_RUNTIME_DIR}/prepare_deepmd.py",
@@ -137,7 +69,7 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
                 f"{DEFAULT_MLFF_TRAINING_DIR}/data/train",
             )
         ]
-        if self.unit.val_set is not None:
+        if self.training_unit.val_set is not None:
             lines.append(
                 command(
                     "$PYTHON_BIN",
@@ -181,26 +113,33 @@ class _DeepMDBundleWriter(BaseMLFFBundleWriter):
         if self.mlff_type == "dpa4c":
             freeze.extend(("--lower-kind", "graph"))
         lines.append(command(*freeze))
+        lines.append(
+            command(
+                "cp",
+                f"{DEFAULT_MLFF_TRAINING_DIR}/deepmd/model.ckpt.pt",
+                f"{DEFAULT_MLFF_ARTIFACTS_DIR}/model.ckpt.pt",
+            )
+        )
         return tuple(lines)
 
 
+@BaseMLFFBundleWriter.register(name="dpa4")
 class DPA4BundleWriter(_DeepMDBundleWriter):
     """Write fixed-layout DPA-4 train-and-test bundles."""
 
     mlff_type = "dpa4"
     backend_flag = "--pt"
-    model_filenames = {"model": "dpa4.pt", "config": "dpa4.json"}
+    model_filenames = {"model": "dpa4.pt"}
     trained_model_filename = "dpa4.pt2"
-    # Comment: make sure that model.ckpt.pt is also returned, as it is needed for deploying the model
-    #  on other hardwares. Models that are already frozen cannot be used on other machines.
 
 
+@BaseMLFFBundleWriter.register(name="dpa4c")
 class DPA4CBundleWriter(_DeepMDBundleWriter):
     """Write fixed-layout DPA-4C train-and-test bundles."""
 
     mlff_type = "dpa4c"
     backend_flag = "--pt-expt"
-    model_filenames = {"model": "dpa4c.pt", "config": "dpa4c.json"}
+    model_filenames = {"model": "dpa4c.pt"}
     trained_model_filename = "dpa4c.pt2"
 
 

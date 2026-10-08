@@ -1,7 +1,7 @@
 """Build local specifications and submit folders for supported MLFFs."""
 
-from temper.mlff.bundle_builder import build_mlff_train_bundles
 from temper.mlff.spec_builders import (
+    mlff_spec_builder_factory,
     DPA4CSpecBuilder,
     DPA4SpecBuilder,
     MACESpecBuilder,
@@ -9,8 +9,8 @@ from temper.mlff.spec_builders import (
     NEP89SpecBuilder,
     SevenNetSpecBuilder,
 )
+from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
-    LocalArtifactRef,
     MLFFImplementation,
     MLFFSpec,
     PretrainedMLFFSpec,
@@ -29,5 +29,5 @@ __all__ = [
     "NEP89SpecBuilder",
     "PretrainedMLFFSpec",
     "SevenNetSpecBuilder",
-    "build_mlff_train_bundles",
+    "mlff_spec_builder_factory",
 ]

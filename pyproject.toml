@@ -19,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest",
+    "PyYAML",
+]
 gpu = [
     "torch",
 ]

@@ -72,7 +72,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
 
     def _validate_before_identity(self) -> None:
         """Reject a fine-tuning dataset paired with a test-only recipe."""
-        if self.unit_type == "finetune" and self.mlff_spec.training is None:
+        if self.unit_type == "finetune" and self.mlff_spec.training_parameters is None:
             raise ValueError(
                 "Fine-tuning TrainingUnit requires non-None MLFF training parameters."
             )
@@ -101,9 +101,9 @@ class MLFFTrainBundle(ManagedIdentityModel):
         OSError
             If an input cannot be read or the destination cannot be written.
         """
-        from temper.mlff.bundle_writers import _write_submit_folder
+        from temper.mlff.bundle_writers import write_submit_folder
 
-        return _write_submit_folder(self, target_dir)
+        return write_submit_folder(self, target_dir)
 
 
 __all__ = ["MLFFTrainBundle"]

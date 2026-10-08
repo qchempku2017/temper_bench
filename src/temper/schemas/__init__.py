@@ -1,7 +1,8 @@
 """Public persisted schemas for TEMPER data and local MLFF experiments."""
+from temper.schemas.mlff_test_result import MLFFTestResult
+from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.group import GroupedDomain
 from temper.schemas.mlff_spec import (
-    LocalArtifactRef,
     MLFFImplementation,
     MLFFSpec,
     PretrainedMLFFSpec,
@@ -16,6 +17,7 @@ __all__ = [
     "LocalArtifactRef",
     "MLFFImplementation",
     "MLFFSpec",
+    "MLFFTestResult",
     "MLFFTrainBundle",
     "PretrainedMLFFSpec",
     "SplitGroup",

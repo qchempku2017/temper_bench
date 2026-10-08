@@ -1,219 +1,66 @@
-"""Specification builders for DeepMD DPA-4 and DPA-4C workflows."""
-
+"""DeepMD fine-tuning policy, independent of submitted datasets."""
 from __future__ import annotations
 
-from copy import deepcopy
-from pathlib import Path
 from typing import Any
 
-from temper.mlff.spec_builders._training import validate_epoch
-from temper.schemas.mlff_spec import (
-    LocalArtifactRef,
-    MLFFImplementation,
-    MLFFSpec,
-    PretrainedMLFFSpec,
-)
-from temper.utils.defaults import DEFAULT_MLFF_PRETRAINED_MODELS_DIR
+from temper.mlff.spec_builders.base import BaseSpecBuilder
+from temper.schemas.mlff_spec import MLFFImplementation
 
 
-# Comment: Fine-tuning of DPA4 and DPA4C usually have recommended default starting learning rate and
-#    ending learning rate. Consider looking these up on the AIS Square's model release page.
-#    Other recommended default fine-tuning parameters may also be found there.
-_TRAINING_DEFAULTS: dict[str, Any] = {
-    "numb_epoch": 100,
-    "save_freq": 1000,
-    "disp_freq": 100,
-    "seed": 42,
-}
-_DISALLOWED_LENGTH_KEYS = {
-    "numb_steps",
-    "stop_batch",
-    "num_step",
-    "num_steps",
-    "numb_step",
-    "num_epochs",
-    "num_epoch",
-    "numb_epochs",
-}
-_IMPLEMENTATIONS = (MLFFImplementation(name="deepmd-kit", version="3.2.0"),)
+class _DeepMDSpecBuilder(BaseSpecBuilder):
+    """Share DPA configuration policy; subclasses select the model release."""
 
-
-def _default_path(filename: str) -> Path:
-    return Path(DEFAULT_MLFF_PRETRAINED_MODELS_DIR) / filename
-
-
-# Comment: unify your implementation habit here. You did not write such a `_build` function for
-#   mace.py and other spec builders. Neither should this be written here.
-#   Just implement the `build` method in each spec builder class.
-def _build(
-    *,
-    mlff_type: str,
-    name: str,
-    model_filename: str,
-    config_filename: str,
-    pretrained_model_path: str | Path | None,
-    pretrained_config_path: str | Path | None,
-    training_parameters: dict[str, Any] | None,
-    testing: dict[str, Any] | None,
-) -> MLFFSpec:
-    model = PretrainedMLFFSpec(
-        name=name,
-        version="2025.10",
-        artifacts={
-            "model": LocalArtifactRef.from_path(
-                _default_path(model_filename)
-                if pretrained_model_path is None
-                else pretrained_model_path
-            ),
-            "config": LocalArtifactRef.from_path(
-                _default_path(config_filename)
-                if pretrained_config_path is None
-                else pretrained_config_path
-            ),
+    implementations = (MLFFImplementation(name="deepmd-kit", version="3.2.0"),)
+    model_version = "2025.10"
+    epoch_key = "numb_epoch"
+    training_defaults = {
+        "numb_epoch": 60,
+        "save_freq": 400,
+        "disp_freq": 100,
+        "seed": 42,
+        "gradient_max_norm": 1.0,
+        "training_data": {"batch_size": "auto:128"},
+        "validation_data": {"batch_size": "auto:128"},
+        "optimizer": {"type": "HybridMuon", "weight_decay": 0.001},
+        "learning_rate": {"type": "exp", "start_lr": 1e-4, "stop_lr": 1e-6},
+        "loss": {
+            "type": "ener",
+            "loss_func": "mae",
+            "f_use_norm": True,
+            "start_pref_e": 20.0,
+            "limit_pref_e": 20.0,
+            "start_pref_f": 20.0,
+            "limit_pref_f": 20.0,
+            "start_pref_v": 5.0,
+            "limit_pref_v": 5.0,
         },
-    )
-    training = None
-    if training_parameters is not None:
-        disallowed = sorted(_DISALLOWED_LENGTH_KEYS & training_parameters.keys())
-        if disallowed:
-            raise ValueError(
-                "DeepMD training length must use canonical 'numb_epoch'; "
-                f"unsupported keys: {disallowed!r}."
-            )
-        training = deepcopy(_TRAINING_DEFAULTS)
-        training.update(deepcopy(training_parameters))
-        validate_epoch(training, "numb_epoch", "DeepMD")
-    return MLFFSpec(
-        mlff_type=mlff_type,
-        implementations=_IMPLEMENTATIONS,
-        pretrained_model=model,
-        training=training,
-        testing=deepcopy(testing) if testing is not None else {},
-    )
+    }
 
-# Comment: If the only difference of SpecBuilder classes is the model and config filenames,
-#   consider creating an abstract base class for BaseSpecBuilder and then creating subclasses to only override
-#   the model and config filenames. This would reduce code duplication and make it easier to add new models
-#   in the future. The same suggestion applies to all SpecBuilder classes in the src/temper/mlff/spec_builders/
-#   module.
-#   Also, when you implement the base class, be sure to make child-class definition as simple as possible, ideally,
-#   I hope one will only need to edit several class variables to create a new spec builder.
-class DPA4SpecBuilder:
-    """Build a DeepMD-kit 3.2.0 DPA-4 specification from local files.
-
-    Attributes
-    ----------
-    pretrained_model_path : str, pathlib.Path, or None, optional
-        DPA-4 checkpoint. Defaults to dpa4.pt below
-        DEFAULT_MLFF_PRETRAINED_MODELS_DIR.
-    pretrained_config_path : str, pathlib.Path, or None, optional
-        DeepMD type-map and non-architecture training template. Defaults to
-        dpa4.json in the same source directory.
-    training_parameters : dict[str, Any] or None, optional
-        Top-level DeepMD training overrides using canonical ``numb_epoch``.
-        None creates a zero-shot recipe; an empty dictionary enables defaults.
-    testing_parameters : dict[str, Any] or None, optional
-        Keyword arguments forwarded to deepmd.calculator.DP, excluding device.
-    """
-
-    def __init__(
-        self,
-        *,
-        pretrained_model_path: str | Path | None = None,
-        pretrained_config_path: str | Path | None = None,
-        training_parameters: dict[str, Any] | None = None,
-        testing_parameters: dict[str, Any] | None = None,
-    ) -> None:
-        self.pretrained_model_path = pretrained_model_path
-        self.pretrained_config_path = pretrained_config_path
-        self.training_parameters = training_parameters
-        self.testing_parameters = testing_parameters
-        # Comment: I recommend exposing `model_filename` and `config_filename` as attributes
-        #   rather than exposing `pretrained_model_path` and `pretrained_config_path`.
-        #   This is because file names can often change between releases, but the storage
-        #   folder of the files is usually stable. Also, the path attributes should point
-        #   to the folders that contain files, not the files themselves. This way, users
-        #   can easily switch.
-
-    def build(self) -> MLFFSpec:
-        """Build the content-addressed DPA-4 specification.
-
-        Returns
-        -------
-        MLFFSpec
-            Persistable zero-shot or fine-tuning recipe.
-
-        Raises
-        ------
-        ValueError
-            If a pretrained file is missing.
-        """
-        return _build(
-            mlff_type="dpa4",
-            name="DPA-4",
-            model_filename="dpa4.pt",
-            config_filename="dpa4.json",
-            pretrained_model_path=self.pretrained_model_path,
-            pretrained_config_path=self.pretrained_config_path,
-            training_parameters=self.training_parameters,
-            testing=self.testing_parameters,
-        )
+    def prepare_training(self) -> dict[str, Any]:
+        """Return training controls plus native loss and learning_rate sections."""
+        aliases = {
+            "numb_steps", "stop_batch", "num_step", "num_steps",
+            "numb_step", "num_epochs", "num_epoch", "numb_epochs",
+        }
+        if aliases & self.training_parameters.keys():
+            raise ValueError("DeepMD training length must use canonical 'numb_epoch'.")
+        return super().prepare_training()
 
 
-class DPA4CSpecBuilder:
-    """Build a DeepMD-kit 3.2.0 DPA-4C specification from local files.
+@BaseSpecBuilder.register(name="dpa4")
+class DPA4SpecBuilder(_DeepMDSpecBuilder):
+    """Build DPA-4 from dpa4.pt, with 60 training epochs."""
 
-    Parameters
-    ----------
-    pretrained_model_path : str, pathlib.Path, or None, optional
-        DPA-4C checkpoint. Defaults to dpa4c.pt below
-        DEFAULT_MLFF_PRETRAINED_MODELS_DIR.
-    pretrained_config_path : str, pathlib.Path, or None, optional
-        DeepMD type-map and non-architecture training template. Defaults to
-        dpa4c.json in the same source directory.
-    training_parameters : dict[str, Any] or None, optional
-        Top-level DeepMD training overrides using canonical ``numb_epoch``.
-        None creates a zero-shot recipe; an empty dictionary enables defaults.
-    testing_parameters : dict[str, Any] or None, optional
-        Keyword arguments forwarded to deepmd.calculator.DP, excluding device.
-    """
-
-    def __init__(
-        self,
-        *,
-        pretrained_model_path: str | Path | None = None,
-        pretrained_config_path: str | Path | None = None,
-        training_parameters: dict[str, Any] | None = None,
-        testing_parameters: dict[str, Any] | None = None,
-    ) -> None:
-        self.pretrained_model_path = pretrained_model_path
-        self.pretrained_config_path = pretrained_config_path
-        self.training_parameters = training_parameters
-        self.testing_parameters = testing_parameters
-
-    def build(self) -> MLFFSpec:
-        """Build the content-addressed DPA-4C specification.
-
-        Returns
-        -------
-        MLFFSpec
-            Persistable zero-shot or fine-tuning recipe.
-
-        Raises
-        ------
-        ValueError
-            If a pretrained file is missing.
-        """
-        return _build(
-            mlff_type="dpa4c",
-            name="DPA-4C",
-            model_filename="dpa4c.pt",
-            config_filename="dpa4c.json",
-            pretrained_model_path=self.pretrained_model_path,
-            pretrained_config_path=self.pretrained_config_path,
-            training_parameters=self.training_parameters,
-            testing=self.testing_parameters,
-        )
+    mlff_type = "dpa4"
+    model_name = "DPA-4"
+    model_filename = "dpa4.pt"
 
 
-__all__ = ["DPA4CSpecBuilder", "DPA4SpecBuilder"]
+@BaseSpecBuilder.register(name="dpa4c")
+class DPA4CSpecBuilder(_DeepMDSpecBuilder):
+    """Build DPA-4C from dpa4c.pt, with 100 training epochs."""
+
+    mlff_type = "dpa4c"
+    model_name = "DPA-4C"
+    model_filename = "dpa4c.pt"
+    training_defaults = {**_DeepMDSpecBuilder.training_defaults, "numb_epoch": 100}
