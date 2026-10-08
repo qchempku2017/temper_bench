@@ -11,7 +11,7 @@ The workflow is available through both the CLI and Python API:
 3. Call [`split_grouped_domain`](src/temper/splitting/split.py) with a [`SplitConfig`](src/temper/schemas/split.py) to split every group for every configured repeat.
 4. Persist models with Monty serialization, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
 5. Build a package-specific [`MLFFSpec`](src/temper/schemas/mlff_spec.py) with one of the six concrete spec builders.
-6. Combine TrainingUnits and specifications with [`build_mlff_train_bundles`](src/temper/mlff/bundle_builder.py), producing one atomic `MLFFTrainBundle` per Cartesian-product pair.
+6. Pair each TrainingUnit with its specification using [`MLFFTrainBundle(training_unit=unit, mlff_spec=spec)`](src/temper/schemas/mlff_train_bundle.py) when preparing that unit for submission.
 7. Call `bundle.write_submit_folder()` to create a local directory containing the referenced datasets, native training files when applicable, a uniform `run.sh`, and the standardized ASE evaluation runtime.
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
