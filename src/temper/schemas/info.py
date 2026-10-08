@@ -8,14 +8,15 @@ from pathlib import Path
 from typing import Any, ClassVar, List
 from collections import OrderedDict
 
-from ase.io import read
+from ase.formula import Formula
+from ase.calculators.calculator import all_properties
 
 from pydantic import Field, model_validator
 from monty.serialization import loadfn
 
 from temper.schemas.base import MSONableModel
 from temper.utils.defaults import DEFAULT_METADATA_FILE
-from temper.schemas.utils import check_atoms_has_stress, check_atoms_have_other_properties
+from temper.utils.extxyz import check_extxyz_properties, iter_extxyz_metadata
 from temper.logging import DataQualityWarning, progress_task
 
 
@@ -162,50 +163,36 @@ class InfoEntry(MSONableModel):
             raise FileNotFoundError(extxyz_path)
 
         logger.debug("Reading source metadata from %s.", extxyz_path)
-        frames = read(extxyz_path, index=":")
 
-        if len(frames) == 0:
-            raise ValueError(
-                f"No structures found in {extxyz_path}"
-            )
-
-        # Organize into dpdata-like systems.
-        #
-        # ASE extxyz does not explicitly store MultiSystems information,
-        # therefore here we infer systems by atom numbers + composition.
         systems = OrderedDict()
-
-        for atoms in frames:
-            formula = atoms.get_chemical_formula(mode="hill")
-            key = (
-                len(atoms),
-                formula,
+        has_stress = True
+        other_properties = None
+        for index, frame in enumerate(iter_extxyz_metadata(extxyz_path, read_symbols=True)):
+            formula = Formula.from_list(list(frame.symbols)).format("hill")
+            key = (frame.number_of_atoms, formula)
+            systems[key] = systems.get(key, 0) + 1
+            has_stress &= check_extxyz_properties(
+                frame, source=f"{extxyz_path} frame {index}",
             )
-            if key not in systems:
-                systems[key] = []
+            other = (set(frame.info) | (frame.properties & set(all_properties))) - {
+                "energy", "forces", "stress", "virial", "Lattice", "pbc",
+            }
+            other_properties = other if other_properties is None else other_properties & other
 
-            systems[key].append(atoms)
-
+        if not systems:
+            raise ValueError(f"No structures found in {extxyz_path}")
+        if not has_stress:
+            warnings.warn(
+                "Stress information is missing in one or more frames. "
+                "The dataset may not be suitable for stress-dependent benchmarks.",
+                DataQualityWarning,
+                stacklevel=2,
+            )
         num_systems = len(systems)
-
-        num_frames_per_system = [
-            len(v)
-            for v in systems.values()
-        ]
-
-        num_atoms_per_system = [
-            len(v[0])
-            for v in systems.values()
-        ]
-
-        formulas = [
-            k[1]
-            for k in systems.keys()
-        ]
-
-        # Detect properties
-        has_stress = check_atoms_has_stress(frames)
-        has_other_properties = check_atoms_have_other_properties(frames)
+        num_frames_per_system = list(systems.values())
+        num_atoms_per_system = [key[0] for key in systems]
+        formulas = [key[1] for key in systems]
+        has_other_properties = sorted(other_properties)
 
         metadata = dict(
             name=extxyz_path.stem,  # Required, but can be inferred from file name.

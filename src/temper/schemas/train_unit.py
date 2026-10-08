@@ -1,5 +1,10 @@
 """Defines persisted benchmark data units and their extxyz references."""
 
+from functools import cached_property
+
+from temper.utils.extxyz import check_extxyz_properties, iter_extxyz_metadata
+from temper.schemas.utils import validate_relative_extxyz_path
+
 from typing import Any, ClassVar, Literal
 from pathlib import Path
 from uuid import UUID
@@ -158,6 +163,83 @@ class TrainingUnit(ManagedIdentityModel):
         validate_default=True,
     )
     training_unit_id: UUID | None = None
+
+    def dataset_source(self, filename: str) -> Path:
+        """Return the existing dataset path within this unit\'s domain."""
+        validate_relative_extxyz_path(filename)
+        domain = Path(self.domain)
+        if (
+            domain.is_absolute()
+            or domain.root
+            or len(domain.parts) != 1
+            or ".." in domain.parts
+        ):
+            raise ValueError("TrainingUnit domain must be one safe directory name.")
+        domain_root = (self.root_path / domain).resolve()
+        source = (domain_root / filename).resolve()
+        try:
+            source.relative_to(domain_root)
+        except ValueError as error:
+            raise ValueError(
+                f"TrainingUnit dataset escapes its domain root: {filename!r}."
+            ) from error
+        if not source.is_file():
+            raise ValueError(f"TrainingUnit dataset does not exist: {source}.")
+        return source
+
+    @staticmethod
+    def _dataset_has_stress(source: Path) -> bool:
+        """Return whether every frame has stress; require energy and forces."""
+        has_stress: bool | None = None
+        frame_count = 0
+        for frame_index, frame in enumerate(iter_extxyz_metadata(source)):
+            frame_count += 1
+            frame_has_stress = check_extxyz_properties(
+                frame, source=f"{source} frame {frame_index}",
+            )
+            if has_stress is not None and frame_has_stress != has_stress:
+                raise ValueError(
+                    f"{source} mixes frames with and without stress labels."
+                )
+            has_stress = frame_has_stress
+        if frame_count == 0:
+            raise ValueError(f"MLFF dataset is empty: {source}.")
+        return bool(has_stress)
+
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Invalidate inspected labels when dataset references change."""
+        super().__setattr__(name, value)
+        if name in {"root_path", "domain", "train_set", "val_set", "test_sets"}:
+            self.__dict__.pop("dataset_stress", None)
+
+    @cached_property
+    def dataset_stress(self) -> dict[str, bool]:
+        """Return cached stress availability by dataset filename.
+
+        Each dataset must have energy and forces on every frame and consistent
+        stress labels. Exported datasets are treated as immutable after inspection.
+        """
+        filenames = (*self.test_sets, self.train_set, self.val_set)
+        return {
+            name: self._dataset_has_stress(self.dataset_source(name))
+            for name in dict.fromkeys(filenames) if name is not None
+        }
+
+    @property
+    def training_has_stress(self) -> bool | None:
+        """Return training stress availability, or None for zero-shot units."""
+        if self.train_set is None:
+            return None
+        result = self.dataset_stress[self.train_set]
+        if self.val_set and self.dataset_stress[self.val_set] != result:
+            raise ValueError("Training and validation datasets disagree on stress availability.")
+        return result
+
+    @property
+    def test_has_stress(self) -> list[bool]:
+        """Return stress availability in the same order as test_sets."""
+        return [self.dataset_stress[name] for name in self.test_sets]
 
     @property
     def unit_type(self) -> Literal["finetune", "zeroshot"]:
