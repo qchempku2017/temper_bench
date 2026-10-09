@@ -215,8 +215,13 @@ class QuestsAdapter:
         """
         backend = self._cpu_backend
         if backend is None:
-            import quests.descriptor as descriptor_module
-            import quests.entropy as entropy_module
+            try:
+                import quests.descriptor as descriptor_module
+                import quests.entropy as entropy_module
+            except ModuleNotFoundError as error:
+                if error.name in {"quests", "numba"}:
+                    raise ImportError('Local data splitting requires pip install "temper-bench[preprocess]".') from error
+                raise
 
             backend = (descriptor_module, entropy_module)
             self._cpu_backend = backend
@@ -337,7 +342,10 @@ class QuestsAdapter:
         """Apply ``config.numba_threads`` to the numba CPU kernels once."""
         if self._numba_threads_configured:
             return
-        import numba as nb
+        try:
+            import numba as nb
+        except ModuleNotFoundError as error:
+            raise ImportError('Local data splitting requires pip install "temper-bench[preprocess]".') from error
 
         nb.set_num_threads(self.config.numba_threads)
         self._numba_threads_configured = True

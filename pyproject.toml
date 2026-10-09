@@ -4,21 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "temper-bench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Data preparation and fine-tuning evaluation tools for the TEMPER MLFF benchmark"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "ase",
     "monty",
-    "numba",
     "numpy==2.5.2",
     "pydantic>=2.0.0",
-    "quests==2026.2.22",
     "ruamel.yaml",
 ]
 
 [project.optional-dependencies]
+preprocess = [
+    "numba",
+    "quests==2026.2.22",
+]
 test = [
     "pytest",
     "PyYAML",
@@ -36,3 +38,6 @@ Repository = "https://github.com/qchempku2017/temper_bench"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["temper*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "temper._version.__version__"}
