@@ -37,7 +37,6 @@ Their same-named environment variables may replace the defaults:
 | `DEFAULT_MLFF_DATASETS_DIR` | `str` | `datasets` |
 | `DEFAULT_MLFF_MODELS_DIR` | `str` | `models` |
 | `DEFAULT_MLFF_TRAINING_DIR` | `str` | `training` |
-| `DEFAULT_MLFF_RUNTIME_DIR` | `str` | `runtime` |
 | `DEFAULT_MLFF_ARTIFACTS_DIR` | `str` | `artifacts` |
 | `DEFAULT_MLFF_OUTPUTS_DIR` | `str` | `outputs` |
 
@@ -68,3 +67,6 @@ On POSIX shells, use `export` instead of `set`.
 Invalid non-empty numeric values raise `ValueError` during import. Environment
 parsing establishes types only; domain-specific range checks happen where the
 values are consumed.
+
+MLFF directory defaults are captured in `bundle.json` when packaging. Remote
+runtimes use that stored layout rather than their own environment defaults.

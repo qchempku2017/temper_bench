@@ -1,6 +1,6 @@
 # TEMPER benchmark
 
-TEMPER provides the data-preparation and local experiment-bundling layers for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and writes self-contained local submit folders. It does not submit those folders to remote systems.
+TEMPER provides data preparation, portable experiment bundles, and an installed execution runtime for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and writes portable local submit folders. It does not submit those folders to remote systems.
 
 ## What is implemented
 
@@ -12,20 +12,34 @@ The workflow is available through both the CLI and Python API:
 4. Persist models with Monty serialization, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
 5. Build a package-specific [`MLFFSpec`](src/temper/schemas/mlff_spec.py) with one of the six concrete spec builders.
 6. Pair each TrainingUnit with its specification using [`MLFFTrainBundle(training_unit=unit, mlff_spec=spec)`](src/temper/schemas/mlff_train_bundle.py) when preparing that unit for submission.
-7. Call `bundle.write_submit_folder()` to create a local directory containing the referenced datasets, native training files when applicable, a uniform `run.sh`, and the standardized ASE evaluation runtime.
+7. Call `bundle.write_submit_folder()` to copy datasets, pretrained models, a versioned `bundle.json`, and a small `run.sh` launcher.
+8. Transfer the folder to a host with the same TEMPER version and the selected model backend installed, then run `temper_bench run_pipeline /path/to/bundle.json`. The runtime prepares native training files, fine-tunes when requested, and writes standardized ASE predictions.
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 
 Install TEMPER from the repository and invoke its command-line entry point:
 
 ```console
-python -m pip install .
+python -m pip install ".[preprocess]"
 temper_bench split
 ```
 
+The `preprocess` extra installs QUESTS and Numba and is required for local data
+splitting. For an execution host, install only the base package:
+
+```console
+python -m pip install .
+temper_bench run_pipeline /path/to/bundle.json
+```
+
+Install the selected MLFF backend separately in that host's environment. The
+bundle records its backend requirements and TEMPER version; local and remote
+A different TEMPER release emits a warning; unsupported bundle formats still fail validation. No Python schema or runtime files are uploaded.
+See [MLFF bundles](docs/mlff-bundles.md) for the folder contract and preparation-only command.
+
 ### Optional GPU support
 
-The base installation supports the QUESTS CPU backend and does not install
+The `preprocess` extra supports the QUESTS CPU backend and does not install
 PyTorch. For GPU execution, the recommended installation order is:
 
 1. Use the official [PyTorch installation selector](https://pytorch.org/get-started/locally/)
@@ -54,11 +68,10 @@ PyTorch. For GPU execution, the recommended installation order is:
    python -c "import torch; print(torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0), torch.cuda.get_arch_list())"
    ```
 
-3. Install TEMPER without the extra, so pip leaves the selected PyTorch build
-   alone:
+3. Install TEMPER with preprocessing support, without the `gpu` extra:
 
    ```console
-   python -m pip install .
+   python -m pip install ".[preprocess]"
    ```
 
 > [!WARNING]

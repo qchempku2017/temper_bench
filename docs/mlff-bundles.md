@@ -2,15 +2,16 @@
 
 [Back to the project overview](../README.md) · [Default variables](default_variables.md) · [Important concepts and schemas](important-concepts-and-schemas.md)
 
-TEMPER supports six MLFF families: DPA-4, DPA-4C, MatterSim, MACE,
-SevenNet, and NEP-89. The local layer does only two things:
+TEMPER supports DPA-4, DPA-4C, MatterSim, MACE, SevenNet, and NEP-89.
+Local builders create model recipes; `MLFFBundleWriter` copies their inputs and
+serializes `MLFFTrainBundle` as `bundle.json`. An installed TEMPER runtime reads
+that record remotely, prepares backend configs, fine-tunes, and evaluates.
+Upload, scheduling, and result download remain separate executor concerns.
 
-1. A family builder hashes local pretrained files and creates an `MLFFSpec`.
-2. `MLFFTrainBundle` pairs that recipe with one `TrainingUnit` and
-   `write_submit_folder()` copies a self-contained directory.
-
-It does not download models, choose local hardware, submit a scheduler job, or
-run third-party training.
+Install `temper-bench[preprocess]` for local data splitting. Execution hosts
+need the base `temper-bench` package plus their selected MLFF backend, using
+preferably the same TEMPER release as the writer. Other releases warn on load.
+Bash is required for native training.
 
 ## Building a specification
 
@@ -48,12 +49,10 @@ No JSON sidecar is required. Default filenames are:
 | `NEP89SpecBuilder` | `nep89.txt` |
 
 Source filenames can change without changing the fixed names in submit folders.
-Subclasses share `BaseSpecBuilder`; adding a release normally means overriding
-class metadata, filenames and defaults. Builders and writers register using
-`@BaseSpecBuilder.register(name="family", alias="short_name")` and
-`@BaseMLFFBundleWriter.register(name="family", alias="short_name")`.
-The alias is optional; registry keys are independent of class attributes.
-`mlff_spec_builder_factory(key)` and `mlff_bundle_writer_factory(key)` return classes.
+Subclasses share `BaseSpecBuilder`; runtime adapters share `BaseMLFFAdapter`
+under `temper.mlff.pipeline.training_adapters`. Both have `register(name, alias=None)`
+decorators and factories (`mlff_spec_builder_factory`, `mlff_adapter_factory`).
+One generic `MLFFBundleWriter` packages all model families.
 The public `temper.mlff.bundle_writers.write_submit_folder(bundle, target_dir)`
 is also available through the bundle's method.
 
@@ -68,7 +67,7 @@ parameters are passed directly to the selected ASE Calculator. Do not include
 a `device` key in either dictionary: the submit host, not the machine creating
 the bundle, determines hardware.
 
-Builders own all training policy. Writers add dataset and artifact paths and
+Builders own training policy. Runtime adapters add packaged input paths and
 disable stress losses when labels are absent; they preserve recipe overrides.
 Nested dictionaries are replaced as complete native sections.
 
@@ -89,7 +88,7 @@ its descriptor and fitting network come from the checkpoint via
 `--use-pretrain-script`. Both pinned backends use the same
 [fine-tuning rules](https://github.com/deepmodeling/deepmd-kit/blob/v3.2.0/deepmd/utils/finetune.py),
 which require the target type map and remap pretrained types to it. `training_parameters` contains native training keys,
-plus `loss` and `learning_rate` dictionaries that the writer places at the
+plus `loss` and `learning_rate` dictionaries that the runtime adapter places at the
 top level of input.json. Defaults use HybridMuon (weight decay 0.001), gradient
 norm 1, MAE normalized-force loss, energy/force weights 20, virial weight 5,
 seed 42, save frequency 400 and display frequency 100. Both data batches use
@@ -110,13 +109,12 @@ MACE follows [naive fine-tuning](https://mace-docs.readthedocs.io/en/latest/guid
 one head, estimated E0s, energy/force weights 10, learning rate 0.001, no weight
 decay, EMA 0.999, AMSGrad, gradient clipping 1 and seed 42. TEMPER defaults to
 batch size 4 and float32 (supported by the pinned 0.3.16 parser). Stress uses
-the native stress loss and weight 1; without stress labels the writer selects
+the native stress loss and weight 1; without stress labels the runtime adapter selects
 the energy/force loss.
 
 SevenNet uses `train.continue.checkpoint` to load local SevenNet-0 weights,
 with fresh optimizer, scheduler and epoch counters. On the runner,
-`prepare_sevennet.py` (copied from
-`runtime/data_preparation/sevennet.py`) uses SevenNet's
+`temper.mlff.pipeline.data_preparation.sevennet` uses SevenNet's
 [checkpoint YAML export](https://github.com/MDIL-SNU/SevenNet/blob/v0.13.0/sevenn/checkpoint.py)
 to obtain the model architecture, then applies the recipe's trainability
 settings. Native training reads `training/sevennet_resolved.yaml`.
@@ -149,50 +147,76 @@ changes the identity schema to `temper.mlff-spec.v3`; rebuild old specifications
 and their bundles. There are no legacy aliases. `LocalArtifactRef` now lives in
 `temper.schemas.artifact`.
 
-`MLFFTrainBundle` stores only one `TrainingUnit`, one `MLFFSpec`, and its
-deterministic ID. Its `unit_type` property comes from
-`TrainingUnit`. There are no capability records, input/output manifests, layout
-objects, named-model resolvers, or copy-mode settings.
+`MLFFTrainBundle` retains the original `TrainingUnit`, `MLFFSpec`, and their
+deterministic bundle ID. Packaging adds `schema_version`, `temper_version`, and
+`files`: a bundle-relative dataset/model mapping, resolved stress availability,
+the trained-model filename, and training/artifact/output directories. Packaging does not change scientific
+identity or mutate the original local object. Original source paths are
+provenance; the runtime uses the packaged mapping exclusively. TrainingUnit
+loading validates metadata without accessing source files; local file access
+checks existence when needed.
 
 ## Submit-directory contract
 
-`write_submit_folder()` always makes ordinary file copies. The destination must
-not exist; when omitted, TEMPER creates and returns a caller-owned temporary
-directory. A zero-shot directory contains:
+`write_submit_folder()` copies ordinary files into a new directory. If omitted,
+the destination is a caller-owned temporary directory. The initial folder is:
 
 ~~~text
 submit/
+├── bundle.json
 ├── run.sh
-├── test_config.json
 ├── datasets/
-│   ├── test_000.extxyz
-│   └── test_001.extxyz
-├── models/
-│   └── <fixed pretrained files>
-└── runtime/
-    ├── run_test.py
-    ├── calculator.py
-    ├── check_cuda.py
-    └── result_schema.py
+│   ├── train.extxyz          # fine-tuning only
+│   ├── validation.extxyz     # when provided
+│   └── test_000.extxyz       # one per test dataset
+└── models/
+    └── <pretrained files>
 ~~~
 
-A fine-tuning directory additionally contains `train.extxyz`, an optional
-`validation.extxyz`, package-native files below the training directory, and
-later writes its trained model below the artifacts directory. MACE, MatterSim,
-SevenNet and NEP use `finetuned_` filenames to distinguish trained outputs from
-pretrained inputs. `run.sh` contains
-no scheduler directives. It runs native training when required and then invokes
-the common ASE evaluator.
+No Python modules or schema definitions are copied: the installed package owns
+both validation and execution. The folder may be moved to another host without
+the original datasets or pretrained-model directory.
 
-The six submit subdirectory names are configurable only through the environment
-variables documented in [Default variables](default_variables.md). Individual
-filenames and command templates are fixed.
+On the execution host, run either:
+
+~~~console
+temper_bench run_pipeline /path/to/submit/bundle.json
+bash /path/to/submit/run.sh
+~~~
+
+To inspect native files without starting training or requiring a GPU:
+
+~~~console
+temper_bench run_pipeline /path/to/submit/bundle.json --prepare-only
+~~~
+
+Preparation writes native files and `training/run.sh` for CLI-based training, plus
+`test_config.json` for evaluation. These are derived outputs of `bundle.json`.
+TorchNEP training is called directly through Python and writes `outputs/training.log`;
+it does not generate a training script. Internal pipeline modules have no CLI
+entry points. Use `temper_bench run_pipeline` for execution or its `--prepare-only` option
+to inspect configs, and `temper.mlff.pipeline.runner.run_pipeline` from Python.
+Execution checks CUDA, calls backend preparation functions (DeepMD conversion or
+SevenNet checkpoint resolution), runs native training when requested, then evaluates
+the trained model (or pretrained model for zero-shot). Predictions and logs go
+under `outputs/`; trained models go under `artifacts/`. The runner records the
+actual TEMPER version alongside backend package versions in result metadata.
+NEP architecture and data checks now run during runtime preparation.
+
+Directory defaults are configurable through the environment variables in
+[Default variables](default_variables.md), captured when the folder is written.
+Remote environment defaults do not override the serialized layout.
+
+This format replaces the old copied-runtime folder contract. Regenerate old
+submit folders for the installed-runtime workflow. Format versions and TEMPER
+release versions are separate. A TEMPER release mismatch emits a warning and
+continues; an unsupported schema version still fails validation.
 
 ## Labels and automatic stress use
 
 `TrainingUnit.dataset_stress` lazily inspects and caches each referenced file.
-`training_has_stress` and `test_has_stress` expose that information to all
-writers sharing the unit. Reassigning dataset references or the root invalidates
+`training_has_stress` and `test_has_stress` expose that information to the
+writer, which records it in the bundle. Reassigning dataset references or the root invalidates
 the cache; exported files are treated as immutable after inspection.
 The shared extxyz utility reads frame headers without constructing ASE Atoms.
 InfoEntry additionally reads species columns for formulas; NEP uses those
@@ -224,7 +248,7 @@ test dataset:
 Adjacent JSON files serialize `temper.schemas.MLFFTestResult`, recording source
 metadata, package versions, units, array counts and wall time. Use
 `MLFFTestResult.from_dict(json.loads(path.read_text()))` to load a result.
-The same standard-library schema is copied as `runtime/result_schema.py`. `outputs/test_summary.json` lists all evaluated datasets.
+The installed package supplies the result schema. `outputs/test_summary.json` lists all evaluated datasets.
 
 ## Pinned integrations and remote device behavior
 
@@ -251,7 +275,7 @@ step size 10. As checked on 2026-10-08, 1.2.5 remains the latest
 [PyPI release](https://pypi.org/project/mattersim/), and its
 [CUDA device and batched-index issue](https://github.com/microsoft/mattersim/issues/163)
 remains open. Batch size therefore still defaults to 1 and training emits a
-warning. The writer no longer forces this value: patched installations can
+warning. The runtime adapter does not force this value: patched installations can
 set `training_parameters={"batch_size": 4}`. This does not claim that stock
 1.2.5 GPU fine-tuning is fixed.
 
@@ -261,7 +285,7 @@ not a core TEMPER dependency, and zero-shot NEP bundles do not require it.
 
 ## Deliberate boundary
 
-Local regression tests can be run with `pip install -e ".[test]"` followed
+Local regression tests can be run with `pip install -e ".[preprocess,test]"` followed
 by `python -m pytest -q`. PyYAML tests the SevenNet preparation helper; the
 remote SevenNet installation already provides it. GPU training remains an
 integration check in the pinned runner environment.
