@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import write
 
-from temper.mlff.runtime import run_test, train_nep89
+from temper.mlff.pipeline import run_test, train_nep89
 
 
 class FakeCalculator(Calculator):
@@ -110,7 +110,7 @@ def _write_runtime_config(root: Path, *, stress: bool = True) -> Path:
 def _install_fake_adapter(monkeypatch, calculator: Calculator) -> None:
     module = ModuleType("calculator")
     module.build_calculator = lambda _config: calculator
-    monkeypatch.setitem(sys.modules, "calculator", module)
+    monkeypatch.setattr(run_test, "build_calculator", module.build_calculator)
 
 
 def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
@@ -206,13 +206,13 @@ def test_generic_runner_rejects_dataset_escape(monkeypatch, tmp_path: Path) -> N
         run_test.run(config_path)
 
 
-def test_generic_runner_has_no_mlff_dispatch_or_temper_dependency() -> None:
+def test_generic_runner_dispatches_through_installed_adapters() -> None:
     source = (
-        resources.files("temper.mlff.runtime")
+        resources.files("temper.mlff.pipeline")
         .joinpath("run_test.py")
         .read_text(encoding="utf-8")
     )
-    assert "import temper" not in source
+    assert "mlff_adapter_factory" in source
     assert "if mlff" not in source.lower()
     for identifier in ("dpa4", "mattersim", "mace", "sevennet", "nep89", "orb"):
         assert identifier not in source.lower()
@@ -232,16 +232,16 @@ def test_every_calculator_resource_implements_static_contract(
     resource: str,
 ) -> None:
     source = (
-        resources.files("temper.mlff.runtime")
+        resources.files("temper.mlff.pipeline")
         .joinpath(resource)
         .read_text(encoding="utf-8")
     )
     assert "def build_calculator(config):" in source
-    assert "import temper" not in source
+    assert "from temper.mlff.pipeline.cuda_utils import" in source
 
 
 def test_orb_runtime_resources_are_absent() -> None:
-    runtime = resources.files("temper.mlff.runtime")
+    runtime = resources.files("temper.mlff.pipeline")
     assert not runtime.joinpath("calculators/orb.py").is_file()
     assert not runtime.joinpath("data_preparation/orb.py").is_file()
 

@@ -273,7 +273,11 @@ class TrainingUnit(ManagedIdentityModel):
         return value
 
     def _validate_before_identity(self) -> None:
-        """Validate dataset shape and files before finalizing identity."""
+        """Validate dataset shape and names without accessing local source files.
+
+        Records also travel inside remote bundles. File existence is checked
+        by dataset_source when local inputs are actually used.
+        """
 
         if self.unit_type == "finetune":
             if self.train_n_frames <= 0:
@@ -313,11 +317,6 @@ class TrainingUnit(ManagedIdentityModel):
                 raise ValueError(
                     f"Dataset file must have .extxyz extension, got: "
                     f"{f}."
-                )
-
-            if not file_path.is_file():
-                raise ValueError(
-                    f"Dataset file does not exist: {file_path}."
                 )
 
         if self.train_set is not None:

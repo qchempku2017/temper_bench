@@ -137,9 +137,6 @@ DEFAULT_MLFF_MODELS_DIR: str = _env_submit_directory(
 DEFAULT_MLFF_TRAINING_DIR: str = _env_submit_directory(
     "DEFAULT_MLFF_TRAINING_DIR", "training"
 )
-DEFAULT_MLFF_RUNTIME_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_RUNTIME_DIR", "runtime"
-)
 DEFAULT_MLFF_ARTIFACTS_DIR: str = _env_submit_directory(
     "DEFAULT_MLFF_ARTIFACTS_DIR", "artifacts"
 )
@@ -182,7 +179,6 @@ __all__ = [
     "DEFAULT_MLFF_MODELS_DIR",
     "DEFAULT_MLFF_OUTPUTS_DIR",
     "DEFAULT_MLFF_PRETRAINED_MODELS_DIR",
-    "DEFAULT_MLFF_RUNTIME_DIR",
     "DEFAULT_MLFF_TRAINING_DIR",
     "DEFAULT_SPLIT_CONFIG_FILE",
     "DEFAULT_SPLIT_GROUPS_FILE",

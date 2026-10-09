@@ -437,14 +437,14 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     tampered_payload["train_n_frames"] = 3
     with pytest.raises(ValidationError, match="does not match training-unit contents"):
         TrainingUnit.model_validate(tampered_payload)
-    with pytest.raises(ValidationError, match="does not exist"):
+    with pytest.raises(ValueError, match="does not exist"):
         TrainingUnit(
             domain="domain", grouping_strategy="all", group_name="all",
             method="random", repeat_id=0, train_n_frames=1, val_n_frames=0,
             test_n_frames=0, train_n_atoms=1, val_n_atoms=0,
             test_n_atoms=0, train_set="missing.extxyz", test_sets=[],
             root_path=root,
-        )
+        ).dataset_source("missing.extxyz")
 
     converted = unit.model_copy(update={
         "train_set": None,
@@ -547,8 +547,8 @@ def test_training_unit_checks_every_referenced_dataset_file(
     }
 
     assert TrainingUnit(**base).unit_type == "zeroshot"
-    with pytest.raises(ValidationError, match="does not exist"):
-        TrainingUnit(**(base | {"test_sets": ["test.extxyz", "missing.extxyz"]}))
+    with pytest.raises(ValueError, match="does not exist"):
+        TrainingUnit(**(base | {"test_sets": ["test.extxyz", "missing.extxyz"]})).dataset_source("missing.extxyz")
     with pytest.raises(ValidationError, match="extension"):
         TrainingUnit(**(base | {"test_sets": ["test.xyz"]}))
     with pytest.raises(ValidationError, match="extension"):

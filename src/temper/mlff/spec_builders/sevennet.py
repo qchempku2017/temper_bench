@@ -5,7 +5,7 @@ from temper.schemas.mlff_spec import MLFFImplementation
 
 @BaseSpecBuilder.register(name="sevennet")
 class SevenNetSpecBuilder(BaseSpecBuilder):
-    """Build a SevenNet-0 recipe; the writer resumes its pretrained weights."""
+    """Build a SevenNet-0 recipe; the runtime resumes its pretrained weights."""
 
     mlff_type = "sevennet"
     model_name = "SevenNet-0"

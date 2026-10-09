@@ -18,8 +18,9 @@ from temper.mlff import (
     NEP89SpecBuilder,
 )
 import temper.mlff.bundle_writers.base as writer_base
-from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter
-from temper.mlff.bundle_writers.nep89 import _nep_architecture
+from temper.mlff.bundle_writers.base import MLFFBundleWriter
+from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
+from temper.mlff.pipeline.training_adapters.nep89 import _nep_architecture
 
 from conftest import make_frame
 
@@ -46,11 +47,11 @@ TRAINING_MARKERS = {
     "mattersim": "mattersim.training.finetune_mattersim",
     "mace": "mace_run_train --config",
     "sevennet": "sevenn train",
-    "nep89": "runtime/train_nep89.py",
+    "nep89": "temper_bench run_pipeline bundle.json",
 }
 
 
-def test_bundle_schema_contains_only_the_pair_and_identity(
+def test_bundle_schema_preserves_pair_and_adds_packaging_fields(
     finetune_training_unit,
     mlff_spec_factory,
 ) -> None:
@@ -62,6 +63,7 @@ def test_bundle_schema_contains_only_the_pair_and_identity(
         "training_unit",
         "mlff_spec",
         "mlff_train_bundle_id",
+        "schema_version", "temper_version", "files",
     }
     assert bundle.unit_type == "finetune"
     assert "file_mode" not in inspect.signature(
@@ -114,12 +116,12 @@ def test_zeroshot_writes_fixed_copied_inputs(
         mlff_spec=mlff_spec_factory(family, with_training=False),
     )
     target = tmp_path / f"zero-{family}"
-    result = bundle.write_submit_folder(target)
+    result = write_prepared(bundle.write_submit_folder(target))
     assert result == target.absolute()
     assert (target / "run.sh").is_file()
     assert (target / "test_config.json").is_file()
-    assert (target / "runtime" / "run_test.py").is_file()
-    assert (target / "runtime" / "calculator.py").is_file()
+    assert (target / "bundle.json").is_file()
+    assert not (target / "runtime").exists()
     assert not (target / "bundle_manifest.json").exists()
     assert not (target / "datasets" / "train.extxyz").exists()
     for filename in MODEL_FILES[family]:
@@ -136,7 +138,7 @@ def test_zeroshot_writes_fixed_copied_inputs(
         "stress",
     ]
     assert "device" not in json.dumps(config)
-    assert "training" not in (target / "run.sh").read_text().lower()
+    assert "training" not in training_script(target).lower()
     if family == "nep89":
         assert {item["name"] for item in config["package_requirements"]} == {
             "calorine"
@@ -154,8 +156,8 @@ def test_finetune_writes_native_training_and_automatic_stress(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory(family),
     )
-    target = bundle.write_submit_folder(tmp_path / f"fine-{family}")
-    run_script = (target / "run.sh").read_text()
+    target = write_prepared(bundle.write_submit_folder(tmp_path / f"fine-{family}"))
+    run_script = training_script(target)
     assert TRAINING_MARKERS[family] in run_script
     assert (target / "datasets" / "train.extxyz").is_file()
     assert (target / "datasets" / "validation.extxyz").is_file()
@@ -195,8 +197,8 @@ def test_finetune_writes_native_training_and_automatic_stress(
         assert config["train"]["is_train_stress"] is True
         assert config["train"]["epoch"] == 100
         assert set(config["model"]) == {"train_shift_scale", "train_denominator"}
-        assert (target / "runtime/prepare_sevennet.py").is_file()
-        assert run_script.index("runtime/prepare_sevennet.py") < run_script.index("sevenn train")
+        assert not (target / "runtime").exists()
+        assert "temper.mlff.pipeline.data_preparation" not in run_script
         assert "sevenn train training/sevennet_resolved.yaml" in run_script
     else:
         config = (target / "training" / "torchnep" / "nep.in").read_text()
@@ -206,8 +208,7 @@ def test_finetune_writes_native_training_and_automatic_stress(
         assert "epoch 100" in config
         assert "early_stop 0" in config
         assert "lambda_v 0.01" in config
-        assert "--model models/nep89.txt" in run_script
-        assert "output/nep_best.txt artifacts/finetuned_nep89.txt" in run_script
+        assert not (target / "training/run.sh").exists()
 
 
 def test_no_stress_is_omitted_from_training_and_each_test(
@@ -229,10 +230,10 @@ def test_no_stress_is_omitted_from_training_and_each_test(
         frame.set_pbc(True)
         write(domain / filename, frame, format="extxyz")
 
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("mace"),
-    ).write_submit_folder(tmp_path / "no-stress")
+    ).write_submit_folder(tmp_path / "no-stress"))
     training = YAML(typ="safe").load(
         (target / "training" / "mace.yaml").read_text()
     )
@@ -258,12 +259,12 @@ def test_deepmd_uses_only_weights_and_full_element_type_map(
         training_parameters={"numb_epoch": 7},
     ).build()
 
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=finetune_training_unit,
         mlff_spec=spec,
-    ).write_submit_folder(tmp_path / "deepmd-template")
+    ).write_submit_folder(tmp_path / "deepmd-template"))
     config = json.loads((target / "training" / "input.json").read_text())
-    run_script = (target / "run.sh").read_text()
+    run_script = training_script(target)
 
     assert config["model"] == {"type_map": DEEPMD_TYPE_MAP}
     assert set(spec.pretrained_model.artifacts) == {"model"}
@@ -299,10 +300,10 @@ def test_nep_without_stress_disables_virial_losses(
         frame.set_pbc(True)
         write(domain / filename, frame, format="extxyz")
 
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("nep89"),
-    ).write_submit_folder(tmp_path / "nep-no-stress")
+    ).write_submit_folder(tmp_path / "nep-no-stress"))
     config = (target / "training" / "torchnep" / "nep.in").read_text()
     assert "lambda_v 0.0" in config
     assert "stage2_lambda_v 0.0" in config
@@ -321,10 +322,10 @@ def test_nep_rejects_unsupported_checkpoint_headers(
     ).build()
 
     with pytest.raises(ValueError, match="nep4"):
-        MLFFTrainBundle(
+        write_prepared(MLFFTrainBundle(
             training_unit=finetune_training_unit,
             mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "bad-nep")
+        ).write_submit_folder(tmp_path / "bad-nep"))
 
 
 @pytest.mark.parametrize(
@@ -405,10 +406,10 @@ def test_nep_rejects_training_elements_absent_from_checkpoint(
     ).build()
 
     with pytest.raises(ValueError, match="absent.*'H'"):
-        MLFFTrainBundle(
+        write_prepared(MLFFTrainBundle(
             training_unit=finetune_training_unit,
             mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "missing-nep-element")
+        ).write_submit_folder(tmp_path / "missing-nep-element"))
 
 
 def test_mixed_stress_within_dataset_is_rejected(
@@ -435,7 +436,7 @@ def test_mixed_stress_within_dataset_is_rejected(
         mlff_spec=mlff_spec_factory("mace", with_training=False),
     )
     with pytest.raises(ValueError, match="mixes frames"):
-        bundle.write_submit_folder(target)
+        write_prepared(bundle.write_submit_folder(target))
     assert not target.exists()
 
 
@@ -454,10 +455,10 @@ def test_train_validation_stress_disagreement_is_rejected(
     frame.set_pbc(True)
     write(validation, frame, format="extxyz")
     with pytest.raises(ValueError, match="disagree"):
-        MLFFTrainBundle(
+        write_prepared(MLFFTrainBundle(
             training_unit=finetune_training_unit,
             mlff_spec=mlff_spec_factory("mace"),
-        ).write_submit_folder(tmp_path / "mismatch")
+        ).write_submit_folder(tmp_path / "mismatch"))
 
 
 def test_artifact_hash_is_checked_again_before_copy(
@@ -468,10 +469,10 @@ def test_artifact_hash_is_checked_again_before_copy(
     spec = mlff_spec_factory("mace", with_training=False)
     spec.pretrained_model.artifacts["model"].path.write_bytes(b"changed")
     with pytest.raises(ValueError, match="changed after"):
-        MLFFTrainBundle(
+        write_prepared(MLFFTrainBundle(
             training_unit=zeroshot_training_unit,
             mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "changed")
+        ).write_submit_folder(tmp_path / "changed"))
 
 
 def test_writer_uses_configured_submit_directories(
@@ -486,31 +487,26 @@ def test_writer_uses_configured_submit_directories(
     monkeypatch.setattr(
         writer_base, "DEFAULT_MLFF_MODELS_DIR", "inputs/models"
     )
-    monkeypatch.setattr(writer_base, "DEFAULT_MLFF_RUNTIME_DIR", "engine")
-    monkeypatch.setattr(writer_base, "DEFAULT_MLFF_OUTPUTS_DIR", "results")
-    monkeypatch.setattr(
-        writer_base, "DEFAULT_MLFF_ARTIFACTS_DIR", "results/models"
-    )
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=zeroshot_training_unit,
         mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder(tmp_path / "custom-layout")
+    ).write_submit_folder(tmp_path / "custom-layout"))
 
     assert (target / "inputs" / "datasets" / "test_000.extxyz").is_file()
     assert (target / "inputs" / "models" / "mace.model").is_file()
-    assert (target / "engine" / "calculator.py").is_file()
+    assert not (target / "runtime").exists()
     config = json.loads((target / "test_config.json").read_text())
-    assert config["summary_output"] == "results/test_summary.json"
+    assert config["summary_output"] == "outputs/test_summary.json"
 
 
 def test_temporary_submit_folder_is_caller_owned(
     zeroshot_training_unit,
     mlff_spec_factory,
 ) -> None:
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=zeroshot_training_unit,
         mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder()
+    ).write_submit_folder())
     try:
         assert target.is_dir()
     finally:
@@ -519,5 +515,17 @@ def test_temporary_submit_folder_is_caller_owned(
 
 def test_base_writer_has_no_copy_strategy_surface() -> None:
     assert "file_mode" not in inspect.signature(
-        BaseMLFFBundleWriter.write_submit_folder
+        MLFFBundleWriter.write_submit_folder
     ).parameters
+
+
+def write_prepared(target):
+    """Exercise backend generation on the runtime side of the bundle boundary."""
+    from temper.mlff.pipeline.runner import prepare_bundle
+    prepare_bundle(target / "bundle.json")
+    return target
+
+
+def training_script(target):
+    path = target / "training/run.sh"
+    return (path if path.exists() else target / "run.sh").read_text()

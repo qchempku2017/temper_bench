@@ -3,15 +3,16 @@ from copy import deepcopy
 import importlib
 import inspect
 import json
-import subprocess
 import sys
 
 import pytest
 from ruamel.yaml import YAML
 
 from temper.mlff import MACESpecBuilder, MLFFTrainBundle, mlff_spec_builder_factory
-from temper.mlff.bundle_writers import mlff_bundle_writer_factory, write_submit_folder
-from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter
+from temper.mlff.bundle_writers import write_submit_folder
+from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
+from temper.mlff.bundle_writers.base import MLFFBundleWriter
+from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas import MLFFTestResult
 
@@ -36,26 +37,26 @@ def test_registered_release_needs_only_class_metadata(tmp_path, monkeypatch):
 
 def test_writer_registry_and_abstract_contract():
     assert inspect.isabstract(BaseSpecBuilder)
-    assert inspect.isabstract(BaseMLFFBundleWriter)
+    assert inspect.isabstract(BaseMLFFAdapter)
     for key in ("dpa4", "dpa4c", "mace", "mattersim", "sevennet", "nep89"):
         assert mlff_spec_builder_factory(key).mlff_type == key
-        writer = mlff_bundle_writer_factory(key)
+        writer = mlff_adapter_factory(key)
         assert writer.mlff_type == key
         assert not inspect.isabstract(writer)
 
 
 def test_writer_registration_uses_explicit_name_and_alias(monkeypatch):
-    monkeypatch.setattr(BaseMLFFBundleWriter, "registry", {})
+    monkeypatch.setattr(BaseMLFFAdapter, "registry", {})
     writer = type("Writer", (), {"mlff_type": "different"})
-    BaseMLFFBundleWriter.register(name="registered", alias="short")(writer)
-    assert mlff_bundle_writer_factory("registered") is writer
-    assert mlff_bundle_writer_factory("short") is writer
-    assert "different" not in BaseMLFFBundleWriter.registry
+    BaseMLFFAdapter.register(name="registered", alias="short")(writer)
+    assert mlff_adapter_factory("registered") is writer
+    assert mlff_adapter_factory("short") is writer
+    assert "different" not in BaseMLFFAdapter.registry
 
 
 def test_sevennet_resolves_architecture_from_checkpoint(tmp_path, monkeypatch):
     from types import ModuleType, SimpleNamespace
-    from temper.mlff.runtime.data_preparation.sevennet import prepare_config
+    from temper.mlff.pipeline.data_preparation.sevennet import prepare_config
 
     architectures = [
         {"chemical_species": "auto", "channel": 32, "lmax": 1},
@@ -83,7 +84,8 @@ def test_sevennet_resolves_architecture_from_checkpoint(tmp_path, monkeypatch):
     output = tmp_path / "resolved.yaml"
     YAML().dump(config, source)
     for architecture in architectures:
-        prepare_config(source, output)
+        prepare_config(source, output, bundle_root=tmp_path)
+        assert calls[-1] == str(tmp_path / "models/sevennet.pth")
         resolved = YAML(typ="safe").load(output)
         assert resolved["model"] == {**architecture, **config["model"]}
         assert resolved["train"] == config["train"]
@@ -122,9 +124,9 @@ def test_writers_preserve_recipe_overrides(
     spec = mlff_spec_factory(family, training_parameters=overrides)
     before = deepcopy(spec.model_dump(mode="json"))
     bundle = MLFFTrainBundle(training_unit=finetune_training_unit, mlff_spec=spec)
-    target = write_submit_folder(bundle, tmp_path / family)
-    script = (target / "run.sh").read_text()
-    assert "check_cuda.py" in script
+    target = write_prepared(write_submit_folder(bundle, tmp_path / family))
+    script = training_script(target)
+    assert "set -euo pipefail" in script
     assert "MLFF_DEVICE" not in script
     assert spec.model_dump(mode="json") == before
     if family in {"dpa4", "dpa4c"}:
@@ -145,8 +147,7 @@ def test_writers_preserve_recipe_overrides(
     elif family == "nep89":
         config = (target / "training/torchnep/nep.in").read_text()
         assert all(f"{key} {value}" in config for key, value in overrides.items())
-        assert "--train datasets/train.extxyz" in script
-        assert "--validation datasets/validation.extxyz" in script
+        assert not (target / "training/run.sh").exists()
         assert not (target / "runtime/prepare_nep89.py").exists()
     else:
         config = YAML(typ="safe").load((target / f"training/{family}.yaml").read_text())
@@ -174,9 +175,9 @@ def test_stress_inspection_is_shared_and_invalidated(
     monkeypatch.setattr(module, "iter_extxyz_metadata", counted)
     unit = finetune_training_unit
     for family in ("mace", "mattersim"):
-        MLFFTrainBundle(training_unit=unit, mlff_spec=mlff_spec_factory(family)).write_submit_folder(
+        write_prepared(MLFFTrainBundle(training_unit=unit, mlff_spec=mlff_spec_factory(family)).write_submit_folder(
             tmp_path / family
-        )
+        ))
     assert len(reads) == 4
     assert unit.training_has_stress is True
     assert unit.test_has_stress == [True, True]
@@ -187,22 +188,15 @@ def test_stress_inspection_is_shared_and_invalidated(
     assert len(reads) == 8
 
 
-def test_written_evaluator_loads_standalone_result_schema(
+def test_written_bundle_uses_installed_runtime_and_result_schema(
     tmp_path, zeroshot_training_unit, mlff_spec_factory,
 ):
-    target = MLFFTrainBundle(
+    target = write_prepared(MLFFTrainBundle(
         training_unit=zeroshot_training_unit,
         mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder(tmp_path / "standalone")
-    # An isolated interpreter must load only the copied runtime, with no TEMPER.
-    program = (
-        "import runpy, sys; "
-        f"sys.path.insert(0, {str(target / 'runtime')!r}); "
-        f"ns = runpy.run_path({str(target / 'runtime/run_test.py')!r}); "
-        "assert ns['MLFFTestResult'].__module__ == 'result_schema'; "
-        "assert 'temper' not in sys.modules"
-    )
-    subprocess.run([sys.executable, "-I", "-c", program], check=True)
+    ).write_submit_folder(tmp_path / "standalone"))
+    assert not (target / "runtime").exists()
+    assert "temper_bench run_pipeline bundle.json" in (target / "run.sh").read_text()
     result = MLFFTestResult(
         schema_version=1, calculator_identifier="mace", model="models/mace.model",
         package_versions={"mace-torch": None}, dataset_id="test_000",
@@ -213,3 +207,15 @@ def test_written_evaluator_loads_standalone_result_schema(
         wall_time_seconds=0.1,
     )
     assert MLFFTestResult.from_dict(json.loads(json.dumps(result.as_dict()))) == result
+
+
+def write_prepared(target):
+    """Exercise backend generation on the runtime side of the bundle boundary."""
+    from temper.mlff.pipeline.runner import prepare_bundle
+    prepare_bundle(target / "bundle.json")
+    return target
+
+
+def training_script(target):
+    path = target / "training/run.sh"
+    return (path if path.exists() else target / "run.sh").read_text()

@@ -5,7 +5,8 @@ import argparse
 import logging
 from typing import Sequence
 
-from temper.entrypoints.split import add_split_parser, split_cli
+from pathlib import Path
+from temper.utils.defaults import DEFAULT_SPLIT_CONFIG_FILE
 from temper.logging import (
     LOG_LEVEL_NAMES,
     PROGRESS_MODES,
@@ -74,7 +75,14 @@ def main_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(title="Valid subcommands", dest="command")
 
-    _ = add_split_parser(subparsers)
+    split = subparsers.add_parser("split", help="Group and split local datasets (requires [preprocess]).")
+    split.add_argument(
+        "-c", "--config-file", type=Path, default=Path(DEFAULT_SPLIT_CONFIG_FILE),
+        help="JSON or YAML SplitConfig (default: DEFAULT_SPLIT_CONFIG_FILE or split_config.json).",
+    )
+    pipeline = subparsers.add_parser("run_pipeline", help="Fine-tune and evaluate a packaged MLFF bundle.")
+    pipeline.add_argument("bundle", type=Path)
+    pipeline.add_argument("--prepare-only", action="store_true", help="Write configs without executing models.")
 
     return parser
 
@@ -87,7 +95,16 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         if args.command == "split":
+            from temper.entrypoints.split import split_cli
+
             sysexit = split_cli(args.config_file)
+        elif args.command == "run_pipeline":
+            from temper.mlff.pipeline.runner import prepare_bundle, run_pipeline
+            if args.prepare_only:
+                prepare_bundle(args.bundle)
+            else:
+                run_pipeline(args.bundle)
+            sysexit = 0
         else:
             parser.print_help()
             sysexit = 1

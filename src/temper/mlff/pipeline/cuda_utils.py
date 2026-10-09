@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
 """Require a visible CUDA GPU on the execution host."""
 from __future__ import annotations
 
-import argparse
 import os
 import shutil
 import subprocess
-import warnings
-
 
 
 def cuda_available() -> bool:
@@ -46,21 +42,3 @@ def torch_device() -> str:
     ):
         raise RuntimeError("MLFF execution requires a visible NVIDIA CUDA GPU.")
     return "cuda"
-
-
-def main() -> None:
-    """Check the generated runner's GPU requirement before executing an MLFF."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--warn-mattersim", action="store_true")
-    arguments = parser.parse_args()
-    require_cuda()
-    if arguments.warn_mattersim:
-        warnings.warn(
-            "MatterSim 1.2.5 has unresolved CUDA fine-tuning and batch-index "
-            "issues (microsoft/mattersim#163). See docs/mlff-bundles.md.",
-            RuntimeWarning,
-        )
-
-
-if __name__ == "__main__":
-    main()

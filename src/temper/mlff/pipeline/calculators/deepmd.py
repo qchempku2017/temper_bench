@@ -7,7 +7,7 @@ import os
 
 def build_calculator(config):
     """Load a local DeepMD model and require CUDA for its runtime device."""
-    from check_cuda import torch_device
+    from temper.mlff.pipeline.cuda_utils import torch_device
     os.environ["DEVICE"] = torch_device()
     from deepmd.calculator import DP
 

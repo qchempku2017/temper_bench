@@ -16,6 +16,7 @@ from temper.schemas.mlff_spec import (
     PretrainedMLFFSpec,
 )
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+from temper.mlff.bundle_writers import MLFFBundleWriter
 
 __all__ = [
     "DPA4CSpecBuilder",
@@ -25,6 +26,7 @@ __all__ = [
     "MLFFImplementation",
     "MLFFSpec",
     "MLFFTrainBundle",
+    "MLFFBundleWriter",
     "MatterSimSpecBuilder",
     "NEP89SpecBuilder",
     "PretrainedMLFFSpec",

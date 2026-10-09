@@ -1,7 +1,6 @@
 """Command-line entry point for splitting configured TemPER domains."""
 from __future__ import annotations
 
-import argparse
 import logging
 from pathlib import Path
 import time
@@ -24,27 +23,6 @@ from temper.logging import format_elapsed, progress_task
 
 
 logger = logging.getLogger(__name__)
-
-
-def add_split_parser(subparser: argparse._SubParsersAction) -> argparse.ArgumentParser:
-    """Build the argument parser for the split entry point."""
-    parser_split = subparser.add_parser(
-        "split",
-        help="Group and split domains using a JSON or YAML configuration file."
-    )
-
-    parser_split.add_argument(
-        "-c",
-        "--config-file",
-        type=Path,
-        default=Path(DEFAULT_SPLIT_CONFIG_FILE),
-        help=(
-            "JSON or YAML SplitConfig file. Defaults to the "
-            "DEFAULT_SPLIT_CONFIG_FILE environment variable or split_config.json."
-        ),
-    )
-
-    return parser_split
 
 
 def _load_split_config(config_file: Path) -> SplitConfig:

@@ -1,14 +1,10 @@
-"""MatterSim submit-folder writer."""
+"""MatterSim runtime adapter."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter, command
-from temper.utils.defaults import (
-    DEFAULT_MLFF_DATASETS_DIR,
-    DEFAULT_MLFF_TRAINING_DIR,
-)
+from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter, command
 
 
 _BOOLEAN_OPTIONS = {
@@ -20,18 +16,14 @@ _BOOLEAN_OPTIONS = {
 }
 
 
-@BaseMLFFBundleWriter.register(name="mattersim")
-class MatterSimBundleWriter(BaseMLFFBundleWriter):
-    """Write fixed-layout MatterSim 1.2.5 train-and-test bundles."""
+@BaseMLFFAdapter.register(name="mattersim")
+class MatterSimAdapter(BaseMLFFAdapter):
+    """Prepare MatterSim 1.2.5 train-and-test bundles."""
 
     mlff_type = "mattersim"
-    calculator_resource = "calculators/mattersim.py"
+    calculator_module = "temper.mlff.pipeline.calculators.mattersim"
     model_filenames = {"model": "mattersim.pth"}
     trained_model_filename = "finetuned_mattersim.pth"
-
-    def extra_runtime_resources(self) -> dict[str, str]:
-        """Return no extra resources beyond the shared runtime."""
-        return {}
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
         """Return no config files: MatterSim accepts all controls on its CLI."""
@@ -56,7 +48,7 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
         parameters["include_stresses"] = training_stress
         if not training_stress:
             parameters["stress_loss_ratio"] = 0.0
-        work = f"{DEFAULT_MLFF_TRAINING_DIR}/mattersim"
+        work = f"{self.files.training_dir}/mattersim"
         arguments = [
             "$PYTHON_BIN",
             "-m",
@@ -66,7 +58,7 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
             "--module",
             "mattersim.training.finetune_mattersim",
             "--train_data_path",
-            f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz",
+            self.dataset_path(self.training_unit.train_set),
             "--load_model_path",
             self.artifact_path("model"),
             "--save_path",
@@ -80,7 +72,7 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
             arguments.extend(
                 (
                     "--valid_data_path",
-                    f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz",
+                    self.dataset_path(self.training_unit.val_set),
                 )
             )
         return (
@@ -92,4 +84,4 @@ class MatterSimBundleWriter(BaseMLFFBundleWriter):
         )
 
 
-__all__ = ["MatterSimBundleWriter"]
+__all__ = ["MatterSimAdapter"]

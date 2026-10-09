@@ -1,19 +1,16 @@
-"""NEP-89 TorchNEP submit-folder writer."""
+"""NEP-89 TorchNEP runtime adapter."""
 
 from __future__ import annotations
 
 from math import isclose
 from pathlib import Path
+from contextlib import redirect_stdout, redirect_stderr
+import shutil
 
 from ase.data import chemical_symbols
 from temper.utils.extxyz import iter_extxyz_metadata
 
-from temper.mlff.bundle_writers.base import BaseMLFFBundleWriter, command
-from temper.utils.defaults import (
-    DEFAULT_MLFF_DATASETS_DIR,
-    DEFAULT_MLFF_RUNTIME_DIR,
-    DEFAULT_MLFF_TRAINING_DIR,
-)
+from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 
 
 def _nep_architecture(path: Path) -> tuple[list[str], set[str]]:
@@ -119,25 +116,19 @@ def _parameter_line(key: str, value: str | int | float | bool) -> str:
     return f"{key} {value}"
 
 
-@BaseMLFFBundleWriter.register(name="nep89")
-class NEP89BundleWriter(BaseMLFFBundleWriter):
-    """Write fixed-layout TorchNEP 1.0.2 and calorine 3.5 bundles."""
+@BaseMLFFAdapter.register(name="nep89")
+class NEP89Adapter(BaseMLFFAdapter):
+    """Prepare TorchNEP 1.0.2 and calorine 3.5 bundles."""
 
     mlff_type = "nep89"
-    calculator_resource = "calculators/nep89.py"
+    calculator_module = "temper.mlff.pipeline.calculators.nep89"
     model_filenames = {"model": "nep89.txt"}
     trained_model_filename = "finetuned_nep89.txt"
 
     @property
     def work_directory(self) -> str:
         """Return the TorchNEP working directory within the submit folder."""
-        return f"{DEFAULT_MLFF_TRAINING_DIR}/torchnep"
-
-    def extra_runtime_resources(self) -> dict[str, str]:
-        """Return the TorchNEP launcher to copy into the standalone runtime."""
-        return {
-            "train_nep89.py": "train_nep89.py",
-        }
+        return f"{self.files.training_dir}/torchnep"
 
     def _check_chemical_symbols(self, model_symbols: set[str]) -> None:
         """Require periodic data whose species are covered by the pretrained model."""
@@ -147,7 +138,7 @@ class NEP89BundleWriter(BaseMLFFBundleWriter):
             filenames.append(self.training_unit.val_set)
         symbols: set[str] = set()
         for filename in filenames:
-            source = self.training_unit.dataset_source(filename)
+            source = self.root / self.dataset_path(filename)
             for frame_index, frame in enumerate(iter_extxyz_metadata(source, read_symbols=True)):
                 if not frame.fully_periodic:
                     raise ValueError(
@@ -172,7 +163,7 @@ class NEP89BundleWriter(BaseMLFFBundleWriter):
         """
         if self.training_unit.val_set is None:
             raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
-        model_path = self._verify_artifact(self.artifact("model"))
+        model_path = self.root / self.artifact_path("model")
         architecture, model_symbols = _nep_architecture(model_path)
 
         self._check_chemical_symbols(model_symbols)
@@ -187,25 +178,30 @@ class NEP89BundleWriter(BaseMLFFBundleWriter):
         return {f"{self.work_directory}/nep.in": "\n".join(lines) + "\n"}
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
-        """Return fine-tuning commands using the original labeled extxyz files."""
-        output = f"{self.work_directory}/output"
-        return (
-            command(
-                "$PYTHON_BIN",
-                f"{DEFAULT_MLFF_RUNTIME_DIR}/train_nep89.py",
-                "--config",
-                f"{self.work_directory}/nep.in",
-                "--train",
-                f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz",
-                "--validation",
-                f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz",
-                "--model",
-                self.artifact_path("model"),
-                "--output-directory",
-                output,
-            ),
-            command("cp", f"{output}/nep_best.txt", self.trained_model_path),
-        )
+        """Return no shell commands: TorchNEP is called through its Python API."""
+        return ()
+
+    def train(self) -> None:
+        """Fine-tune with TorchNEP, save its log, and copy the selected model.
+
+        All input and output paths resolve against the bundle root. Returns
+        None after copying nep_best.txt to the bundle's trained-model path.
+        Backend exceptions propagate to stop the pipeline before evaluation.
+        """
+        from temper.mlff.pipeline.train_nep89 import run
+
+        output = self.root / self.work_directory / "output"
+        log_path = self.root / self.files.outputs_dir / "training.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            with redirect_stdout(log), redirect_stderr(log):
+                run(
+                    config=str(self.root / self.work_directory / "nep.in"),
+                    train=str(self.root / self.dataset_path(self.training_unit.train_set)),
+                    validation=str(self.root / self.dataset_path(self.training_unit.val_set)),
+                    model=str(self.root / self.artifact_path("model")),
+                    output_directory=str(output),
+                )
+        shutil.copy2(output / "nep_best.txt", self.root / self.trained_model_path)
 
 
-__all__ = ["NEP89BundleWriter"]
+__all__ = ["NEP89Adapter"]

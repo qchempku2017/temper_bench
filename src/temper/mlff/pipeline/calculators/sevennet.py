@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def build_calculator(config):
     """Load a local SevenNet model on CUDA."""
-    from check_cuda import torch_device
+    from temper.mlff.pipeline.cuda_utils import torch_device
     from sevenn.calculator import SevenNetCalculator
 
     return SevenNetCalculator(

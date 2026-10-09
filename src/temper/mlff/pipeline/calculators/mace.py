@@ -5,7 +5,7 @@ from __future__ import annotations
 
 def build_calculator(config):
     """Load a local MACE model after resolving CUDA remotely."""
-    from check_cuda import torch_device
+    from temper.mlff.pipeline.cuda_utils import torch_device
     from mace.calculators import MACECalculator
 
     parameters = dict(config["calculator"].get("parameters", {}))

@@ -1,20 +1,14 @@
-#!/usr/bin/env python3
 """Run ordered MLFF predictions through one locally selected ASE Calculator."""
 
 from __future__ import annotations
 
-if __package__:
-    # temper_bench has been installed remotely.
-    from temper.schemas.mlff_test_result import MLFFTestResult
-else:
-    # temper_bench has not been installed remotely, only module file uploaded.
-    from result_schema import MLFFTestResult
+from temper.schemas.mlff_test_result import MLFFTestResult
+from temper._version import __version__
 
-import argparse
 import json
 import os
 import time
-from importlib import metadata
+from importlib import metadata, import_module
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -45,7 +39,7 @@ def _write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
 
 
 def _installed_versions(requirements: list[dict[str, str]]) -> dict[str, str | None]:
-    versions: dict[str, str | None] = {}
+    versions: dict[str, str | None] = {"temper-bench": __version__}
     for requirement in requirements:
         name = requirement["name"]
         try:
@@ -187,6 +181,14 @@ def _evaluate_dataset(
     }
 
 
+def build_calculator(config):
+    """Import only the selected family's installed calculator adapter."""
+    from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
+
+    adapter = mlff_adapter_factory(config["calculator"]["identifier"])
+    return import_module(adapter.calculator_module).build_calculator(config)
+
+
 def run(config_path: str | Path) -> None:
     """Evaluate every configured dataset and write standardized predictions.
 
@@ -202,19 +204,14 @@ def run(config_path: str | Path) -> None:
     RuntimeError
         If a Calculator fails on a requested dataset property.
     """
-    # Import from the colocated, selected adapter only when the standalone
-    # runtime actually executes. This keeps the source-tree module importable
-    # without a sibling ``calculator.py`` and preserves the remote-free
-    # materialized contract.
-    from calculator import build_calculator
-
     config_file = Path(config_path).expanduser().resolve()
     config = json.loads(config_file.read_text(encoding="utf-8"))
     if config.get("schema_version") != 2:
         raise ValueError("Unsupported test_config schema_version.")
     bundle_root = config_file.parent
 
-    calculator = build_calculator(config)
+    calculator_config = {**config, "model": str(_bundle_path(bundle_root, config["model"], label="model"))}
+    calculator = build_calculator(calculator_config)
     package_versions = _installed_versions(config.get("package_requirements", []))
     common_metadata = {
         "schema_version": 1,
@@ -244,15 +241,3 @@ def run(config_path: str | Path) -> None:
             "wall_time_seconds": time.perf_counter() - started,
         },
     )
-
-
-def main() -> None:
-    """Parse the test configuration path and run all configured datasets."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    arguments = parser.parse_args()
-    run(arguments.config)
-
-
-if __name__ == "__main__":
-    main()

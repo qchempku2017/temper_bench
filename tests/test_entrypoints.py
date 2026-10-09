@@ -54,8 +54,7 @@ def test_main_configures_logging_before_subcommand_dispatch(
         ),
     )
     monkeypatch.setattr(
-        entrypoint,
-        "split_cli",
+        "temper.entrypoints.split.split_cli",
         lambda config_file: calls.append(("split", config_file)) or 0,
     )
     monkeypatch.setattr(
@@ -101,7 +100,7 @@ def test_main_reports_failures_cleanly(
     def fail(_config_file):
         raise error
 
-    monkeypatch.setattr(entrypoint, "split_cli", fail)
+    monkeypatch.setattr("temper.entrypoints.split.split_cli", fail)
     with pytest.raises(SystemExit) as exc_info:
         entrypoint.main(["--progress", "off", "split"])
 
@@ -120,7 +119,7 @@ def test_main_verbose_failure_includes_traceback(
     def fail(_config_file):
         raise RuntimeError("backend exploded")
 
-    monkeypatch.setattr(entrypoint, "split_cli", fail)
+    monkeypatch.setattr("temper.entrypoints.split.split_cli", fail)
     with pytest.raises(SystemExit) as exc_info:
         entrypoint.main(["--verbose", "--progress", "off", "split"])
 

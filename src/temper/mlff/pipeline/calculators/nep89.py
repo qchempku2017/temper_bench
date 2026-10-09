@@ -6,7 +6,7 @@ import shutil
 
 def build_calculator(config):
     """Return GPUNEP, requiring both CUDA and the gpumd executable."""
-    from check_cuda import require_cuda
+    from temper.mlff.pipeline.cuda_utils import require_cuda
     from calorine.calculators import GPUNEP
 
     require_cuda()

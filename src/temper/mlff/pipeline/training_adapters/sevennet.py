@@ -1,31 +1,22 @@
-"""SevenNet submit-folder writer."""
+"""SevenNet runtime adapter."""
 
 from __future__ import annotations
 
-from temper.mlff.bundle_writers.base import (
-    BaseMLFFBundleWriter,
+from temper.mlff.pipeline.training_adapters.base import (
+    BaseMLFFAdapter,
     command,
     yaml_text,
 )
-from temper.utils.defaults import (
-    DEFAULT_MLFF_DATASETS_DIR,
-    DEFAULT_MLFF_RUNTIME_DIR,
-    DEFAULT_MLFF_TRAINING_DIR,
-)
 
 
-@BaseMLFFBundleWriter.register(name="sevennet")
-class SevenNetBundleWriter(BaseMLFFBundleWriter):
-    """Write fixed-layout SevenNet 0.13.0 train-and-test bundles."""
+@BaseMLFFAdapter.register(name="sevennet")
+class SevenNetAdapter(BaseMLFFAdapter):
+    """Prepare SevenNet 0.13.0 train-and-test bundles."""
 
     mlff_type = "sevennet"
-    calculator_resource = "calculators/sevennet.py"
+    calculator_module = "temper.mlff.pipeline.calculators.sevennet"
     model_filenames = {"model": "sevennet.pth"}
     trained_model_filename = "finetuned_sevennet.pth"
-
-    def extra_runtime_resources(self) -> dict[str, str]:
-        """Return the checkpoint-based native YAML preparation script."""
-        return {"prepare_sevennet.py": "data_preparation/sevennet.py"}
 
     def generated_training_files(self, training_stress: bool) -> dict[str, str]:
         """Return YAML that fine-tunes SevenNet-0 via train.continue.
@@ -64,36 +55,40 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
             "data_divide_ratio": data_divide_ratio,
             "data_format_args": {"index": ":"},
             "load_trainset_path": [
-                f"{DEFAULT_MLFF_DATASETS_DIR}/train.extxyz"
+                self.dataset_path(self.training_unit.train_set)
             ],
         }
         if self.training_unit.val_set is not None:
             data["load_validset_path"] = [
-                f"{DEFAULT_MLFF_DATASETS_DIR}/validation.extxyz"
+                self.dataset_path(self.training_unit.val_set)
             ]
         return {
-            f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet.yaml": yaml_text(
+            f"{self.files.training_dir}/sevennet.yaml": yaml_text(
                 {"model": model, "train": train, "data": data}
             )
         }
+
+    def prepare_training(self) -> None:
+        """Resolve the checkpoint architecture before native SevenNet training."""
+        from temper.mlff.pipeline.data_preparation.sevennet import prepare_config
+
+        prepare_config(
+            self.root / self.files.training_dir / "sevennet.yaml",
+            self.root / self.files.training_dir / "sevennet_resolved.yaml",
+            bundle_root=self.root,
+        )
 
     def training_lines(self, training_stress: bool) -> tuple[str, ...]:
         """Return the native continuation command and final checkpoint copy."""
         del training_stress
         epoch = (self.spec.training_parameters or {})["epoch"]
-        work = f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet"
+        work = f"{self.files.training_dir}/sevennet"
         return (
             command("mkdir", "-p", work),
             command(
-                "$PYTHON_BIN",
-                f"{DEFAULT_MLFF_RUNTIME_DIR}/prepare_sevennet.py",
-                "--config", f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet.yaml",
-                "--output", f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet_resolved.yaml",
-            ),
-            command(
                 "sevenn",
                 "train",
-                f"{DEFAULT_MLFF_TRAINING_DIR}/sevennet_resolved.yaml",
+                f"{self.files.training_dir}/sevennet_resolved.yaml",
                 "-s",
                 "-w",
                 work,
@@ -106,4 +101,4 @@ class SevenNetBundleWriter(BaseMLFFBundleWriter):
         )
 
 
-__all__ = ["SevenNetBundleWriter"]
+__all__ = ["SevenNetAdapter"]
