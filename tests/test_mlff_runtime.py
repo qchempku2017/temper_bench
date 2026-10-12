@@ -14,7 +14,7 @@ from ase import Atoms
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import write
 
-from temper.mlff.pipeline import run_test, train_nep89
+from temper.mlff.pipeline import evaluate_mlff as run_test
 
 
 class FakeCalculator(Calculator):
@@ -58,7 +58,7 @@ class NoStressCalculator(Calculator):
 
 
 def _write_runtime_config(root: Path, *, stress: bool = True) -> Path:
-    datasets = root / "datasets"
+    datasets = root / "testing_inputs"
     datasets.mkdir(parents=True)
     first = Atoms("H", positions=[[0.0, 0.0, 0.0]])
     second = Atoms(
@@ -78,31 +78,31 @@ def _write_runtime_config(root: Path, *, stress: bool = True) -> Path:
             "identifier": "fake",
             "parameters": {},
         },
-        "model": "models/fake-model",
+        "model": "pretrained_models/fake-model",
         "test_datasets": [
             {
                 "id": "test_000",
-                "path": "datasets/first.extxyz",
+                "path": "testing_inputs/first.extxyz",
                 "source_domain": "domain",
                 "source_filename": "first.extxyz",
                 "properties": properties,
-                "output": "outputs/test_000.npz",
-                "metadata_output": "outputs/test_000.json",
+                "output": "testing_outputs/test_000.npz",
+                "metadata_output": "testing_outputs/test_000.json",
             },
             {
                 "id": "test_001",
-                "path": "datasets/second.extxyz",
+                "path": "testing_inputs/second.extxyz",
                 "source_domain": "domain",
                 "source_filename": "second.extxyz",
                 "properties": properties,
-                "output": "outputs/test_001.npz",
-                "metadata_output": "outputs/test_001.json",
+                "output": "testing_outputs/test_001.npz",
+                "metadata_output": "testing_outputs/test_001.json",
             },
         ],
-        "summary_output": "outputs/summary.json",
+        "summary_output": "testing_outputs/summary.json",
         "package_requirements": [],
     }
-    path = root / "test_config.json"
+    path = root / "testing_inputs/test_config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
     return path
 
@@ -119,9 +119,9 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
 ) -> None:
     config = _write_runtime_config(tmp_path)
     _install_fake_adapter(monkeypatch, FakeCalculator())
-    run_test.run(config)
+    run_test.run_test(config, bundle_root=tmp_path)
 
-    with np.load(tmp_path / "outputs" / "test_000.npz", allow_pickle=False) as data:
+    with np.load(tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False) as data:
         assert data.files == [
             "energies",
             "forces",
@@ -142,12 +142,12 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
         )
         assert all(data[name].dtype != object for name in data.files)
 
-    with np.load(tmp_path / "outputs" / "test_001.npz", allow_pickle=False) as data:
+    with np.load(tmp_path / "testing_outputs" / "test_001.npz", allow_pickle=False) as data:
         np.testing.assert_array_equal(data["energies"], [1.0])
         np.testing.assert_array_equal(data["atom_offsets"], [0, 1])
 
     first_metadata = json.loads(
-        (tmp_path / "outputs" / "test_000.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "test_000.json").read_text(encoding="utf-8")
     )
     assert first_metadata["dataset_id"] == "test_000"
     assert first_metadata["source_filename"] == "first.extxyz"
@@ -160,7 +160,7 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
     }
 
     summary = json.loads(
-        (tmp_path / "outputs" / "summary.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "summary.json").read_text(encoding="utf-8")
     )
     assert [item["dataset_id"] for item in summary["datasets"]] == [
         "test_000",
@@ -174,12 +174,12 @@ def test_generic_runner_omits_stress_when_not_requested(
 ) -> None:
     config = _write_runtime_config(tmp_path, stress=False)
     _install_fake_adapter(monkeypatch, FakeCalculator())
-    run_test.run(config)
+    run_test.run_test(config, bundle_root=tmp_path)
 
-    with np.load(tmp_path / "outputs" / "test_000.npz", allow_pickle=False) as data:
+    with np.load(tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False) as data:
         assert "stresses" not in data.files
     metadata = json.loads(
-        (tmp_path / "outputs" / "test_000.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "test_000.json").read_text(encoding="utf-8")
     )
     assert metadata["units"]["stress"] is None
 
@@ -191,7 +191,7 @@ def test_generic_runner_reports_unsupported_stress_with_dataset_and_frame(
     config = _write_runtime_config(tmp_path, stress=True)
     _install_fake_adapter(monkeypatch, NoStressCalculator())
     with pytest.raises(RuntimeError, match="test_000 frame 0"):
-        run_test.run(config)
+        run_test.run_test(config, bundle_root=tmp_path)
 
 
 def test_generic_runner_rejects_dataset_escape(monkeypatch, tmp_path: Path) -> None:
@@ -203,70 +203,4 @@ def test_generic_runner_rejects_dataset_escape(monkeypatch, tmp_path: Path) -> N
     config_path.write_text(json.dumps(config), encoding="utf-8")
     _install_fake_adapter(monkeypatch, FakeCalculator())
     with pytest.raises(ValueError, match="escapes bundle root"):
-        run_test.run(config_path)
-
-
-def test_generic_runner_dispatches_through_installed_adapters() -> None:
-    source = (
-        resources.files("temper.mlff.pipeline")
-        .joinpath("run_test.py")
-        .read_text(encoding="utf-8")
-    )
-    assert "mlff_adapter_factory" in source
-    assert "if mlff" not in source.lower()
-    for identifier in ("dpa4", "mattersim", "mace", "sevennet", "nep89", "orb"):
-        assert identifier not in source.lower()
-
-
-@pytest.mark.parametrize(
-    "resource",
-    (
-        "calculators/deepmd.py",
-        "calculators/mattersim.py",
-        "calculators/mace.py",
-        "calculators/sevennet.py",
-        "calculators/nep89.py",
-    ),
-)
-def test_every_calculator_resource_implements_static_contract(
-    resource: str,
-) -> None:
-    source = (
-        resources.files("temper.mlff.pipeline")
-        .joinpath(resource)
-        .read_text(encoding="utf-8")
-    )
-    assert "def build_calculator(config):" in source
-    assert "from temper.mlff.pipeline.cuda_utils import" in source
-
-
-def test_orb_runtime_resources_are_absent() -> None:
-    runtime = resources.files("temper.mlff.pipeline")
-    assert not runtime.joinpath("calculators/orb.py").is_file()
-    assert not runtime.joinpath("data_preparation/orb.py").is_file()
-
-
-def test_torchnep_wrapper_starts_one_fresh_finetune(monkeypatch) -> None:
-    captured = {}
-    module = ModuleType("torchnep")
-
-    def fake_train_nep(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-
-    module.train_nep = fake_train_nep
-    monkeypatch.setitem(sys.modules, "torchnep", module)
-
-    train_nep89.run("nep.in", "train.xyz", "valid.xyz", "nep.txt", "out")
-
-    assert captured["args"] == ("nep.in", "train.xyz")
-    assert captured["kwargs"] == {
-        "output_dir": "out",
-        "device": "cuda",
-        "finetune_from": "nep.txt",
-        "restart": False,
-        "recompute_q_scaler": False,
-        "slim_types": True,
-        "run_seed": 42,
-        "valid_file": "valid.xyz",
-    }
+        run_test.run_test(config_path, bundle_root=tmp_path)

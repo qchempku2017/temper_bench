@@ -1,13 +1,14 @@
 """DeepMD fine-tuning policy, independent of submitted datasets."""
 from __future__ import annotations
 
+from abc import ABC
 from typing import Any
 
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_spec import MLFFImplementation
 
 
-class _DeepMDSpecBuilder(BaseSpecBuilder):
+class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
     """Share DPA configuration policy; subclasses select the model release."""
 
     implementations = (MLFFImplementation(name="deepmd-kit", version="3.2.0"),)

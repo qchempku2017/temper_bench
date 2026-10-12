@@ -128,20 +128,20 @@ DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get("DEFAULT_TRAINING_UNITS_FILE",
 DEFAULT_MLFF_PRETRAINED_MODELS_DIR: str = os.environ.get(
     "DEFAULT_MLFF_PRETRAINED_MODELS_DIR", "./pretrained_models"
 )
-DEFAULT_MLFF_DATASETS_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_DATASETS_DIR", "datasets"
-)
 DEFAULT_MLFF_MODELS_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_MODELS_DIR", "models"
+    "DEFAULT_MLFF_MODELS_DIR", "pretrained_models"
 )
-DEFAULT_MLFF_TRAINING_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_TRAINING_DIR", "training"
+DEFAULT_MLFF_TRAINING_INPUTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_TRAINING_INPUTS_DIR", "training_inputs"
 )
-DEFAULT_MLFF_ARTIFACTS_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_ARTIFACTS_DIR", "artifacts"
+DEFAULT_MLFF_TRAINING_OUTPUTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_TRAINING_OUTPUTS_DIR", "training_outputs"
 )
-DEFAULT_MLFF_OUTPUTS_DIR: str = _env_submit_directory(
-    "DEFAULT_MLFF_OUTPUTS_DIR", "outputs"
+DEFAULT_MLFF_TESTING_INPUTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_TESTING_INPUTS_DIR", "testing_inputs"
+)
+DEFAULT_MLFF_TESTING_OUTPUTS_DIR: str = _env_submit_directory(
+    "DEFAULT_MLFF_TESTING_OUTPUTS_DIR", "testing_outputs"
 )
 
 ##################################
@@ -174,12 +174,12 @@ __all__ = [
     "DEFAULT_GROUPED_DOMAIN_FILE",
     "DEFAULT_MAX_N_TRAIN",
     "DEFAULT_METADATA_FILE",
-    "DEFAULT_MLFF_ARTIFACTS_DIR",
-    "DEFAULT_MLFF_DATASETS_DIR",
+    "DEFAULT_MLFF_TRAINING_OUTPUTS_DIR",
+    "DEFAULT_MLFF_TESTING_INPUTS_DIR",
     "DEFAULT_MLFF_MODELS_DIR",
-    "DEFAULT_MLFF_OUTPUTS_DIR",
+    "DEFAULT_MLFF_TESTING_OUTPUTS_DIR",
     "DEFAULT_MLFF_PRETRAINED_MODELS_DIR",
-    "DEFAULT_MLFF_TRAINING_DIR",
+    "DEFAULT_MLFF_TRAINING_INPUTS_DIR",
     "DEFAULT_SPLIT_CONFIG_FILE",
     "DEFAULT_SPLIT_GROUPS_FILE",
     "DEFAULT_SPLIT_REPEATS",

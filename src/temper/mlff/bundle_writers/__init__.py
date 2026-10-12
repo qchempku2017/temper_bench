@@ -5,7 +5,7 @@ from temper.mlff.bundle_writers.base import MLFFBundleWriter
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 
-def write_submit_folder(bundle: MLFFTrainBundle, target_dir: str | Path | None = None) -> Path:
+def write_submit_folder(bundle: MLFFTrainBundle, target_dir: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
     """Package an experiment for the installed TEMPER runtime.
 
     Parameters
@@ -17,20 +17,10 @@ def write_submit_folder(bundle: MLFFTrainBundle, target_dir: str | Path | None =
 
     Returns
     -------
-    Path
-        Absolute destination path, with this default layout::
-
-            bundle.json              # recipe, input mapping, evaluation settings
-            run.sh                   # prepare, fine-tune, and test in one command
-            datasets/train.extxyz    # fine-tuning only
-            datasets/validation.extxyz  # when supplied
-            datasets/test_000.extxyz # one indexed file per test dataset
-            models/<model files>
-
-        Run ``bash run.sh`` remotely with TEMPER and the selected backend
-        installed. It creates training files, artifacts, and prediction outputs;
-        zero-shot bundles skip fine-tuning. Directory names use the configured
-        defaults. No Python code is copied into the bundle.
+    tuple[Path, MLFFTrainBundle]
+        The first value is the absolute path to the new directory. The second
+        is a separate bundle whose files field records the planned layout and
+        whose contents match bundle.json. The original bundle is unchanged.
 
     Raises
     ------
@@ -40,6 +30,17 @@ def write_submit_folder(bundle: MLFFTrainBundle, target_dir: str | Path | None =
         If input labels are inconsistent or a pretrained artifact has changed.
     OSError
         If inputs cannot be read or output files cannot be written.
+
+    Notes
+    -----
+    Packaging copies weights into pretrained_models/, training datasets into
+    training_inputs/, and test datasets into testing_inputs/. It also writes
+    bundle.json and run.sh at the root. Run ``bash run.sh`` on a host with
+    TEMPER and the chosen backend installed. Execution creates the native
+    configs and testing_inputs/test_config.json, then writes results under
+    training_outputs/ and testing_outputs/. Zero-shot runs skip training.
+    Directory defaults can be configured before packaging; recorded paths are
+    always relative to the bundle root. No backend Python code is copied.
     """
     return MLFFBundleWriter(bundle).write_submit_folder(target_dir)
 

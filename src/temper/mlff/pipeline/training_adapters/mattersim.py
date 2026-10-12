@@ -20,12 +20,13 @@ _BOOLEAN_OPTIONS = {
 class MatterSimAdapter(BaseMLFFAdapter):
     """Prepare MatterSim 1.2.5 train-and-test bundles."""
 
-    mlff_type = "mattersim"
-    calculator_module = "temper.mlff.pipeline.calculators.mattersim"
-    model_filenames = {"model": "mattersim.pth"}
-    trained_model_filename = "finetuned_mattersim.pth"
+    pretrained_model_filename = "mattersim.pth"
+    training_output_filenames = {
+        "trained_model": "finetuned_mattersim.pth", "training_log": "training.log",
+        "native_outputs": "mattersim",
+    }
 
-    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+    def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return no config files: MatterSim accepts all controls on its CLI."""
         return {}
 
@@ -41,14 +42,14 @@ class MatterSimAdapter(BaseMLFFAdapter):
                 result.extend((option, str(value)))
         return result
 
-    def training_lines(self, training_stress: bool) -> tuple[str, ...]:
+    def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
         """Return the CUDA launcher command with recipe options and data paths."""
         parameters = dict(self.spec.training_parameters or {})
         parameters["include_forces"] = True
         parameters["include_stresses"] = training_stress
         if not training_stress:
             parameters["stress_loss_ratio"] = 0.0
-        work = f"{self.files.training_dir}/mattersim"
+        work = self.output_path("native_outputs")
         arguments = [
             "$PYTHON_BIN",
             "-m",
@@ -58,9 +59,9 @@ class MatterSimAdapter(BaseMLFFAdapter):
             "--module",
             "mattersim.training.finetune_mattersim",
             "--train_data_path",
-            self.dataset_path(self.training_unit.train_set),
+            self.input_path("train"),
             "--load_model_path",
-            self.artifact_path("model"),
+            self.files.pretrained_model,
             "--save_path",
             work,
             "--save_checkpoint",
@@ -72,7 +73,7 @@ class MatterSimAdapter(BaseMLFFAdapter):
             arguments.extend(
                 (
                     "--valid_data_path",
-                    self.dataset_path(self.training_unit.val_set),
+                    self.input_path("validation"),
                 )
             )
         return (
@@ -82,6 +83,3 @@ class MatterSimAdapter(BaseMLFFAdapter):
                 "cp", f"{work}/last_model.pth", self.trained_model_path
             ),
         )
-
-
-__all__ = ["MatterSimAdapter"]

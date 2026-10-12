@@ -14,24 +14,27 @@ from temper.mlff.pipeline.training_adapters.base import (
 class MACEAdapter(BaseMLFFAdapter):
     """Prepare mace-torch 0.3.16 train-and-test bundles."""
 
-    mlff_type = "mace"
-    calculator_module = "temper.mlff.pipeline.calculators.mace"
-    model_filenames = {"model": "mace.model"}
-    trained_model_filename = "finetuned_mace.model"
+    pretrained_model_filename = "mace.model"
+    training_input_filenames = {"script": "run.sh", "config": "mace.yaml"}
+    training_output_filenames = {
+        "trained_model": "finetuned_mace.model", "training_log": "training.log",
+        "native_models": "mace/models",
+        "checkpoints": "mace/checkpoints", "logs": "mace/logs",
+        "metrics": "mace/results",
+    }
 
-    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+    def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return native YAML with bundle paths and dataset-dependent stress."""
         config = dict(self.spec.training_parameters or {})
-        work = f"{self.files.training_dir}/mace"
         config.update(
             {
                 "name": "temper_model",
-                "foundation_model": self.artifact_path("model"),
-                "train_file": self.dataset_path(self.training_unit.train_set),
-                "model_dir": f"{work}/models",
-                "checkpoints_dir": f"{work}/checkpoints",
-                "results_dir": f"{work}/results",
-                "log_dir": f"{work}/logs",
+                "foundation_model": self.files.pretrained_model,
+                "train_file": self.input_path("train"),
+                "model_dir": self.output_path("native_models"),
+                "checkpoints_dir": self.output_path("checkpoints"),
+                "results_dir": self.output_path("metrics"),
+                "log_dir": self.output_path("logs"),
             }
         )
         if not training_stress:
@@ -41,30 +44,26 @@ class MACEAdapter(BaseMLFFAdapter):
 
         if self.training_unit.val_set is not None:
             config["valid_file"] = (
-                self.dataset_path(self.training_unit.val_set)
+                self.input_path("validation")
             )
             config.pop("valid_fraction", None)
-        return {f"{self.files.training_dir}/mace.yaml": yaml_text(config)}
+        return {self.input_path("config"): yaml_text(config)}
 
-    def training_lines(self, training_stress: bool) -> tuple[str, ...]:
+    def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
         """Return CUDA fine-tuning and trained-model copy commands."""
         del training_stress
-        work = f"{self.files.training_dir}/mace"
         return (
-            command("mkdir", "-p", f"{work}/models"),
+            command("mkdir", "-p", self.output_path("native_models")),
             command(
                 "mace_run_train",
                 "--config",
-                f"{self.files.training_dir}/mace.yaml",
+                self.input_path("config"),
                 "--device",
                 "cuda",
             ),
             command(
                 "cp",
-                f"{work}/models/temper_model.model",
+                f"{self.output_path('native_models')}/temper_model.model",
                 self.trained_model_path,
             ),
         )
-
-
-__all__ = ["MACEAdapter"]

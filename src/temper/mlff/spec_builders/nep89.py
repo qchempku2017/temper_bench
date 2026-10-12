@@ -5,6 +5,7 @@ from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_spec import MLFFImplementation
 
 _TRAINING_DEFAULTS: dict[str, Any] = {
+    "run_seed": 42,
     "epoch": 100,
     "batch": 32,
     "lr": 0.01,

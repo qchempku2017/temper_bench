@@ -16,7 +16,6 @@ class MACESpecBuilder(BaseSpecBuilder):
     patience_key = "patience"
     training_defaults = {
         "multiheads_finetuning": False,
-        "valid_fraction": 0.05,
         "energy_weight": 10.0,
         "forces_weight": 10.0,
         "stress_weight": 1.0,

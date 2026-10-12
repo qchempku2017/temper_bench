@@ -6,18 +6,19 @@ from temper.schemas.mlff_test_result import MLFFTestResult
 from temper._version import __version__
 
 import json
+import logging
 import os
+import shutil
 import time
-from importlib import metadata, import_module
+from importlib import metadata
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import numpy as np
 from ase.io import iread
 
-# The filename is part of the materialized runtime contract, but also matches
-# pytest's default ``*_test.py`` discovery pattern in the TEMPER source tree.
-__test__ = False
+
+logger = logging.getLogger(__name__)
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -78,6 +79,7 @@ def _evaluate_dataset(
     calculator: Any,
     common_metadata: dict[str, Any],
 ) -> dict[str, Any]:
+    logger.info("Evaluating dataset %s", dataset["id"])
     started = time.perf_counter()
     properties = list(dataset["properties"])
     if "energy" not in properties or "forces" not in properties:
@@ -153,6 +155,7 @@ def _evaluate_dataset(
         label="prediction metadata output",
     )
     _write_npz(prediction_path, arrays)
+    logger.debug("Wrote predictions to %s", prediction_path)
     wall_time = time.perf_counter() - started
     result_metadata = MLFFTestResult.from_dict({
         **common_metadata,
@@ -180,22 +183,53 @@ def _evaluate_dataset(
         "wall_time_seconds": wall_time,
     }
 
-
 def build_calculator(config):
-    """Import only the selected family's installed calculator adapter."""
-    from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
+    """Construct the selected ASE calculator without importing other backends.
 
-    adapter = mlff_adapter_factory(config["calculator"]["identifier"])
-    return import_module(adapter.calculator_module).build_calculator(config)
+    config supplies the family identifier, an absolute model path, and the
+    calculator parameters. CUDA is required; NEP also requires gpumd on PATH.
+    """
+    from temper.mlff.pipeline.cuda_utils import torch_device, require_cuda
+
+    family = config["calculator"]["identifier"]
+    parameters = dict(config["calculator"].get("parameters", {}))
+    model = config["model"]
+    if family in {"dpa4", "dpa4c"}:
+        os.environ["DEVICE"] = torch_device()
+        from deepmd.calculator import DP
+        return DP(model=model, **parameters)
+    if family == "mace":
+        from mace.calculators import MACECalculator
+        parameters["device"] = torch_device()
+        return MACECalculator(model_paths=[model], **parameters)
+    if family == "mattersim":
+        from mattersim.forcefield import MatterSimCalculator
+        parameters["device"] = torch_device()
+        return MatterSimCalculator(load_path=model, **parameters)
+    if family == "sevennet":
+        from sevenn.calculator import SevenNetCalculator
+        parameters["device"] = torch_device()
+        return SevenNetCalculator(model=model, **parameters)
+    if family == "nep89":
+        require_cuda()
+        if shutil.which("gpumd") is None:
+            raise RuntimeError("NEP evaluation requires the gpumd executable.")
+        from calorine.calculators import GPUNEP
+        return GPUNEP(model, **parameters)
+    raise ValueError(f"Unsupported MLFF type {family!r}.")
 
 
-def run(config_path: str | Path) -> None:
+def run_test(config_path: str | Path, *, bundle_root: str | Path) -> None:
     """Evaluate every configured dataset and write standardized predictions.
 
     Parameters
     ----------
     config_path : str or pathlib.Path
-        Version-2 test configuration inside a written submit directory.
+        Test configuration file, normally testing_inputs/test_config.json.
+    bundle_root : str or pathlib.Path
+        Directory containing bundle.json. Every path recorded in the test
+        configuration is resolved from here, regardless of where the
+        configuration itself is stored or the process's working directory.
 
     Raises
     ------
@@ -208,8 +242,7 @@ def run(config_path: str | Path) -> None:
     config = json.loads(config_file.read_text(encoding="utf-8"))
     if config.get("schema_version") != 2:
         raise ValueError("Unsupported test_config schema_version.")
-    bundle_root = config_file.parent
-
+    bundle_root = Path(bundle_root).expanduser().resolve()
     calculator_config = {**config, "model": str(_bundle_path(bundle_root, config["model"], label="model"))}
     calculator = build_calculator(calculator_config)
     package_versions = _installed_versions(config.get("package_requirements", []))

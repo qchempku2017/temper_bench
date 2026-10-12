@@ -8,7 +8,9 @@ import sys
 import pytest
 from ruamel.yaml import YAML
 
-from temper.mlff import MACESpecBuilder, MLFFTrainBundle, mlff_spec_builder_factory
+from temper.mlff.spec_builders import MACESpecBuilder
+from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+from temper.mlff.spec_builders import mlff_spec_builder_factory
 from temper.mlff.bundle_writers import write_submit_folder
 from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
 from temper.mlff.bundle_writers.base import MLFFBundleWriter
@@ -41,7 +43,7 @@ def test_writer_registry_and_abstract_contract():
     for key in ("dpa4", "dpa4c", "mace", "mattersim", "sevennet", "nep89"):
         assert mlff_spec_builder_factory(key).mlff_type == key
         writer = mlff_adapter_factory(key)
-        assert writer.mlff_type == key
+        assert "mlff_type" not in writer.__dict__
         assert not inspect.isabstract(writer)
 
 
@@ -77,15 +79,15 @@ def test_sevennet_resolves_architecture_from_checkpoint(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "sevenn.util", native)
     config = {
         "model": {"train_shift_scale": False, "train_denominator": False},
-        "train": {"continue": {"checkpoint": "models/sevennet.pth"}, "epoch": 7},
-        "data": {"load_trainset_path": ["datasets/train.extxyz"]},
+        "train": {"continue": {"checkpoint": "pretrained_models/sevennet.pth"}, "epoch": 7},
+        "data": {"load_trainset_path": ["training_inputs/train.extxyz"]},
     }
     source = tmp_path / "input.yaml"
     output = tmp_path / "resolved.yaml"
     YAML().dump(config, source)
     for architecture in architectures:
         prepare_config(source, output, bundle_root=tmp_path)
-        assert calls[-1] == str(tmp_path / "models/sevennet.pth")
+        assert calls[-1] == str(tmp_path / "pretrained_models/sevennet.pth")
         resolved = YAML(typ="safe").load(output)
         assert resolved["model"] == {**architecture, **config["model"]}
         assert resolved["train"] == config["train"]
@@ -124,13 +126,13 @@ def test_writers_preserve_recipe_overrides(
     spec = mlff_spec_factory(family, training_parameters=overrides)
     before = deepcopy(spec.model_dump(mode="json"))
     bundle = MLFFTrainBundle(training_unit=finetune_training_unit, mlff_spec=spec)
-    target = write_prepared(write_submit_folder(bundle, tmp_path / family))
+    target = write_prepared(write_submit_folder(bundle, tmp_path / family)[0])
     script = training_script(target)
     assert "set -euo pipefail" in script
     assert "MLFF_DEVICE" not in script
     assert spec.model_dump(mode="json") == before
     if family in {"dpa4", "dpa4c"}:
-        config = json.loads((target / "training/input.json").read_text())
+        config = json.loads((target / "training_inputs/input.json").read_text())
         flattened = {**config["training"], "learning_rate": config["learning_rate"]}
         assert all(flattened[key] == value for key, value in overrides.items())
         assert config["training"]["optimizer"] == {
@@ -140,21 +142,21 @@ def test_writers_preserve_recipe_overrides(
         assert config["training"]["validation_data"]["batch_size"] == "auto:128"
         assert config["loss"]["loss_func"] == "mae"
         assert config["loss"]["f_use_norm"] is True
-        assert config["training"]["save_ckpt"] == "training/deepmd/model.ckpt"
-        assert "cp training/deepmd/model.ckpt.pt artifacts/model.ckpt.pt" in script
+        assert config["training"]["save_ckpt"] == "training_outputs/model.ckpt"
+        assert "cp " not in script
     elif family == "mattersim":
         assert all(f"--{key} {value}" in script for key, value in overrides.items())
     elif family == "nep89":
-        config = (target / "training/torchnep/nep.in").read_text()
+        config = (target / "training_inputs/nep.in").read_text()
         assert all(f"{key} {value}" in config for key, value in overrides.items())
-        assert not (target / "training/run.sh").exists()
+        assert not (target / "training_inputs/run.sh").exists()
         assert not (target / "runtime/prepare_nep89.py").exists()
     else:
-        config = YAML(typ="safe").load((target / f"training/{family}.yaml").read_text())
+        config = YAML(typ="safe").load((target / f"training_inputs/{family}.yaml").read_text())
         if family == "sevennet":
             config = config["train"]
             assert config["continue"] == {
-                "checkpoint": "models/sevennet.pth",
+                "checkpoint": "pretrained_models/sevennet.pth",
                 "reset_optimizer": True, "reset_scheduler": True, "reset_epoch": True,
             }
             assert config["device"] == "cuda"
@@ -177,7 +179,7 @@ def test_stress_inspection_is_shared_and_invalidated(
     for family in ("mace", "mattersim"):
         write_prepared(MLFFTrainBundle(training_unit=unit, mlff_spec=mlff_spec_factory(family)).write_submit_folder(
             tmp_path / family
-        ))
+        )[0])
     assert len(reads) == 4
     assert unit.training_has_stress is True
     assert unit.test_has_stress == [True, True]
@@ -194,14 +196,14 @@ def test_written_bundle_uses_installed_runtime_and_result_schema(
     target = write_prepared(MLFFTrainBundle(
         training_unit=zeroshot_training_unit,
         mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder(tmp_path / "standalone"))
+    ).write_submit_folder(tmp_path / "standalone")[0])
     assert not (target / "runtime").exists()
     assert "temper_bench run_pipeline bundle.json" in (target / "run.sh").read_text()
     result = MLFFTestResult(
-        schema_version=1, calculator_identifier="mace", model="models/mace.model",
+        schema_version=1, calculator_identifier="mace", model="pretrained_models/mace.model",
         package_versions={"mace-torch": None}, dataset_id="test_000",
         source_domain="example", source_filename="test.extxyz",
-        submit_path="datasets/test_000.extxyz", number_of_frames=2, total_atoms=3,
+        submit_path="testing_inputs/test_000.extxyz", number_of_frames=2, total_atoms=3,
         requested_properties=["energy", "forces"],
         units={"energy": "eV", "forces": "eV/Angstrom", "stress": None},
         wall_time_seconds=0.1,
@@ -217,5 +219,5 @@ def write_prepared(target):
 
 
 def training_script(target):
-    path = target / "training/run.sh"
+    path = target / "training_inputs/run.sh"
     return (path if path.exists() else target / "run.sh").read_text()

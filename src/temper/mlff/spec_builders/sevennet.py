@@ -14,7 +14,7 @@ class SevenNetSpecBuilder(BaseSpecBuilder):
     implementations = (MLFFImplementation(name="sevenn", version="0.13.0"),)
     epoch_key = "epoch"
     training_defaults = {
-        "random_seed": 1,
+        "random_seed": 42,
         "epoch": 100,
         "loss": "Huber",
         "loss_param": {"delta": 0.01},

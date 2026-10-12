@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from copy import deepcopy
 from pathlib import PurePosixPath
 
@@ -11,10 +13,20 @@ from ase.data import chemical_symbols
 
 
 class _DeepMDAdapter(BaseMLFFAdapter):
-    calculator_module = "temper.mlff.pipeline.calculators.deepmd"
     backend_flag: str
+    freeze_options: tuple[str, ...] = ()
+    evaluation_model_filename = "evaluation.pt2"
+    training_output_filenames = {
+        "trained_model": "model.ckpt.pt",
+        "training_log": "training.log", "adapted_config": "train_adapted.json",
+        "learning_curve": "lcurve.out",
+    }
+    training_input_filenames = {
+        "script": "run.sh", "config": "input.json",
+        "converted_train": "data/train", "converted_validation": "data/validation",
+    }
 
-    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+    def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return native inputs with all 118 elements in atomic-number order."""
         training = deepcopy(self.spec.training_parameters)
         config = {
@@ -26,20 +38,21 @@ class _DeepMDAdapter(BaseMLFFAdapter):
             config["loss"]["start_pref_v"] = 0.0
             config["loss"]["limit_pref_v"] = 0.0
         training["training_data"]["systems"] = [
-            f"{self.files.training_dir}/data/train"
+            self.input_path("converted_train")
         ]
         if self.training_unit.val_set is not None:
             training["validation_data"]["systems"] = [
-                f"{self.files.training_dir}/data/validation"
+                self.input_path("converted_validation")
             ]
         else:
             training.pop("validation_data", None)
         # DeepMD appends .pt to save_ckpt; freeze takes the resulting filename.
-        training["save_ckpt"] = f"{self.files.training_dir}/deepmd/model.ckpt"
+        training["save_ckpt"] = str(PurePosixPath(self.trained_model_path).with_suffix(""))
+        training["disp_file"] = self.output_path("learning_curve")
         config["training"] = training
 
         return {
-            f"{self.files.training_dir}/input.json": (
+            self.input_path("config"): (
                 json.dumps(config, indent=2, sort_keys=True) + "\n"
             )
         }
@@ -48,23 +61,20 @@ class _DeepMDAdapter(BaseMLFFAdapter):
         """Convert packaged train/validation data before native training starts."""
         from temper.mlff.pipeline.data_preparation.deepmd import prepare_dataset
 
-        for filename, name in (
-            (self.training_unit.train_set, "train"),
-            (self.training_unit.val_set, "validation"),
-        ):
-            if filename is not None:
+        for name in ("train", "validation"):
+            if name in self.files.training_input_files:
                 prepare_dataset(
-                    self.root / self.dataset_path(filename),
-                    self.root / self.files.training_dir / "data" / name,
+                    self.root / self.input_path(name),
+                    self.root / self.input_path("converted_" + name),
                 )
 
-    def training_lines(self, training_stress: bool) -> tuple[str, ...]:
-        """Return CUDA training, freezing and portable-checkpoint copy commands."""
+    def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
+        """Train on CUDA and write portable weights to the recorded output."""
         del training_stress
         lines = ["export DEVICE=cuda"]
         lines.append(
             command(
-                "mkdir", "-p", f"{self.files.training_dir}/deepmd"
+                "mkdir", "-p", str(PurePosixPath(self.trained_model_path).parent)
             )
         )
         lines.append(
@@ -72,57 +82,54 @@ class _DeepMDAdapter(BaseMLFFAdapter):
                 "dp",
                 self.backend_flag,
                 "train",
-                f"{self.files.training_dir}/input.json",
+                self.input_path("config"),
                 "--finetune",
-                self.artifact_path("model"),
+                self.files.pretrained_model,
                 "--use-pretrain-script",
                 "--output",
-                f"{self.files.outputs_dir}/train_adapted.json",
+                self.output_path("adapted_config"),
             )
         )
+        return tuple(lines)
+
+    def prepare_evaluation(self) -> None:
+        """Freeze fine-tuned portable weights on the evaluation host only."""
+        if self.bundle.unit_type != "finetune":
+            return
         output_without_suffix = str(
-            PurePosixPath(self.trained_model_path).with_suffix("")
+            PurePosixPath(self.files.evaluation_model).with_suffix("")
         )
         freeze = [
             "dp",
             self.backend_flag,
             "freeze",
             "-c",
-            f"{self.files.training_dir}/deepmd/model.ckpt.pt",
+            self.trained_model_path,
             "-o",
             output_without_suffix,
+            *self.freeze_options,
         ]
-        if self.mlff_type == "dpa4c":
-            freeze.extend(("--lower-kind", "graph"))
-        lines.append(command(*freeze))
-        lines.append(
-            command(
-                "cp",
-                f"{self.files.training_dir}/deepmd/model.ckpt.pt",
-                f"{self.files.artifacts_dir}/model.ckpt.pt",
+        with (self.root / self.output_path("training_log")).open(
+            "a", encoding="utf-8"
+        ) as log:
+            subprocess.run(
+                freeze, cwd=self.root, env={**os.environ, "DEVICE": "cuda"},
+                stdout=log, stderr=subprocess.STDOUT, check=True,
             )
-        )
-        return tuple(lines)
 
 
 @BaseMLFFAdapter.register(name="dpa4")
 class DPA4Adapter(_DeepMDAdapter):
     """Prepare DPA-4 train-and-test bundles."""
 
-    mlff_type = "dpa4"
     backend_flag = "--pt"
-    model_filenames = {"model": "dpa4.pt"}
-    trained_model_filename = "dpa4.pt2"
+    pretrained_model_filename = "dpa4.pt"
 
 
 @BaseMLFFAdapter.register(name="dpa4c")
 class DPA4CAdapter(_DeepMDAdapter):
     """Prepare DPA-4C train-and-test bundles."""
 
-    mlff_type = "dpa4c"
     backend_flag = "--pt-expt"
-    model_filenames = {"model": "dpa4c.pt"}
-    trained_model_filename = "dpa4c.pt2"
-
-
-__all__ = ["DPA4Adapter", "DPA4CAdapter"]
+    pretrained_model_filename = "dpa4c.pt"
+    freeze_options = ("--lower-kind", "graph")

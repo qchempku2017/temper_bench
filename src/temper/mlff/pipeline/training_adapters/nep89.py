@@ -120,25 +120,22 @@ def _parameter_line(key: str, value: str | int | float | bool) -> str:
 class NEP89Adapter(BaseMLFFAdapter):
     """Prepare TorchNEP 1.0.2 and calorine 3.5 bundles."""
 
-    mlff_type = "nep89"
-    calculator_module = "temper.mlff.pipeline.calculators.nep89"
-    model_filenames = {"model": "nep89.txt"}
-    trained_model_filename = "finetuned_nep89.txt"
-
-    @property
-    def work_directory(self) -> str:
-        """Return the TorchNEP working directory within the submit folder."""
-        return f"{self.files.training_dir}/torchnep"
+    pretrained_model_filename = "nep89.txt"
+    training_input_filenames = {"config": "nep.in"}
+    training_output_filenames = {
+        "trained_model": "finetuned_nep89.txt", "training_log": "training.log",
+        "native_outputs": "torchnep",
+    }
 
     def _check_chemical_symbols(self, model_symbols: set[str]) -> None:
         """Require periodic data whose species are covered by the pretrained model."""
         assert self.training_unit.train_set is not None
-        filenames = [self.training_unit.train_set]
+        filenames = [self.input_path("train")]
         if self.training_unit.val_set is not None:
-            filenames.append(self.training_unit.val_set)
+            filenames.append(self.input_path("validation"))
         symbols: set[str] = set()
         for filename in filenames:
-            source = self.root / self.dataset_path(filename)
+            source = self.root / filename
             for frame_index, frame in enumerate(iter_extxyz_metadata(source, read_symbols=True)):
                 if not frame.fully_periodic:
                     raise ValueError(
@@ -154,7 +151,7 @@ class NEP89Adapter(BaseMLFFAdapter):
                 f"model: {missing!r}."
             )
 
-    def generated_training_files(self, training_stress: bool) -> dict[str, str]:
+    def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return nep.in with checkpoint architecture and recipe controls.
 
         The pretrained header determines species and network dimensions.
@@ -163,21 +160,23 @@ class NEP89Adapter(BaseMLFFAdapter):
         """
         if self.training_unit.val_set is None:
             raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
-        model_path = self.root / self.artifact_path("model")
+        model_path = self.root / self.files.pretrained_model
         architecture, model_symbols = _nep_architecture(model_path)
 
         self._check_chemical_symbols(model_symbols)
 
         parameters = dict(self.spec.training_parameters or {})
+        # run_seed belongs to train_nep's Python API, not the nep.in grammar.
+        parameters.pop("run_seed", None)
         if not training_stress:
             parameters["lambda_v"] = 0.0
             parameters["stage2_lambda_v"] = 0.0
         lines = architecture + [
             _parameter_line(key, value) for key, value in parameters.items()
         ]
-        return {f"{self.work_directory}/nep.in": "\n".join(lines) + "\n"}
+        return {self.input_path("config"): "\n".join(lines) + "\n"}
 
-    def training_lines(self, training_stress: bool) -> tuple[str, ...]:
+    def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
         """Return no shell commands: TorchNEP is called through its Python API."""
         return ()
 
@@ -188,20 +187,20 @@ class NEP89Adapter(BaseMLFFAdapter):
         None after copying nep_best.txt to the bundle's trained-model path.
         Backend exceptions propagate to stop the pipeline before evaluation.
         """
-        from temper.mlff.pipeline.train_nep89 import run
+        from torchnep import train_nep
 
-        output = self.root / self.work_directory / "output"
-        log_path = self.root / self.files.outputs_dir / "training.log"
+        output = self.root / self.output_path("native_outputs")
+        log_path = self.root / self.output_path("training_log")
         with log_path.open("w", encoding="utf-8") as log:
             with redirect_stdout(log), redirect_stderr(log):
-                run(
-                    config=str(self.root / self.work_directory / "nep.in"),
-                    train=str(self.root / self.dataset_path(self.training_unit.train_set)),
-                    validation=str(self.root / self.dataset_path(self.training_unit.val_set)),
-                    model=str(self.root / self.artifact_path("model")),
-                    output_directory=str(output),
+                train_nep(
+                    str(self.root / self.input_path("config")),
+                    str(self.root / self.input_path("train")),
+                    valid_file=str(self.root / self.input_path("validation")),
+                    finetune_from=str(self.root / self.files.pretrained_model),
+                    output_dir=str(output),
+                    device="cuda", restart=False, recompute_q_scaler=False,
+                    slim_types=True,
+                    run_seed=(self.spec.training_parameters or {}).get("run_seed", 42),
                 )
         shutil.copy2(output / "nep_best.txt", self.root / self.trained_model_path)
-
-
-__all__ = ["NEP89Adapter"]

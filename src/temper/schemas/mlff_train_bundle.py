@@ -7,14 +7,11 @@ from pathlib import Path
 from typing import Any, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from temper._version import __version__
 
 from temper.schemas.base import ManagedIdentityModel, MSONableModel
 from temper.schemas.utils import validate_submit_relative_path
-from temper.utils.defaults import (
-    DEFAULT_MLFF_ARTIFACTS_DIR, DEFAULT_MLFF_OUTPUTS_DIR, DEFAULT_MLFF_TRAINING_DIR,
-)
 from temper.schemas.mlff_spec import MLFFSpec
 from temper.schemas.train_unit import TrainingUnit
 
@@ -36,54 +33,77 @@ def _nested_identity(value: Any) -> str:
 
 
 class MLFFBundleFiles(MSONableModel):
-    """Portable input mapping and output directories, resolved by the writer.
+    """Record where a packaged experiment reads and writes its files.
 
-    Dataset keys retain the original TrainingUnit filenames. All values are
-    relative to bundle.json; local source paths remain provenance only.
+    Every path is relative to the directory containing bundle.json, including
+    paths to directories. These are planned locations: packaging copies input
+    datasets and pretrained weights, while execution creates the other files.
+    A recorded output therefore need not exist yet.
 
     Attributes
     ----------
-    datasets : dict[str, str]
-        Original dataset filenames mapped to copied paths inside the bundle.
-    models : dict[str, str]
-        Pretrained artifact keys, such as ``model``, mapped to copied paths.
+    pretrained_model : str
+        Copied pretrained weights. Fine-tuning starts from this file; zero-shot
+        evaluation uses it directly. Execution does not modify it.
+    training_input_files : dict[str, str]
+        Training inputs named by purpose: train, optional validation, config,
+        script, and any backend-specific converted datasets. Empty for zero-shot.
+    training_output_files : dict[str, str]
+        Training outputs named by purpose, including trained_model and
+        training_log. Other entries describe backend configs, checkpoints,
+        metrics, or directories containing them. Empty for zero-shot.
+    test_input_files : dict[str, str]
+        Test datasets keyed as test_000, test_001, and so on in TrainingUnit
+        order, plus config for the generated test_config.json.
+    test_output_files : dict[str, str]
+        Prediction arrays and metadata keyed as test_000_predictions and
+        test_000_metadata, plus summary for the combined test summary.
+    evaluation_model : str or None
+        Temporary export made for evaluation, such as a frozen DeepMD model.
+        The runner removes it after evaluation. None means evaluation can use
+        the pretrained or fine-tuned model directly.
     training_stress : bool or None
-        Whether train/validation data have stress labels; None for zero-shot.
+        Whether training and validation data have stress labels. None for zero-shot.
     test_stress : list[bool]
         Stress availability in the same order as TrainingUnit.test_sets.
-    trained_model_filename : str
-        Backend's trained output filename, relative to artifacts_dir.
-    training_dir : str
-        Directory for native training configs and working files.
-    artifacts_dir : str
-        Directory for trained models and retained checkpoints.
-    outputs_dir : str
-        Directory for logs, prediction arrays, and result metadata.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    datasets: dict[str, str]
-    models: dict[str, str]
+    pretrained_model: str
+    training_input_files: dict[str, str] = Field(default_factory=dict)
+    training_output_files: dict[str, str] = Field(default_factory=dict)
+    test_input_files: dict[str, str]
+    test_output_files: dict[str, str]
+    evaluation_model: str | None = None
     training_stress: bool | None
     test_stress: list[bool]
-    trained_model_filename: str
-    training_dir: str = DEFAULT_MLFF_TRAINING_DIR
-    artifacts_dir: str = DEFAULT_MLFF_ARTIFACTS_DIR
-    outputs_dir: str = DEFAULT_MLFF_OUTPUTS_DIR
 
-    @field_validator("datasets", "models")
+    @field_validator("training_input_files", "training_output_files", "test_input_files", "test_output_files")
     @classmethod
     def validate_paths(cls, value: dict[str, str]) -> dict[str, str]:
         for path in value.values():
-            validate_submit_relative_path(path, label="bundle input")
+            validate_submit_relative_path(path, label="bundle file")
         return value
 
-    @field_validator("training_dir", "artifacts_dir", "outputs_dir", "trained_model_filename")
+    @field_validator("pretrained_model", "evaluation_model")
     @classmethod
-    def validate_directory(cls, value: str) -> str:
-        validate_submit_relative_path(value, label="bundle directory")
+    def validate_model_path(cls, value: str | None) -> str | None:
+        if value is not None:
+            validate_submit_relative_path(value, label="bundle model")
         return value
+
+    @model_validator(mode="after")
+    def separate_temporary_model(self) -> MLFFBundleFiles:
+        """Prevent evaluation cleanup from deleting an input or training result."""
+        permanent_paths = {
+            self.pretrained_model, *self.training_input_files.values(),
+            *self.training_output_files.values(), *self.test_input_files.values(),
+            *self.test_output_files.values(),
+        }
+        if self.evaluation_model in permanent_paths:
+            raise ValueError("The temporary evaluation model must have its own path.")
+        return self
 
 
 class MLFFTrainBundle(ManagedIdentityModel):
@@ -102,14 +122,17 @@ class MLFFTrainBundle(ManagedIdentityModel):
         Model, implementation, training, and testing recipe.
     mlff_train_bundle_id : UUID or None
         Stored deterministic identity derived from the two nested identities.
-    schema_version : Literal[1]
+    schema_version : Literal[2]
         Bundle format version used when loading the serialized record.
     temper_version : str
         TEMPER release that wrote the bundle, retained for provenance.
         The runtime warns if its release differs.
     files : MLFFBundleFiles or None
-        Packaged paths and label availability. The writer populates this on
-        the serialized copy; a newly constructed local bundle has None.
+        Locations of copied datasets and pretrained weights, plus planned training
+        and testing files. Every path is relative to the bundle directory.
+        A newly constructed local bundle has None, and therefore
+        when encountering a None value, the runtime cannot perform
+        fine-tuning or evaluation.
     unit_type : Literal["finetune", "zeroshot"]
         Read-only mode derived from training_unit.
     """
@@ -132,7 +155,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
     training_unit: TrainingUnit
     mlff_spec: MLFFSpec
     mlff_train_bundle_id: UUID | None = None
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     temper_version: str = __version__
     files: MLFFBundleFiles | None = None
 
@@ -156,7 +179,8 @@ class MLFFTrainBundle(ManagedIdentityModel):
         dict[str, Any]
             Calculator settings, selected model, per-dataset properties and
             output paths, and package requirements. Fine-tuning evaluates the
-            trained model; zero-shot evaluates the pretrained model.
+            trained model (or its temporary host-specific export); zero-shot
+            evaluates the pretrained model.
 
         Raises
         ------
@@ -166,9 +190,9 @@ class MLFFTrainBundle(ManagedIdentityModel):
         if self.files is None:
             raise ValueError('Bundle has not been packaged; call write_submit_folder first.')
         model_path = (
-            f"{self.files.artifacts_dir}/{self.files.trained_model_filename}"
+            self.files.evaluation_model or self.files.training_output_files["trained_model"]
             if self.unit_type == "finetune"
-            else self.files.models["model"]
+            else self.files.pretrained_model
         )
         datasets = []
         for index, (filename, has_stress) in enumerate(
@@ -181,12 +205,12 @@ class MLFFTrainBundle(ManagedIdentityModel):
             datasets.append(
                 {
                     "id": stem,
-                    "path": self.files.datasets[filename],
+                    "path": self.files.test_input_files[stem],
                     "source_domain": self.training_unit.domain,
                     "source_filename": filename,
                     "properties": properties,
-                    "output": f"{self.files.outputs_dir}/{stem}.npz",
-                    "metadata_output": f"{self.files.outputs_dir}/{stem}.json",
+                    "output": self.files.test_output_files[stem + "_predictions"],
+                    "metadata_output": self.files.test_output_files[stem + "_metadata"],
                 }
             )
         return {
@@ -197,7 +221,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
             },
             "model": model_path,
             "test_datasets": datasets,
-            "summary_output": f"{self.files.outputs_dir}/test_summary.json",
+            "summary_output": self.files.test_output_files["summary"],
             "package_requirements": [
                 {"name": item.name, "version": item.version}
                 for item in self.mlff_spec.implementations
@@ -205,7 +229,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
             ],
         }
 
-    def write_submit_folder(self, target_dir: str | Path | None = None) -> Path:
+    def write_submit_folder(self, target_dir: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
         """Copy inputs and a portable bundle.json into a new submit directory.
 
         Parameters
@@ -216,8 +240,9 @@ class MLFFTrainBundle(ManagedIdentityModel):
 
         Returns
         -------
-        pathlib.Path
-            Created submit directory containing ordinary copied files.
+        tuple[pathlib.Path, MLFFTrainBundle]
+            Created directory and independent packaged record matching bundle.json.
+            The original bundle is unchanged.
 
         Raises
         ------

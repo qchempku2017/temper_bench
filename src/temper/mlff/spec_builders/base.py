@@ -28,10 +28,11 @@ class BaseSpecBuilder(ABC):
 
     Attributes
     ----------
-    mlff_type : str
-        Family identifier stored in the generated recipe.
     model_name, model_version : str
         Pretrained model name and release identifier.
+    model_filename : str
+        Pretrained file name, relative to pretrained_model_dir.
+        This points to pretrained model file on local submission machine.
     implementations : tuple[MLFFImplementation, ...]
         Software required for evaluation.
     training_implementations : tuple[MLFFImplementation, ...]
@@ -62,15 +63,15 @@ class BaseSpecBuilder(ABC):
         """Family key; concrete builders supply this as a class attribute."""
 
     @classmethod
-    def register(cls, name: str, alias: str | None = None):
+    def register(cls, name: str, alias: str | list[str] | None = None):
         """Return a decorator that registers a builder class.
 
         Parameters
         ----------
         name : str
             Primary key accepted by mlff_spec_builder_factory.
-        alias : str or None, optional
-            Additional key referring to the same builder class.
+        alias : str, list[str], or None, optional
+            Additional key or keys referring to the same builder class.
 
         Returns
         -------
@@ -80,7 +81,8 @@ class BaseSpecBuilder(ABC):
         def decorate(subclass):
             cls.registry[name] = subclass
             if alias is not None:
-                cls.registry[alias] = subclass
+                for key in ([alias] if isinstance(alias, str) else alias):
+                    cls.registry[key] = subclass
             return subclass
 
         return decorate
@@ -109,6 +111,8 @@ class BaseSpecBuilder(ABC):
             raise ValueError(f"{self.patience_key!r} is managed by TEMPER.")
         parameters = deepcopy(self.training_defaults)
         parameters.update(deepcopy(overrides))
+
+        # Effectively disable early stopping by setting patience to epochs + 1.
         epochs = parameters[self.epoch_key]
         if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs <= 0:
             raise ValueError(f"{self.epoch_key!r} must be a positive integer.")

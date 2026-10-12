@@ -7,9 +7,9 @@ import sys
 
 import pytest
 
-from temper.mlff import MLFFTrainBundle
+from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.mlff.pipeline import runner
-from temper.mlff.pipeline.calculators import mace
+from temper.mlff.pipeline import evaluate_mlff
 from temper.mlff.pipeline.training_adapters.mace import MACEAdapter
 from temper.mlff.pipeline.training_adapters import base as adapter_base
 from test_mlff_runtime import FakeCalculator
@@ -22,8 +22,8 @@ def test_prepare_after_relocation_without_original_inputs(
     spec = mlff_spec_factory(family)
     bundle = MLFFTrainBundle(training_unit=finetune_training_unit, mlff_spec=spec)
     before = bundle.model_dump(mode="json")
-    source = bundle.write_submit_folder(tmp_path / "local")
-    assert set(p.name for p in source.iterdir()) == {"bundle.json", "run.sh", "datasets", "models"}
+    source = bundle.write_submit_folder(tmp_path / "local")[0]
+    assert set(p.name for p in source.iterdir()) == {"bundle.json", "run.sh", "training_inputs", "testing_inputs", "pretrained_models"}
     assert bundle.model_dump(mode="json") == before
     remote = tmp_path / "remote"
     source.rename(remote)
@@ -34,8 +34,8 @@ def test_prepare_after_relocation_without_original_inputs(
     adapter = runner.prepare_bundle(remote / "bundle.json")
     assert adapter.bundle.mlff_train_bundle_id == bundle.mlff_train_bundle_id
     assert adapter.bundle.training_unit.training_unit_id == finetune_training_unit.training_unit_id
-    assert (remote / "training/run.sh").is_file() == (family != "nep89")
-    config = json.loads((remote / "test_config.json").read_text())
+    assert (remote / "training_inputs/run.sh").is_file() == (family != "nep89")
+    config = json.loads((remote / "testing_inputs/test_config.json").read_text())
     assert all((remote / item["path"]).is_file() for item in config["test_datasets"])
     assert not (remote / "runtime").exists()
 
@@ -47,18 +47,18 @@ def test_runner_trains_then_evaluates_from_another_directory(
 ):
     unit = finetune_training_unit if finetune else zeroshot_training_unit
     bundle = MLFFTrainBundle(training_unit=unit, mlff_spec=mlff_spec_factory("mace", with_training=finetune))
-    target = bundle.write_submit_folder(tmp_path / "job")
+    target = bundle.write_submit_folder(tmp_path / "job")[0]
     events = []
     monkeypatch.setattr(runner, "require_cuda", lambda: events.append("cuda"))
     monkeypatch.setattr(MACEAdapter, "prepare_training", lambda self: events.append("prepare"))
 
     def train(command, *, cwd, env, check):
         assert cwd == target
-        assert command == ["bash", "training/run.sh"]
+        assert command == ["bash", "training_inputs/run.sh"]
         assert env["PYTHON_BIN"] == sys.executable
         assert check
         events.append("train")
-        (target / "artifacts/finetuned_mace.model").write_bytes(b"trained")
+        (target / "training_outputs/finetuned_mace.model").write_bytes(b"trained")
 
     def calculator(config):
         model = Path(config["model"])
@@ -68,11 +68,11 @@ def test_runner_trains_then_evaluates_from_another_directory(
         return FakeCalculator()
 
     monkeypatch.setattr(adapter_base.subprocess, "run", train)
-    monkeypatch.setattr(mace, "build_calculator", calculator)
+    monkeypatch.setattr(evaluate_mlff, "build_calculator", calculator)
     monkeypatch.chdir(tmp_path)
     runner.run_pipeline(target / "bundle.json")
     assert events == (["cuda", "prepare", "train", "evaluate"] if finetune else ["cuda", "evaluate"])
-    summary = json.loads((target / "outputs/test_summary.json").read_text())
+    summary = json.loads((target / "testing_outputs/summary.json").read_text())
     assert len(summary["datasets"]) == len(unit.test_sets)
     assert "temper-bench" in summary["package_versions"]
 
@@ -80,15 +80,14 @@ def test_runner_trains_then_evaluates_from_another_directory(
 def test_runtime_uses_serialized_directories_and_checks_version(
     tmp_path, finetune_training_unit, mlff_spec_factory,
 ):
-    path = MLFFTrainBundle(training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace")).write_submit_folder(tmp_path / "job") / "bundle.json"
+    path = MLFFTrainBundle(training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace")).write_submit_folder(tmp_path / "job")[0] / "bundle.json"
     bundle = MLFFTrainBundle.model_validate_json(path.read_text())
-    bundle.files.training_dir = "work/native"
-    bundle.files.outputs_dir = "results"
-    bundle.files.artifacts_dir = "results/models"
+    bundle.files.training_input_files["config"] = "work/native/mace.yaml"
+    bundle.files.training_output_files["trained_model"] = "results/models/finetuned_mace.model"
     path.write_text(bundle.model_dump_json())
     runner.prepare_bundle(path)
     assert (path.parent / "work/native/mace.yaml").exists()
-    assert "results/models/finetuned_mace.model" in (path.parent / "test_config.json").read_text()
+    assert "results/models/finetuned_mace.model" in (path.parent / "testing_inputs/test_config.json").read_text()
     bundle.temper_version = "0.0.0"
     path.write_text(bundle.model_dump_json())
     with pytest.warns(RuntimeWarning, match="written by temper-bench 0.0.0"):
@@ -122,7 +121,7 @@ def test_backend_preparation_calls_functions_with_packaged_paths(
 
     target = MLFFTrainBundle(
         training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory(family),
-    ).write_submit_folder(tmp_path / "job")
+    ).write_submit_folder(tmp_path / "job")[0]
     adapter = runner.prepare_bundle(target / "bundle.json")
     calls = []
     if family == "sevennet":
@@ -132,11 +131,11 @@ def test_backend_preparation_calls_functions_with_packaged_paths(
     monkeypatch.chdir(tmp_path)
     adapter.prepare_training()
     if family == "sevennet":
-        assert calls == [(target / "training/sevennet.yaml", target / "training/sevennet_resolved.yaml", {"bundle_root": target})]
+        assert calls == [(target / "training_inputs/sevennet.yaml", target / "training_outputs/sevennet_resolved.yaml", {"bundle_root": target})]
     else:
         assert calls == [
-            (target / "datasets/train.extxyz", target / "training/data/train"),
-            (target / "datasets/validation.extxyz", target / "training/data/validation"),
+            (target / "training_inputs/train.extxyz", target / "training_inputs/data/train"),
+            (target / "training_inputs/validation.extxyz", target / "training_inputs/data/validation"),
         ]
 
 
@@ -162,12 +161,12 @@ def test_training_failure_does_not_start_testing(
 ):
     target = MLFFTrainBundle(
         training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
-    ).write_submit_folder(tmp_path / "job")
+    ).write_submit_folder(tmp_path / "job")[0]
     monkeypatch.setattr(runner, "require_cuda", lambda: None)
     def fail(*args, **kwargs):
         raise subprocess.CalledProcessError(1, args[0])
     monkeypatch.setattr(adapter_base.subprocess, "run", fail)
-    monkeypatch.setattr(runner.run_test, "run", lambda path: pytest.fail("Testing ran after failed training"))
+    monkeypatch.setattr(runner, "run_test", lambda path: pytest.fail("Testing ran after failed training"))
     with pytest.raises(subprocess.CalledProcessError):
         runner.run_pipeline(target / "bundle.json")
 
@@ -177,34 +176,43 @@ def test_bundle_owns_test_configuration_after_serialization(
 ):
     target = MLFFTrainBundle(
         training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
-    ).write_submit_folder(tmp_path / "job")
+    ).write_submit_folder(tmp_path / "job")[0]
     bundle = MLFFTrainBundle.model_validate_json((target / "bundle.json").read_text())
     config = bundle.test_config()
     # Changing an installed adapter's default cannot change a packaged model path.
-    monkeypatch.setattr(MACEAdapter, "trained_model_filename", "another.model")
+    monkeypatch.setattr(MACEAdapter, "training_output_filenames", {"trained_model": "another.model"})
     adapter = runner.prepare_bundle(target / "bundle.json")
-    assert config["model"] == adapter.trained_model_path == "artifacts/finetuned_mace.model"
-    assert config == json.loads((target / "test_config.json").read_text())
+    assert config["model"] == adapter.trained_model_path == "training_outputs/finetuned_mace.model"
+    assert config == json.loads((target / "testing_inputs/test_config.json").read_text())
 
 
+@pytest.mark.parametrize("run_seed", [42, 23])
 def test_nep_training_is_a_function_call_before_evaluation(
-    tmp_path, finetune_training_unit, mlff_spec_factory, monkeypatch,
+    run_seed, tmp_path, finetune_training_unit, mlff_spec_factory, monkeypatch,
 ):
-    from temper.mlff.pipeline import train_nep89
-    from temper.mlff.pipeline.calculators import nep89
+    from types import ModuleType
+    native = ModuleType("torchnep")
+    monkeypatch.setitem(sys.modules, "torchnep", native)
 
     target = MLFFTrainBundle(
-        training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("nep89"),
-    ).write_submit_folder(tmp_path / "job")
+        training_unit=finetune_training_unit,
+        mlff_spec=mlff_spec_factory("nep89", training_parameters={"run_seed": run_seed}),
+    ).write_submit_folder(tmp_path / "job")[0]
     events = []
     monkeypatch.setattr(runner, "require_cuda", lambda: None)
-    def train(**kwargs):
+    def train(config, train, **kwargs):
         events.append("train")
-        assert kwargs["config"] == str(target / "training/torchnep/nep.in")
-        assert kwargs["train"] == str(target / "datasets/train.extxyz")
-        assert kwargs["validation"] == str(target / "datasets/validation.extxyz")
-        assert kwargs["model"] == str(target / "models/nep89.txt")
-        output = Path(kwargs["output_directory"])
+        assert config == str(target / "training_inputs/nep.in")
+        assert train == str(target / "training_inputs/train.extxyz")
+        assert kwargs["valid_file"] == str(target / "training_inputs/validation.extxyz")
+        assert kwargs["finetune_from"] == str(target / "pretrained_models/nep89.txt")
+        assert kwargs["device"] == "cuda"
+        assert kwargs["restart"] is False
+        assert kwargs["recompute_q_scaler"] is False
+        assert kwargs["slim_types"] is True
+        assert kwargs["run_seed"] == run_seed
+        assert "run_seed" not in Path(config).read_text()
+        output = Path(kwargs["output_dir"])
         output.mkdir(parents=True)
         (output / "nep_best.txt").write_bytes(b"trained")
         print("training completed")
@@ -212,13 +220,13 @@ def test_nep_training_is_a_function_call_before_evaluation(
         events.append("evaluate")
         assert Path(config["model"]).read_bytes() == b"trained"
         return FakeCalculator()
-    monkeypatch.setattr(train_nep89, "run", train)
-    monkeypatch.setattr(nep89, "build_calculator", calculator)
+    monkeypatch.setattr(native, "train_nep", train, raising=False)
+    monkeypatch.setattr(evaluate_mlff, "build_calculator", calculator)
     monkeypatch.chdir(tmp_path)
     runner.run_pipeline(target / "bundle.json")
     assert events == ["train", "evaluate"]
-    assert "training completed" in (target / "outputs/training.log").read_text()
-    assert not (target / "training/run.sh").exists()
+    assert "training completed" in (target / "training_outputs/training.log").read_text()
+    assert not (target / "training_inputs/run.sh").exists()
 
 
 def test_pipeline_contains_no_internal_script_entrypoints():

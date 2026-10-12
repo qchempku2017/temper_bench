@@ -12,14 +12,13 @@ from monty.serialization import dumpfn, loadfn
 from pydantic import ValidationError
 
 import temper.mlff as mlff
-from temper.mlff import (
-    DPA4CSpecBuilder,
-    DPA4SpecBuilder,
-    MACESpecBuilder,
-    MatterSimSpecBuilder,
-    NEP89SpecBuilder,
-    SevenNetSpecBuilder,
-)
+from temper.mlff.spec_builders import DPA4CSpecBuilder
+from temper.mlff.spec_builders import DPA4SpecBuilder
+from temper.mlff.spec_builders import MACESpecBuilder
+from temper.mlff.spec_builders import MatterSimSpecBuilder
+from temper.mlff.spec_builders import NEP89SpecBuilder
+from temper.mlff.spec_builders import SevenNetSpecBuilder
+from temper.mlff.spec_builders import mlff_spec_builder_factory
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
     MLFFImplementation,
@@ -32,11 +31,14 @@ from temper.schemas.utils import validate_submit_relative_path
 FAMILIES = ("dpa4", "dpa4c", "mattersim", "mace", "sevennet", "nep89")
 
 
-def test_only_six_concrete_builders_are_public() -> None:
+def test_mlff_root_does_not_reexport_builders_or_schemas() -> None:
     assert not hasattr(mlff, "ORBSpecBuilder")
     assert not hasattr(mlff, "MLFFType")
     assert not hasattr(mlff, "MLFFBundleLayout")
-    assert mlff.mlff_spec_builder_factory("mace") is MACESpecBuilder
+    assert not hasattr(mlff, "mlff_spec_builder_factory")
+    assert not hasattr(mlff, "MACESpecBuilder")
+    assert not hasattr(mlff, "MLFFTrainBundle")
+    assert mlff_spec_builder_factory("mace") is MACESpecBuilder
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -102,12 +104,12 @@ def test_mlff_directory_defaults_are_read_from_environment(monkeypatch) -> None:
 
     with monkeypatch.context() as environment:
         environment.setenv(
-            "DEFAULT_MLFF_DATASETS_DIR", "inputs/datasets"
+            "DEFAULT_MLFF_TESTING_INPUTS_DIR", "inputs/datasets"
         )
-        environment.setenv("DEFAULT_MLFF_OUTPUTS_DIR", "results")
+        environment.setenv("DEFAULT_MLFF_TESTING_OUTPUTS_DIR", "results")
         reloaded = importlib.reload(defaults)
-        assert reloaded.DEFAULT_MLFF_DATASETS_DIR == "inputs/datasets"
-        assert reloaded.DEFAULT_MLFF_OUTPUTS_DIR == "results"
+        assert reloaded.DEFAULT_MLFF_TESTING_INPUTS_DIR == "inputs/datasets"
+        assert reloaded.DEFAULT_MLFF_TESTING_OUTPUTS_DIR == "results"
     importlib.reload(defaults)
 
 
@@ -240,6 +242,7 @@ def test_nep_uses_torchnep_only_for_finetuning(mlff_spec_factory) -> None:
 
 def test_nep_defaults_match_torchnep_1_0_2(mlff_spec_factory) -> None:
     assert mlff_spec_factory("nep89").training_parameters == {
+        "run_seed": 42,
         "epoch": 100,
         "batch": 32,
         "lr": 0.01,

@@ -20,3 +20,9 @@ def mlff_adapter_factory(mlff_type: str) -> type[BaseMLFFAdapter]:
         return BaseMLFFAdapter.registry[mlff_type]
     except KeyError as error:
         raise ValueError(f"Unsupported MLFF type {mlff_type!r}.") from error
+
+
+__all__ = [
+    "BaseMLFFAdapter", "DPA4Adapter", "DPA4CAdapter", "MACEAdapter",
+    "MatterSimAdapter", "NEP89Adapter", "SevenNetAdapter", "mlff_adapter_factory",
+]
