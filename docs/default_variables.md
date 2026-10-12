@@ -34,23 +34,24 @@ Their same-named environment variables may replace the defaults:
 
 | Constant | Type | Default |
 | --- | --- | --- |
-| `DEFAULT_MLFF_DATASETS_DIR` | `str` | `datasets` |
-| `DEFAULT_MLFF_MODELS_DIR` | `str` | `models` |
-| `DEFAULT_MLFF_TRAINING_DIR` | `str` | `training` |
-| `DEFAULT_MLFF_ARTIFACTS_DIR` | `str` | `artifacts` |
-| `DEFAULT_MLFF_OUTPUTS_DIR` | `str` | `outputs` |
+| `DEFAULT_MLFF_MODELS_DIR` | `str` | `pretrained_models` |
+| `DEFAULT_MLFF_TRAINING_INPUTS_DIR` | `str` | `training_inputs` |
+| `DEFAULT_MLFF_TRAINING_OUTPUTS_DIR` | `str` | `training_outputs` |
+| `DEFAULT_MLFF_TESTING_INPUTS_DIR` | `str` | `testing_inputs` |
+| `DEFAULT_MLFF_TESTING_OUTPUTS_DIR` | `str` | `testing_outputs` |
 
 Submit-directory values must be non-empty, normalized relative POSIX paths.
 They may contain subdirectories, but cannot be absolute or drive-qualified,
 cannot contain backslashes, and cannot contain empty, dot, or parent segments.
-An invalid value raises `ValueError` during import. Only these directory names
-are configurable; filenames and indexed dataset/output templates are fixed.
+An invalid value raises `ValueError` during import. These variables set directory defaults during packaging. The writer records
+complete bundle-relative paths in bundle.files; adapters then use those paths
+for configuration, execution, and evaluation.
 
 For example, set a nested submit layout before starting Python:
 
 ~~~console
-set DEFAULT_MLFF_DATASETS_DIR=inputs/datasets
-set DEFAULT_MLFF_OUTPUTS_DIR=results
+set DEFAULT_MLFF_TESTING_INPUTS_DIR=inputs/tests
+set DEFAULT_MLFF_TESTING_OUTPUTS_DIR=results/tests
 ~~~
 
 On POSIX shells, use `export` instead of `set`.

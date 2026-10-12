@@ -181,6 +181,16 @@ An [`MLFFTrainBundle`](../src/temper/schemas/mlff_train_bundle.py) pairs exactly
 
 See [Local MLFF specifications and submit bundles](mlff-bundles.md) for the public construction API, identity rules, pinned integrations, fixed copy behavior, runtime contract, prediction format, and package-specific limitations.
 
+Packaging returns `(submit_directory, packaged_bundle)`. The second value matches
+`bundle.json` and leaves the original local bundle unchanged. Its populated
+`files` field describes the copied `pretrained_model`, `training_input_files`,
+`training_output_files`, `test_input_files`, `test_output_files`, and an optional
+temporary `evaluation_model`. Every path is relative to the bundle root, and an
+output's recorded location does not mean it already exists. The fine-tuned model
+is recorded as `training_output_files["trained_model"]`. DeepMD's temporary
+evaluation export is removed after evaluation. Bundle schema version 2 uses
+these fields; regenerate older bundles instead of reusing their old layout.
+
 ## Implemented scope versus roadmap
 
 The implemented Python API and split CLI cover metadata loading, grouping, repeatable splitting, QUESTS-backed selection, reconstruction, and `extxyz` export. The MLFF API additionally defines model recipes and materializes local folders containing native training instructions and standardized ASE evaluation scripts. Folder writing does not execute those scripts. Remote submission/orchestration, run records, result retrieval, and model-quality metrics are **not implemented** and remain in the [Roadmap](roadmap.md).

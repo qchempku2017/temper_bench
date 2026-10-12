@@ -20,7 +20,8 @@ Omitting the directory uses `DEFAULT_MLFF_PRETRAINED_MODELS_DIR`, whose default
 is `./pretrained_models`.
 
 ~~~python
-from temper.mlff import MACESpecBuilder, MLFFTrainBundle
+from temper.mlff.spec_builders import MACESpecBuilder
+from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 spec = MACESpecBuilder(
     # Optional; defaults to ./pretrained_models/mace.model.
@@ -33,7 +34,7 @@ spec = MACESpecBuilder(
 ).build()
 
 bundle = MLFFTrainBundle(training_unit=training_unit, mlff_spec=spec)
-submit_directory = bundle.write_submit_folder("submit/mace-run")
+submit_directory, packaged_bundle = bundle.write_submit_folder("submit/mace-run")
 ~~~
 
 All builders accept `pretrained_model_dir` and `model_filename`.
@@ -51,10 +52,11 @@ No JSON sidecar is required. Default filenames are:
 Source filenames can change without changing the fixed names in submit folders.
 Subclasses share `BaseSpecBuilder`; runtime adapters share `BaseMLFFAdapter`
 under `temper.mlff.pipeline.training_adapters`. Both have `register(name, alias=None)`
-decorators and factories (`mlff_spec_builder_factory`, `mlff_adapter_factory`).
+decorators (alias accepts one string or a list of strings) and factories (`mlff_spec_builder_factory`, `mlff_adapter_factory`).
 One generic `MLFFBundleWriter` packages all model families.
 The public `temper.mlff.bundle_writers.write_submit_folder(bundle, target_dir)`
-is also available through the bundle's method.
+is also available through the bundle's method. Both return `(directory, packaged_bundle)`;
+the returned record is independent of the source and matches `bundle.json`.
 
 Builders read and hash every file immediately. The resolved absolute source
 path is not part of MLFF identity, but each artifact key and SHA-256 digest is.
@@ -100,10 +102,13 @@ defaults, not independently verified release recommendations. The
 currently provides no recipe. Override the complete `learning_rate` section
 when a chosen release specifies another schedule.
 
-DeepMD writes its adapted input to `outputs/train_adapted.json` and retains
-both `artifacts/model.ckpt.pt` and the frozen `artifacts/dpa4.pt2` or
-`dpa4c.pt2`. `save_ckpt` is the prefix `model.ckpt`: DeepMD appends `.pt`.
-Refreeze the portable checkpoint on a different target machine.
+DeepMD writes its adapted configuration to `training_outputs/train_adapted.json`
+and its portable trained model to `training_outputs/model.ckpt.pt`. The frozen
+`training_outputs/evaluation.pt2` is temporary and recorded separately as
+`files.evaluation_model`. `save_ckpt` is the prefix `model.ckpt`: DeepMD appends
+`.pt`. The runner creates the export immediately before evaluation and removes
+it afterward, including when freezing or evaluation fails. On a different host,
+the portable checkpoint can be frozen again for that host.
 
 MACE follows [naive fine-tuning](https://mace-docs.readthedocs.io/en/latest/guide/finetuning.html#naive-fine-tuning):
 one head, estimated E0s, energy/force weights 10, learning rate 0.001, no weight
@@ -117,7 +122,7 @@ with fresh optimizer, scheduler and epoch counters. On the runner,
 `temper.mlff.pipeline.data_preparation.sevennet` uses SevenNet's
 [checkpoint YAML export](https://github.com/MDIL-SNU/SevenNet/blob/v0.13.0/sevenn/checkpoint.py)
 to obtain the model architecture, then applies the recipe's trainability
-settings. Native training reads `training/sevennet_resolved.yaml`.
+settings. Native training reads `training_outputs/sevennet_resolved.yaml`.
 The checkpoint supplies the architecture and weights, as in the
 [fine-tuning tutorial](https://github.com/MDIL-SNU/sevennet_tutorial/blob/main/notebooks/SevenNet_finetune_tutorial.ipynb).
 The [0.13.0 continuation implementation](https://github.com/MDIL-SNU/SevenNet/blob/v0.13.0/sevenn/scripts/processing_continue.py)
@@ -149,29 +154,54 @@ and their bundles. There are no legacy aliases. `LocalArtifactRef` now lives in
 
 `MLFFTrainBundle` retains the original `TrainingUnit`, `MLFFSpec`, and their
 deterministic bundle ID. Packaging adds `schema_version`, `temper_version`, and
-`files`: a bundle-relative dataset/model mapping, resolved stress availability,
-the trained-model filename, and training/artifact/output directories. Packaging does not change scientific
-identity or mutate the original local object. Original source paths are
-provenance; the runtime uses the packaged mapping exclusively. TrainingUnit
-loading validates metadata without accessing source files; local file access
-checks existence when needed.
+`files`: the copied pretrained model, training inputs and outputs, test inputs
+and outputs, and any temporary evaluation model. Every recorded path starts at
+the directory containing bundle.json. Packaging does not change scientific
+identity or mutate the original local object. Original source paths describe
+where inputs came from; the runtime uses the copied paths exclusively.
+TrainingUnit loading validates metadata without accessing source files; local
+file access checks existence when needed.
 
 ## Submit-directory contract
 
-`write_submit_folder()` copies ordinary files into a new directory. If omitted,
-the destination is a caller-owned temporary directory. The initial folder is:
+`write_submit_folder()` returns the new directory and a separate packaged
+bundle matching `bundle.json`. If no destination is supplied, it creates a
+temporary directory which the caller is responsible for removing.
+
+The default layout over the course of a fine-tuning run is:
 
 ~~~text
-submit/
-├── bundle.json
-├── run.sh
-├── datasets/
-│   ├── train.extxyz          # fine-tuning only
-│   ├── validation.extxyz     # when provided
-│   └── test_000.extxyz       # one per test dataset
-└── models/
-    └── <pretrained files>
+bundle/
+    bundle.json
+    run.sh
+    pretrained_models/
+        <pretrained model>
+    training_inputs/
+        train.extxyz
+        validation.extxyz       # optional
+        <native configuration>
+        run.sh                  # CLI backends only
+        data/                   # converted DeepMD datasets, when needed
+    training_outputs/
+        training.log
+        <fine-tuned model>
+        <adapted configuration, checkpoints, and other backend outputs>
+        evaluation.pt2          # temporary DeepMD export
+    testing_inputs/
+        test_000.extxyz         # one indexed dataset per test set
+        test_config.json
+    testing_outputs/
+        test_000.npz
+        test_000.json
+        summary.json
 ~~~
+
+Packaging initially writes only bundle.json, the root launcher, copied weights,
+and copied datasets. Preparation writes native configs, the training script,
+and test_config.json. Execution produces the remaining outputs. A populated
+`files` field describes planned locations, not a claim that every file exists.
+Zero-shot bundles have no training inputs or training outputs and evaluate the
+copied pretrained model directly.
 
 No Python modules or schema definitions are copied: the installed package owns
 both validation and execution. The folder may be moved to another host without
@@ -190,16 +220,16 @@ To inspect native files without starting training or requiring a GPU:
 temper_bench run_pipeline /path/to/submit/bundle.json --prepare-only
 ~~~
 
-Preparation writes native files and `training/run.sh` for CLI-based training, plus
-`test_config.json` for evaluation. These are derived outputs of `bundle.json`.
-TorchNEP training is called directly through Python and writes `outputs/training.log`;
+Preparation writes native files and `training_inputs/run.sh` for CLI-based training,
+plus `testing_inputs/test_config.json` for evaluation. These are derived outputs of `bundle.json`.
+TorchNEP training is called directly through Python and writes `training_outputs/training.log`;
 it does not generate a training script. Internal pipeline modules have no CLI
 entry points. Use `temper_bench run_pipeline` for execution or its `--prepare-only` option
 to inspect configs, and `temper.mlff.pipeline.runner.run_pipeline` from Python.
 Execution checks CUDA, calls backend preparation functions (DeepMD conversion or
 SevenNet checkpoint resolution), runs native training when requested, then evaluates
-the trained model (or pretrained model for zero-shot). Predictions and logs go
-under `outputs/`; trained models go under `artifacts/`. The runner records the
+the trained model (or pretrained model for zero-shot). Predictions go under
+`testing_outputs/`; training logs and fine-tuned models go under `training_outputs/`. The runner records the
 actual TEMPER version alongside backend package versions in result metadata.
 NEP architecture and data checks now run during runtime preparation.
 
@@ -207,8 +237,10 @@ Directory defaults are configurable through the environment variables in
 [Default variables](default_variables.md), captured when the folder is written.
 Remote environment defaults do not override the serialized layout.
 
-This format replaces the old copied-runtime folder contract. Regenerate old
-submit folders for the installed-runtime workflow. Format versions and TEMPER
+Bundle schema version 2 introduces this layout and replaces the previous file
+fields. Regenerate version-1 bundles with the writer; they are not silently
+interpreted as version 2. Experiment IDs do not change merely because their
+file layout changes. Format versions and TEMPER
 release versions are separate. A TEMPER release mismatch emits a warning and
 continues; an unsupported schema version still fails validation.
 
@@ -248,13 +280,13 @@ test dataset:
 Adjacent JSON files serialize `temper.schemas.MLFFTestResult`, recording source
 metadata, package versions, units, array counts and wall time. Use
 `MLFFTestResult.from_dict(json.loads(path.read_text()))` to load a result.
-The installed package supplies the result schema. `outputs/test_summary.json` lists all evaluated datasets.
+The installed package supplies the result schema. `testing_outputs/summary.json` lists all evaluated datasets.
 
 ## Pinned integrations and remote device behavior
 
 All training and evaluation requires a visible NVIDIA CUDA GPU. The shared
 preflight runs before either stage and respects `CUDA_VISIBLE_DEVICES`.
-There is no CPU or MPS fallback. Calculator adapters check CUDA as well;
+There is no CPU or MPS fallback. Calculator construction checks CUDA as well;
 DeepMD's native `DEVICE` environment setting is set to `cuda`, while
 MACE, MatterSim and SevenNet receive a CUDA device explicitly.
 NEP evaluation also requires the `gpumd` executable.
@@ -293,3 +325,48 @@ integration check in the pinned runner environment.
 The generated folder is local output. Remote upload, hosts, scheduler settings,
 submission, polling, retries, result download, and benchmark metric aggregation
 remain separate execution-layer concerns.
+
+## File records and execution responsibilities
+
+The populated `files` field describes these paths, all relative to the bundle root:
+
+| Field | Contents |
+| --- | --- |
+| `pretrained_model` | Copied model used to start fine-tuning or to evaluate zero-shot |
+| `training_input_files` | `train`, optional `validation`, native `config`, CLI `script`, and any converted datasets |
+| `training_output_files` | `trained_model`, `training_log`, and backend-specific output files or directories |
+| `test_input_files` | `config` and datasets named `test_000`, `test_001`, etc. in TrainingUnit order |
+| `test_output_files` | `summary`, `test_000_predictions`, `test_000_metadata`, and corresponding entries for other datasets |
+| `evaluation_model` | Temporary model export, or None when no export is needed |
+
+Backend output entries include DeepMD's adapted configuration and learning curve;
+MACE's checkpoints, logs, and results directories; SevenNet's resolved configuration
+and native work directory; and MatterSim/TorchNEP native output directories.
+Directory entries identify where backend-generated files appear. These fields do
+not define download selection or implement a download manager.
+
+Adapters define filename defaults, which the writer expands into the recorded
+paths. During execution the adapters use those recorded paths. They own
+`generate_training_files(training_stress)` and
+`generate_training_script(training_stress)`; the runner calls these methods.
+TorchNEP trains directly through its Python API. Fine-tuned models are found at
+`files.training_output_files["trained_model"]`, not by searching a directory.
+
+Evaluation uses one `build_calculator()` function in
+`temper.mlff.pipeline.evaluate_mlff`. It imports only the selected backend.
+Adding a new calculator requires adding a branch to that function. The evaluator
+receives the bundle root explicitly, so placing test_config.json under
+testing_inputs/ does not change how its dataset and model paths are interpreted.
+Python callers use `run_test(config_path, bundle_root=bundle_directory)`.
+
+All applicable default random seeds are 42, including SevenNet and TorchNEP's
+Python API `run_seed`. MACE uses the supplied validation file when present;
+TEMPER does not set `valid_fraction`. Without a validation file, MACE's native
+validation-split default applies.
+
+INFO messages identify the bundle being packaged, prepared, trained, or evaluated.
+Backend training output is written to the recorded training.log rather than echoed
+to the terminal. Failed training reports the log's location and stops before
+evaluation. `temper_bench --verbose run_pipeline bundle.json` adds DEBUG file and
+adapter details; `--quiet` suppresses routine progress. Python callers can
+configure the `temper` logger with the standard logging module.
