@@ -212,7 +212,7 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     monkeypatch.setattr(entrypoint, "dumpfn", record_dump)
 
     with caplog.at_level(logging.DEBUG, logger="temper.entrypoints.split"):
-        assert entrypoint.split_cli(config_file) == 0
+        assert entrypoint.split_cli(config_file) is None
 
     assert partition_calls == [
         ("ignored", data_root, "metadata.json"),
@@ -311,7 +311,7 @@ def test_reproduction_config_reloads_and_replays_identical_real_split(
         indent=2,
     )
 
-    assert entrypoint.split_cli(config_file) == 0
+    assert entrypoint.split_cli(config_file) is None
 
     reproduce_path = tmp_path / "split_config_reproduce.json"
     reproduced = entrypoint._load_split_config(reproduce_path)
@@ -327,7 +327,7 @@ def test_reproduction_config_reloads_and_replays_identical_real_split(
         for path in sorted(domain_output.glob("*.extxyz"))
     }
 
-    assert entrypoint.split_cli(reproduce_path) == 0
+    assert entrypoint.split_cli(reproduce_path) is None
 
     assert loadfn(domain_output / "split_groups.json") == first_split_groups
     assert loadfn(domain_output / "training_units.json") == first_training_units

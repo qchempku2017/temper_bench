@@ -42,8 +42,11 @@ def _reproduce_config_path(config_file: Path) -> Path:
     return config_file.with_name(f"{config_file.stem}_reproduce.json")
 
 
-def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> int:
-    """Resolve configuration, persist provenance, then group, split, and export."""
+def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
+    """Resolve configuration, persist provenance, then group, split, and export.
+
+    Return None on success; errors propagate to the CLI exit-status handler.
+    """
     command_started_at = time.monotonic()
     config_file = Path(config_file)
     split_config = _load_split_config(config_file).resolve_domains()
@@ -171,4 +174,3 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> int:
         format_elapsed(time.monotonic() - command_started_at),
         output_path,
     )
-    return 0

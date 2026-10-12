@@ -96,8 +96,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         if args.command == "split":
             from temper.entrypoints.split import split_cli
-
-            sysexit = split_cli(args.config_file)
+            split_cli(args.config_file)
+            sysexit = 0
         elif args.command == "run_pipeline":
             from temper.mlff.pipeline.runner import prepare_bundle, run_pipeline
             if args.prepare_only:
