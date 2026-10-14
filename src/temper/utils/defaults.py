@@ -124,10 +124,12 @@ DEFAULT_SPLIT_GROUPS_FILE: str = os.environ.get("DEFAULT_SPLIT_GROUPS_FILE", "sp
 # Default name of the output file to save training units in a domain.
 DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get("DEFAULT_TRAINING_UNITS_FILE", "training_units.json")
 
-# MLFF source artifacts and fixed submit-folder directories.
+# MLFF source artifacts and fixed submit-folder directories on the local machine.
 DEFAULT_MLFF_PRETRAINED_MODELS_DIR: str = os.environ.get(
     "DEFAULT_MLFF_PRETRAINED_MODELS_DIR", "./pretrained_models"
 )
+
+# MLFF bundle directories on the remote runner server.
 DEFAULT_MLFF_MODELS_DIR: str = _env_submit_directory(
     "DEFAULT_MLFF_MODELS_DIR", "pretrained_models"
 )
