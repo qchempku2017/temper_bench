@@ -525,6 +525,37 @@ def write_prepared(target):
     return target
 
 
+def test_writer_accepts_adapter_class_without_instantiating_or_rendering(
+    tmp_path, finetune_training_unit, mlff_spec_factory,
+):
+    from temper.mlff.pipeline.training_adapters.mace import MACEAdapter
+
+    bundle = MLFFTrainBundle(
+        training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
+    )
+    before = bundle.model_dump()
+
+    class FailingAdapter(MACEAdapter):
+        pretrained_model_filename = "custom.model"
+
+        def __init__(self, *args):
+            pytest.fail("Packaging instantiated a runtime adapter")
+
+    target, packaged = MLFFBundleWriter(bundle, FailingAdapter).write_submit_folder(tmp_path / "job")
+    assert (target / "pretrained_models/custom.model").is_file()
+    assert packaged.files.pretrained_model == "pretrained_models/custom.model"
+    assert not (target / packaged.files.test_input_files["config"]).exists()
+    assert not (target / packaged.files.training_input_files["config"]).exists()
+    assert not (target / packaged.files.training_input_files["script"]).exists()
+    assert bundle.model_dump() == before
+
+    sentinel = target / "keep.txt"
+    sentinel.write_text("existing")
+    with pytest.raises(FileExistsError):
+        MLFFBundleWriter(bundle, FailingAdapter).write_submit_folder(target)
+    assert sentinel.read_text() == "existing"
+
+
 def training_script(target):
     path = target / "training_inputs/run.sh"
     return (path if path.exists() else target / "run.sh").read_text()
