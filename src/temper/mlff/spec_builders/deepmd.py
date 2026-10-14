@@ -43,7 +43,8 @@ class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
             "numb_steps", "stop_batch", "num_step", "num_steps",
             "numb_step", "num_epochs", "num_epoch", "numb_epochs",
         }
-        if aliases & self.training_parameters.keys():
+        # Intercept illegal aliases for DeepMD training length, which must be specified as 'numb_epoch'.
+        if aliases & (self.training_parameters or {}).keys():
             raise ValueError("DeepMD training length must use canonical 'numb_epoch'.")
         return super().prepare_training()
 

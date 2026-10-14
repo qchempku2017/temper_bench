@@ -7,7 +7,7 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 from temper.mlff.pipeline import cuda_utils as device
-from temper.mlff.pipeline import evaluate_mlff
+from temper.mlff.pipeline import calculators as calculator_factory
 
 
 @pytest.fixture(autouse=True)
@@ -33,13 +33,13 @@ def test_deepmd_uses_cuda(family, monkeypatch) -> None:
     calculator.DP = lambda **kwargs: calls.append(kwargs) or "dp"
     monkeypatch.setitem(sys.modules, "deepmd", package)
     monkeypatch.setitem(sys.modules, "deepmd.calculator", calculator)
-    assert evaluate_mlff.build_calculator(_config(family, head="Energy")) == "dp"
+    assert calculator_factory.build_calculator(_config(family, head="Energy")) == "dp"
     assert calls == [{"model": "pretrained_models/model", "head": "Energy"}]
 
 
 def test_unknown_calculator_has_a_clear_error():
     with pytest.raises(ValueError, match="Unsupported MLFF type 'unknown'"):
-        evaluate_mlff.build_calculator(_config("unknown"))
+        calculator_factory.build_calculator(_config("unknown"))
 
 
 def test_mattersim_uses_cuda(monkeypatch) -> None:
@@ -51,7 +51,7 @@ def test_mattersim_uses_cuda(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "mattersim", package)
     monkeypatch.setitem(sys.modules, "mattersim.forcefield", forcefield)
-    assert evaluate_mlff.build_calculator(_config("mattersim", custom=True)) == "mattersim"
+    assert calculator_factory.build_calculator(_config("mattersim", custom=True)) == "mattersim"
     assert calls == [{"load_path": "pretrained_models/model", "custom": True, "device": "cuda"}]
 
 
@@ -64,7 +64,7 @@ def test_sevennet_uses_cuda(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "sevenn", package)
     monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
-    assert evaluate_mlff.build_calculator(_config("sevennet", modal="mpa")) == "sevennet"
+    assert calculator_factory.build_calculator(_config("sevennet", modal="mpa")) == "sevennet"
     assert calls == [{"model": "pretrained_models/model", "modal": "mpa", "device": "cuda"}]
 
 
@@ -81,7 +81,7 @@ def test_mace_resolves_device_on_runner(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device)
     monkeypatch.setitem(sys.modules, "mace", package)
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
-    assert evaluate_mlff.build_calculator(_config("mace", default_dtype="float64")) == "mace"
+    assert calculator_factory.build_calculator(_config("mace", default_dtype="float64")) == "mace"
     assert calls == [
         {
             "model_paths": ["pretrained_models/model"],
@@ -107,8 +107,8 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device)
     monkeypatch.setitem(sys.modules, "calorine", calorine)
     monkeypatch.setitem(sys.modules, "calorine.calculators", calculators)
-    monkeypatch.setattr(evaluate_mlff.shutil, "which", lambda name: "/bin/gpumd")
-    assert evaluate_mlff.build_calculator(_config("nep89", timestep=1)) == "gpu"
+    monkeypatch.setattr(calculator_factory.shutil, "which", lambda name: "/bin/gpumd")
+    assert calculator_factory.build_calculator(_config("nep89", timestep=1)) == "gpu"
     assert calls[0] == (
         "gpu",
         ("pretrained_models/model",),
@@ -116,9 +116,9 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
     )
 
     calls.clear()
-    monkeypatch.setattr(evaluate_mlff.shutil, "which", lambda name: None)
+    monkeypatch.setattr(calculator_factory.shutil, "which", lambda name: None)
     with pytest.raises(RuntimeError, match="gpumd"):
-        evaluate_mlff.build_calculator(_config("nep89"))
+        calculator_factory.build_calculator(_config("nep89"))
     assert not calls
 
 

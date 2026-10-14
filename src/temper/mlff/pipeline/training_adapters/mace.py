@@ -26,6 +26,7 @@ class MACEAdapter(BaseMLFFAdapter):
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return native YAML with bundle paths and dataset-dependent stress."""
         config = dict(self.spec.training_parameters or {})
+        assert self.files is not None
         config.update(
             {
                 "name": "temper_model",

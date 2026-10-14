@@ -28,7 +28,9 @@ class _DeepMDAdapter(BaseMLFFAdapter):
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return native inputs with all 118 elements in atomic-number order."""
+        assert self.spec.training_parameters is not None
         training = deepcopy(self.spec.training_parameters)
+        assert "loss" in training and "learning_rate" in training
         config = {
             "model": {"type_map": chemical_symbols[1:]},
             "loss": training.pop("loss"),
@@ -62,6 +64,7 @@ class _DeepMDAdapter(BaseMLFFAdapter):
         from temper.mlff.pipeline.data_preparation.deepmd import prepare_dataset
 
         for name in ("train", "validation"):
+            assert self.files is not None
             if name in self.files.training_input_files:
                 prepare_dataset(
                     self.root / self.input_path(name),
@@ -71,13 +74,12 @@ class _DeepMDAdapter(BaseMLFFAdapter):
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
         """Train on CUDA and write portable weights to the recorded output."""
         del training_stress
-        lines = ["export DEVICE=cuda"]
-        lines.append(
+        assert self.files is not None
+        lines = [
+            "export DEVICE=cuda",
             command(
-                "mkdir", "-p", str(PurePosixPath(self.trained_model_path).parent)
-            )
-        )
-        lines.append(
+            "mkdir", "-p", str(PurePosixPath(self.trained_model_path).parent)
+            ),
             command(
                 "dp",
                 self.backend_flag,
@@ -89,13 +91,16 @@ class _DeepMDAdapter(BaseMLFFAdapter):
                 "--output",
                 self.output_path("adapted_config"),
             )
-        )
+        ]
         return tuple(lines)
 
     def prepare_evaluation(self) -> None:
         """Freeze fine-tuned portable weights on the evaluation host only."""
         if self.bundle.unit_type != "finetune":
             return
+        # Bundle must have been packaged with an evaluation model filename, and the file must exist.
+        assert self.files is not None
+        assert self.files.evaluation_model is not None
         output_without_suffix = str(
             PurePosixPath(self.files.evaluation_model).with_suffix("")
         )

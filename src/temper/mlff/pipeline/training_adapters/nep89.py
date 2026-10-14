@@ -160,6 +160,7 @@ class NEP89Adapter(BaseMLFFAdapter):
         """
         if self.training_unit.val_set is None:
             raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
+        assert self.files is not None
         model_path = self.root / self.files.pretrained_model
         architecture, model_symbols = _nep_architecture(model_path)
 
@@ -191,6 +192,7 @@ class NEP89Adapter(BaseMLFFAdapter):
 
         output = self.root / self.output_path("native_outputs")
         log_path = self.root / self.output_path("training_log")
+        assert self.files is not None
         with log_path.open("w", encoding="utf-8") as log:
             with redirect_stdout(log), redirect_stderr(log):
                 train_nep(

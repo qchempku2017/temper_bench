@@ -101,7 +101,7 @@ class BaseSpecBuilder(ABC):
             else pretrained_model_dir
         ).expanduser()
         self.model_filename = model_filename or type(self).model_filename
-        self.training_parameters = training_parameters
+        self.training_parameters: dict[str, Any] | None = training_parameters
         self.testing_parameters = testing_parameters
 
     def prepare_training(self) -> dict[str, Any]:
@@ -121,7 +121,7 @@ class BaseSpecBuilder(ABC):
         return parameters
 
     def build(self) -> MLFFSpec:
-        """Return a persistable recipe, hashing each required local file.
+        """Return a training parameters and model recipe in the form of MLFFSpec.
 
         Raises ValueError for missing files or invalid training controls.
         """

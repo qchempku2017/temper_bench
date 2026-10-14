@@ -28,9 +28,10 @@ class SevenNetAdapter(BaseMLFFAdapter):
         The runner reads architecture from the checkpoint before training.
         """
         parameters = dict(self.spec.training_parameters or {})
-        model = {}
-        model["train_shift_scale"] = parameters.pop("train_shift_scale")
-        model["train_denominator"] = parameters.pop("train_denominator")
+        model = {
+            "train_shift_scale": parameters.pop("train_shift_scale"),
+            "train_denominator": parameters.pop("train_denominator"),
+        }
         batch_size = parameters.pop("batch_size")
         data_divide_ratio = parameters.pop("data_divide_ratio")
 
@@ -46,6 +47,7 @@ class SevenNetAdapter(BaseMLFFAdapter):
         if training_stress:
             train["error_record"].append(["Stress", "RMSE"])
         train["error_record"].append(["TotalLoss", "None"])
+        assert self.files is not None
         train["continue"] = {
             "reset_optimizer": True,
             "reset_scheduler": True,

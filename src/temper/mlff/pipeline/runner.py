@@ -56,6 +56,7 @@ def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
     logger.debug("Selected MLFF adapter %s", bundle.mlff_spec.mlff_type)
     adapter = mlff_adapter_factory(bundle.mlff_spec.mlff_type)(bundle, path.parent)
     files = adapter.files
+    assert files is not None
     for relative in (
         *files.training_input_files.values(), *files.training_output_files.values(),
         *files.test_input_files.values(), *files.test_output_files.values(),
@@ -66,6 +67,7 @@ def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
         stress = bool(files.training_stress)
         adapter.generate_training_files(stress)
         adapter.generate_training_script(stress)
+    # Comment: Writing of test_config.json should be handled by BundleWriter, not here.
     (adapter.root / files.test_input_files["config"]).write_text(
         json.dumps(bundle.test_config(), indent=2) + "\n", encoding="utf-8",
     )
@@ -117,6 +119,7 @@ def run_pipeline(bundle_path: str | Path) -> None:
     logger.info("Evaluating bundle %s (%s)", adapter.bundle.mlff_train_bundle_id, adapter.spec.mlff_type)
     try:
         adapter.prepare_evaluation()
+        assert adapter.files is not None
         run_test(adapter.root / adapter.files.test_input_files["config"], bundle_root=adapter.root)
     finally:
         adapter.cleanup_evaluation()

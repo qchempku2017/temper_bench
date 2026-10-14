@@ -19,6 +19,9 @@ from temper.utils.defaults import (
 logger = logging.getLogger(__name__)
 
 
+# Comment: maybe bundle writer can take in bundle and adapter as input. Adapter should only generate
+#   file contents rather than being responsible for writing and copying files. These should be handled
+#   by the bundle writer.
 class MLFFBundleWriter:
     """Copy one bundle's inputs without changing its local source records.
 

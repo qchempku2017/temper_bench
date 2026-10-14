@@ -50,6 +50,7 @@ class MatterSimAdapter(BaseMLFFAdapter):
         if not training_stress:
             parameters["stress_loss_ratio"] = 0.0
         work = self.output_path("native_outputs")
+        assert self.files is not None
         arguments = [
             "$PYTHON_BIN",
             "-m",

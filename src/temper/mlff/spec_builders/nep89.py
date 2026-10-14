@@ -70,6 +70,8 @@ class NEP89SpecBuilder(BaseSpecBuilder):
 
     def prepare_training(self) -> dict[str, Any]:
         """Return native controls, rejecting incompatible architecture overrides."""
+        if self.training_parameters is None:
+            return self.training_defaults
         keys = self.training_parameters.keys()
         architecture = sorted(_ARCHITECTURE_KEYS & keys)
         if architecture:
