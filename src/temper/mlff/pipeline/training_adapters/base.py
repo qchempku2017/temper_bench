@@ -58,6 +58,8 @@ class BaseMLFFAdapter(ABC):
     pretrained_model_filename : str
         Default name of the copied model under pretrained_models/. The source
         file remains recorded in MLFFSpec.pretrained_model.artifacts.
+        This is the name on the remote runner machine, not the name on the local
+        submission machine.
     training_input_filenames : dict[str, str]
         Default config and script names relative to training_inputs/.
     training_output_filenames : dict[str, str]
