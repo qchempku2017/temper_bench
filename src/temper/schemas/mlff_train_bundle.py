@@ -37,7 +37,9 @@ class MLFFBundleFiles(MSONableModel):
 
     Every path is relative to the directory containing bundle.json, including
     paths to directories. These are planned locations: packaging copies input
-    datasets and pretrained weights, while execution creates the other files.
+    datasets and pretrained weights. Runtime preparation writes native configs
+    and scripts; execution creates converted datasets, resolved backend configs
+    and results.
     A recorded output therefore need not exist yet.
 
     Attributes
@@ -111,7 +113,8 @@ class MLFFTrainBundle(ManagedIdentityModel):
 
     Constructing this object does not copy data or run third-party software.
     write_submit_folder copies inputs and serializes a portable file mapping.
-    The installed runtime creates native training files and evaluates models.
+    The installed runtime writes missing configs and scripts, prepares
+    backend-dependent data, trains when requested, and evaluates models.
     Packaging fields do not change the experiment's deterministic identity.
 
     Attributes
@@ -230,7 +233,10 @@ class MLFFTrainBundle(ManagedIdentityModel):
         }
 
     def write_submit_folder(self, target_dir: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
-        """Copy inputs and a portable bundle.json into a new submit directory.
+        """Copy inputs and write bundle.json and a launcher to a new directory.
+
+        Runtime preparation creates native configs, training scripts, and the
+        test configuration at their recorded paths; packaging does not write them.
 
         Parameters
         ----------

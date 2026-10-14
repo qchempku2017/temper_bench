@@ -82,7 +82,7 @@ def main_parser() -> argparse.ArgumentParser:
     )
     pipeline = subparsers.add_parser("run_pipeline", help="Fine-tune and evaluate a packaged MLFF bundle.")
     pipeline.add_argument("bundle", type=Path)
-    pipeline.add_argument("--prepare-only", action="store_true", help="Write configs without executing models.")
+    pipeline.add_argument("--prepare-only", action="store_true", help="Prepare directories and restore missing configs without executing models.")
 
     return parser
 

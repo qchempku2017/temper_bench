@@ -5,7 +5,8 @@
 TEMPER supports DPA-4, DPA-4C, MatterSim, MACE, SevenNet, and NEP-89.
 Local builders create model recipes; `MLFFBundleWriter` copies their inputs and
 serializes `MLFFTrainBundle` as `bundle.json`. An installed TEMPER runtime reads
-that record remotely, prepares backend configs, fine-tunes, and evaluates.
+that record, writes missing configs and scripts, prepares backend-dependent
+data and checkpoint settings, fine-tunes, and evaluates.
 Upload, scheduling, and result download remain separate executor concerns.
 
 Install `temper-bench[preprocess]` for local data splitting. Execution hosts
@@ -196,9 +197,11 @@ bundle/
         summary.json
 ~~~
 
-Packaging initially writes only bundle.json, the root launcher, copied weights,
-and copied datasets. Preparation writes native configs, the training script,
-and test_config.json. Execution produces the remaining outputs. A populated
+Packaging writes bundle.json, the root launcher, copied weights and datasets.
+Runtime preparation writes native configs, the training script for CLI backends,
+and test_config.json using the copied inputs. Repeated preparation preserves
+existing files, including manual edits, and restores missing configs. Execution
+produces the remaining outputs. A populated
 `files` field describes planned locations, not a claim that every file exists.
 Zero-shot bundles have no training inputs or training outputs and evaluate the
 copied pretrained model directly.
@@ -214,14 +217,16 @@ temper_bench run_pipeline /path/to/submit/bundle.json
 bash /path/to/submit/run.sh
 ~~~
 
-To inspect native files without starting training or requiring a GPU:
+To generate inspectable configs and prepare output directories without requiring
+a GPU, run the following locally or on the execution host:
 
 ~~~console
 temper_bench run_pipeline /path/to/submit/bundle.json --prepare-only
 ~~~
 
 Preparation writes native files and `training_inputs/run.sh` for CLI-based training,
-plus `testing_inputs/test_config.json` for evaluation. These are derived outputs of `bundle.json`.
+plus `testing_inputs/test_config.json` for evaluation. These are derived from
+`bundle.json`; preparation fills missing files without overwriting existing ones.
 TorchNEP training is called directly through Python and writes `training_outputs/training.log`;
 it does not generate a training script. Internal pipeline modules have no CLI
 entry points. Use `temper_bench run_pipeline` for execution or its `--prepare-only` option
@@ -346,14 +351,28 @@ Directory entries identify where backend-generated files appear. These fields do
 not define download selection or implement a download manager.
 
 Adapters define filename defaults, which the writer expands into the recorded
-paths. During execution the adapters use those recorded paths. They own
-`generate_training_files(training_stress)` and
-`generate_training_script(training_stress)`; the runner calls these methods.
+paths. `MLFFBundleWriter(bundle, adapter_class=None)` accepts an optional adapter
+class; omission selects the registered family adapter. Packaging uses its filename
+defaults without instantiating it. The runner selects an adapter from its installed
+registry and instantiates it with the packaged bundle and root. Adapters return configs and
+scripts through `training_file_contents(training_stress)` without writing them.
+The standalone `pipeline.runner.write_configuration_files()` function writes these
+files during preparation. NEP rendering reads the copied model header
+and validates dataset species and periodicity; no training backend is imported.
+During execution adapters use recorded paths for dataset conversion, checkpoint
+resolution, training, and temporary model export and cleanup.
+
+`prepare_bundle()` preserves existing configs. After deliberately changing a
+packaged recipe or its recorded paths, regenerate derived configs explicitly with
+`temper.mlff.pipeline.runner.write_configuration_files(adapter)` using an adapter bound to
+that updated bundle and its root. Removing selected configs also lets preparation
+restore just those files. Rewriting configs replaces manual edits; moving the
+whole folder without changing its relative layout needs no regeneration.
 TorchNEP trains directly through its Python API. Fine-tuned models are found at
 `files.training_output_files["trained_model"]`, not by searching a directory.
 
 Evaluation uses one `build_calculator()` function in
-`temper.mlff.pipeline.evaluate_mlff`. It imports only the selected backend.
+`temper.mlff.pipeline.calculators`. It imports only the selected backend.
 Adding a new calculator requires adding a branch to that function. The evaluator
 receives the bundle root explicitly, so placing test_config.json under
 testing_inputs/ does not change how its dataset and model paths are interpreted.
