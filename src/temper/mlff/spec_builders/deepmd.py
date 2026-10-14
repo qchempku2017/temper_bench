@@ -9,10 +9,9 @@ from temper.schemas.mlff_spec import MLFFImplementation
 
 
 class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
-    """Share DPA configuration policy; subclasses select the model release."""
+    """Share DPA training policy; instances select the pretrained release."""
 
     implementations = (MLFFImplementation(name="deepmd-kit", version="3.2.0"),)
-    model_version = "2025.10"
     epoch_key = "numb_epoch"
     training_defaults = {
         "numb_epoch": 60,
@@ -51,18 +50,14 @@ class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
 
 @BaseSpecBuilder.register(name="dpa4")
 class DPA4SpecBuilder(_DeepMDSpecBuilder):
-    """Build DPA-4 from dpa4.pt, with 60 training epochs."""
+    """Build a selected DPA-4 checkpoint recipe with 60 training epochs."""
 
     mlff_type = "dpa4"
-    model_name = "DPA-4"
-    model_filename = "dpa4.pt"
 
 
 @BaseSpecBuilder.register(name="dpa4c")
 class DPA4CSpecBuilder(_DeepMDSpecBuilder):
-    """Build DPA-4C from dpa4c.pt, with 100 training epochs."""
+    """Build a selected DPA-4C checkpoint recipe with 100 training epochs."""
 
     mlff_type = "dpa4c"
-    model_name = "DPA-4C"
-    model_filename = "dpa4c.pt"
     training_defaults = {**_DeepMDSpecBuilder.training_defaults, "numb_epoch": 100}

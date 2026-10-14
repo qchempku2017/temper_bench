@@ -57,9 +57,6 @@ class NEP89SpecBuilder(BaseSpecBuilder):
     """Build NEP-89 recipes with architecture owned by the pretrained file."""
 
     mlff_type = "nep89"
-    model_name = "NEP-89"
-    model_version = "2025.1"
-    model_filename = "nep89.txt"
     implementations = (
         MLFFImplementation(name="gpumd", version="5.7", kind="executable"),
         MLFFImplementation(name="calorine", version="3.5"),

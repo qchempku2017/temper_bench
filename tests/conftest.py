@@ -230,6 +230,8 @@ def mlff_spec_factory(tmp_path: Path):
             training = None
         model_path = paths["pretrained_model_path"]
         source = {
+            "model_name": family,
+            "model_version": "test-release",
             "pretrained_model_dir": model_path.parent,
             "model_filename": model_path.name,
         }

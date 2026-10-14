@@ -12,9 +12,6 @@ class MatterSimSpecBuilder(BaseSpecBuilder):
     """
 
     mlff_type = "mattersim"
-    model_name = "MatterSim-v1-5M"
-    model_version = "1.0.0"
-    model_filename = "mattersim.pth"
     implementations = (MLFFImplementation(name="mattersim", version="1.2.5"),)
     epoch_key = "epochs"
     patience_key = "early_stop_patience"

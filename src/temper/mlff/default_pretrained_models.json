@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-10-14",
+  "notes": "Curated fine-tunable checkpoints, not an exhaustive release archive. Entries with known unsupported TEMPER training workflows are excluded. Backend prerequisites in usage_notes must be satisfied; metadata verification is not a GPU execution test. estimated_num_parameters describes the full pretrained model before downstream adaptation, not checkpoint bytes or optimizer state. Filenames are relative to pretrained_model_dir; weights are not downloaded automatically. See docs/mlff-bundles.md.",
+  "models": {
+    "dpa4": {
+      "nano-omat24-v20260805": {
+        "model_name": "DPA4-Nano-OMat24",
+        "model_version": "v20260805",
+        "model_filename": "dpa4/v20260805/DPA4-Nano-OMat24-v20260805.pt",
+        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
+        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Nano-OMat24-v20260805.pt",
+        "size": "Nano",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 480650,
+        "parameter_count_notes": "Published count for this release in the linked model card."
+      },
+      "mini-omat24-v20260805": {
+        "model_name": "DPA4-Mini-OMat24",
+        "model_version": "v20260805",
+        "model_filename": "dpa4/v20260805/DPA4-Mini-OMat24-v20260805.pt",
+        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
+        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Mini-OMat24-v20260805.pt",
+        "size": "Mini",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 655504,
+        "parameter_count_notes": "Published count for this release in the linked model card."
+      },
+      "neo-omat24-v20260805": {
+        "model_name": "DPA4-Neo-OMat24",
+        "model_version": "v20260805",
+        "model_filename": "dpa4/v20260805/DPA4-Neo-OMat24-v20260805.pt",
+        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
+        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Neo-OMat24-v20260805.pt",
+        "size": "Neo",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 1125372,
+        "parameter_count_notes": "Published count for this release in the linked model card."
+      },
+      "air-omat24-v20260805": {
+        "model_name": "DPA4-Air-OMat24",
+        "model_version": "v20260805",
+        "model_filename": "dpa4/v20260805/DPA4-Air-OMat24-v20260805.pt",
+        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
+        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Air-OMat24-v20260805.pt",
+        "size": "Air",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 5148611,
+        "parameter_count_notes": "Published count for this release in the linked model card."
+      },
+      "plus-omat24-v20260805": {
+        "model_name": "DPA4-Plus-OMat24",
+        "model_version": "v20260805",
+        "model_filename": "dpa4/v20260805/DPA4-Plus-OMat24-v20260805.pt",
+        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
+        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Plus-OMat24-v20260805.pt",
+        "size": "Plus",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 8849376,
+        "parameter_count_notes": "Published count for this release in the linked model card."
+      },
+      "nano-omat24-v20260911": {
+        "model_name": "DPA4-Nano-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Nano-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260911.pt",
+        "size": "Nano",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 480650,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "mini-omat24-v20260911": {
+        "model_name": "DPA4-Mini-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Mini-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260911.pt",
+        "size": "Mini",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 655390,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "neo-omat24-v20260911": {
+        "model_name": "DPA4-Neo-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Neo-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260911.pt",
+        "size": "Neo",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 1125244,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "air-omat24-v20260911": {
+        "model_name": "DPA4-Air-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Air-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260911.pt",
+        "size": "Air",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 5148371,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "plus-omat24-v20260911": {
+        "model_name": "DPA4-Plus-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Plus-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Plus-OMat24-v20260911.pt",
+        "size": "Plus",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 8849084,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "pro-omat24-v20260911": {
+        "model_name": "DPA4-Pro-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Pro-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Pro-OMat24-v20260911.pt",
+        "size": "Pro",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 25211308,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "max-omat24-v20260911": {
+        "model_name": "DPA4-Max-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4/v20260911/DPA4-Max-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Max-OMat24-v20260911.pt",
+        "size": "Max",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 99010408,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "mini-matpes-v20260628": {
+        "model_name": "DPA4-Mini-MatPES",
+        "model_version": "v20260628",
+        "model_filename": "dpa4/v20260628/DPA4-Mini-MatPES-v20260628.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=424&name=DPA4-MatPES-v20260628",
+        "download_url": "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Mini-MatPES-v20260628.pt",
+        "size": "Mini",
+        "pretraining_data": "MatPES R2SCAN 2025.2",
+        "estimated_num_parameters": 655504,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "neo-matpes-v20260628": {
+        "model_name": "DPA4-Neo-MatPES",
+        "model_version": "v20260628",
+        "model_filename": "dpa4/v20260628/DPA4-Neo-MatPES-v20260628.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=424&name=DPA4-MatPES-v20260628",
+        "download_url": "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Neo-MatPES-v20260628.pt",
+        "size": "Neo",
+        "pretraining_data": "MatPES R2SCAN 2025.2",
+        "estimated_num_parameters": 1125372,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "air-matpes-v20260628": {
+        "model_name": "DPA4-Air-MatPES",
+        "model_version": "v20260628",
+        "model_filename": "dpa4/v20260628/DPA4-Air-MatPES-v20260628.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=424&name=DPA4-MatPES-v20260628",
+        "download_url": "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Air-MatPES-v20260628.pt",
+        "size": "Air",
+        "pretraining_data": "MatPES R2SCAN 2025.2",
+        "estimated_num_parameters": 5148611,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      }
+    },
+    "dpa4c": {
+      "nano-omat24-v20260911": {
+        "model_name": "DPA4C-Nano-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4c/v20260911/DPA4C-Nano-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260911.pt",
+        "size": "Nano",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 29809,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "mini-omat24-v20260911": {
+        "model_name": "DPA4C-Mini-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4c/v20260911/DPA4C-Mini-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260911.pt",
+        "size": "Mini",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 145513,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "neo-omat24-v20260911": {
+        "model_name": "DPA4C-Neo-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4c/v20260911/DPA4C-Neo-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260911.pt",
+        "size": "Neo",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 342089,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "air-omat24-v20260911": {
+        "model_name": "DPA4C-Air-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4c/v20260911/DPA4C-Air-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260911.pt",
+        "size": "Air",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 433673,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      },
+      "plus-omat24-v20260911": {
+        "model_name": "DPA4C-Plus-OMat24",
+        "model_version": "v20260911",
+        "model_filename": "dpa4c/v20260911/DPA4C-Plus-OMat24-v20260911.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Plus-OMat24-v20260911.pt",
+        "size": "Plus",
+        "pretraining_data": "OMat24",
+        "estimated_num_parameters": 1456961,
+        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
+        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+      }
+    },
+    "mattersim": {
+      "v1.0.0-1m": {
+        "model_name": "MatterSim-v1.0.0-1M",
+        "model_version": "1.0.0",
+        "model_filename": "mattersim/1.0.0/mattersim-v1.0.0-1M.pth",
+        "source_url": "https://github.com/microsoft/mattersim/blob/main/MODEL_CARD.md",
+        "size": "1M",
+        "pretraining_data": "MatterSim active-learning materials dataset",
+        "download_url": "https://raw.githubusercontent.com/microsoft/mattersim/aedf510ec536cf24163edad4570eaceafdb7cb2b/pretrained_models/mattersim-v1.0.0-1M.pth",
+        "estimated_num_parameters": 1000000,
+        "parameter_count_notes": "Nominal model size published by MatterSim; rounded estimate."
+      },
+      "v1.0.0-5m": {
+        "model_name": "MatterSim-v1.0.0-5M",
+        "model_version": "1.0.0",
+        "model_filename": "mattersim/1.0.0/mattersim-v1.0.0-5M.pth",
+        "source_url": "https://github.com/microsoft/mattersim/blob/main/MODEL_CARD.md",
+        "size": "5M",
+        "pretraining_data": "MatterSim active-learning materials dataset",
+        "download_url": "https://raw.githubusercontent.com/microsoft/mattersim/aedf510ec536cf24163edad4570eaceafdb7cb2b/pretrained_models/mattersim-v1.0.0-5M.pth",
+        "estimated_num_parameters": 5000000,
+        "parameter_count_notes": "Nominal model size published by MatterSim; rounded estimate."
+      }
+    },
+    "mace": {
+      "mp-0-small": {
+        "model_name": "MACE-MP-0-small",
+        "model_version": "mace_mp_0",
+        "model_filename": "mace/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0",
+        "size": "small",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model",
+        "estimated_num_parameters": 3847696,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0-medium": {
+        "model_name": "MACE-MP-0-medium",
+        "model_version": "mace_mp_0",
+        "model_filename": "mace/mace_mp_0/2023-12-03-mace-128-L1_epoch-199.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0",
+        "size": "medium",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2023-12-03-mace-128-L1_epoch-199.model",
+        "estimated_num_parameters": 4688656,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0-large": {
+        "model_name": "MACE-MP-0-large",
+        "model_version": "mace_mp_0",
+        "model_filename": "mace/mace_mp_0/2024-01-07-mace-128-L2_epoch-199.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0",
+        "size": "large",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2024-01-07-mace-128-L2_epoch-199.model",
+        "estimated_num_parameters": 5725072,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b-small": {
+        "model_name": "MACE-MP-0b-small",
+        "model_version": "mace_mp_0b",
+        "model_filename": "mace/mace_mp_0b/mace_agnesi_small.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b",
+        "size": "small",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b/mace_agnesi_small.model",
+        "estimated_num_parameters": 8222224,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b-medium": {
+        "model_name": "MACE-MP-0b-medium",
+        "model_version": "mace_mp_0b",
+        "model_filename": "mace/mace_mp_0b/mace_agnesi_medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b",
+        "size": "medium",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b/mace_agnesi_medium.model",
+        "estimated_num_parameters": 9063184,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b2-small": {
+        "model_name": "MACE-MP-0b2-small",
+        "model_version": "mace_mp_0b2",
+        "model_filename": "mace/mace_mp_0b2/mace-small-density-agnesi-stress.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b2",
+        "size": "small",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b2/mace-small-density-agnesi-stress.model",
+        "estimated_num_parameters": 8221984,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b2-medium": {
+        "model_name": "MACE-MP-0b2-medium",
+        "model_version": "mace_mp_0b2",
+        "model_filename": "mace/mace_mp_0b2/mace-medium-density-agnesi-stress.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b2",
+        "size": "medium",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b2/mace-medium-density-agnesi-stress.model",
+        "estimated_num_parameters": 9062944,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b2-large": {
+        "model_name": "MACE-MP-0b2-large",
+        "model_version": "mace_mp_0b2",
+        "model_filename": "mace/mace_mp_0b2/mace-large-density-agnesi-stress.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b2",
+        "size": "large",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b2/mace-large-density-agnesi-stress.model",
+        "estimated_num_parameters": 10099360,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mp-0b3-medium": {
+        "model_name": "MACE-MP-0b3-medium",
+        "model_version": "mace_mp_0b3",
+        "model_filename": "mace/mace_mp_0b3/mace-mp-0b3-medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mp_0b3",
+        "size": "medium",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0b3/mace-mp-0b3-medium.model",
+        "estimated_num_parameters": 9063204,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "mpa-0-medium": {
+        "model_name": "MACE-MPA-0-medium",
+        "model_version": "mace_mpa_0",
+        "model_filename": "mace/mace_mpa_0/mace-mpa-0-medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_mpa_0",
+        "size": "medium",
+        "pretraining_data": "MPtrj + sAlex",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mpa_0/mace-mpa-0-medium.model",
+        "estimated_num_parameters": 9063204,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "omat-0-small": {
+        "model_name": "MACE-OMAT-0-small",
+        "model_version": "mace_omat_0",
+        "model_filename": "mace/mace_omat_0/mace-omat-0-small.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_omat_0",
+        "size": "small",
+        "pretraining_data": "OMat24",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_omat_0/mace-omat-0-small.model",
+        "estimated_num_parameters": 8222244,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "omat-0-medium": {
+        "model_name": "MACE-OMAT-0-medium",
+        "model_version": "mace_omat_0",
+        "model_filename": "mace/mace_omat_0/mace-omat-0-medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_omat_0",
+        "size": "medium",
+        "pretraining_data": "OMat24",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_omat_0/mace-omat-0-medium.model",
+        "estimated_num_parameters": 9063204,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "matpes-pbe-0": {
+        "model_name": "MACE-MATPES-pbe-0",
+        "model_version": "mace_matpes_0",
+        "model_filename": "mace/mace_matpes_0/MACE-matpes-pbe-omat-ft.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_matpes_0",
+        "size": "medium",
+        "pretraining_data": "OMat24 then MatPES-pbe",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-pbe-omat-ft.model",
+        "estimated_num_parameters": 9063204,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "matpes-r2scan-0": {
+        "model_name": "MACE-MATPES-r2scan-0",
+        "model_version": "mace_matpes_0",
+        "model_filename": "mace/mace_matpes_0/MACE-matpes-r2scan-omat-ft.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_matpes_0",
+        "size": "medium",
+        "pretraining_data": "OMat24 then MatPES-r2scan",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_matpes_0/MACE-matpes-r2scan-omat-ft.model",
+        "estimated_num_parameters": 9063214,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "omol-0-extra-large": {
+        "model_name": "MACE-OMOL-0-extra-large",
+        "model_version": "mace_omol_0",
+        "model_filename": "mace/mace_omol_0/MACE-omol-0-extra-large-1024.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_omol_0",
+        "size": "extra-large",
+        "pretraining_data": "OMol25 100M",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_omol_0/MACE-omol-0-extra-large-1024.model",
+        "usage_notes": "Supply physical charge and spin multiplicity in ASE atoms.info.",
+        "estimated_num_parameters": 52365482,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "omol-0-extra-large-4m": {
+        "model_name": "MACE-OMOL-0-extra-large-4M",
+        "model_version": "mace_omol_0",
+        "model_filename": "mace/mace_omol_0/mace-omol-0-extra-large-4M.model",
+        "source_url": "https://github.com/ACEsuit/mace-foundations/releases/tag/mace_omol_0",
+        "size": "extra-large",
+        "pretraining_data": "OMol25 4M subset",
+        "download_url": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_omol_0/mace-omol-0-extra-large-4M.model",
+        "usage_notes": "Supply physical charge and spin multiplicity in ASE atoms.info.",
+        "estimated_num_parameters": 51347434,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "off23-small": {
+        "model_name": "MACE-OFF23-small",
+        "model_version": "OFF23",
+        "model_filename": "mace/OFF23/MACE-OFF23_small.model",
+        "source_url": "https://github.com/ACEsuit/mace-off/tree/main/mace_off23",
+        "size": "small",
+        "pretraining_data": "SPICE-based MACE-OFF23 organic training set",
+        "download_url": "https://raw.githubusercontent.com/ACEsuit/mace-off/91a78c5a9c300d1104700d9352c8bfe449227737/mace_off23/MACE-OFF23_small.model",
+        "estimated_num_parameters": 694320,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "off23-medium": {
+        "model_name": "MACE-OFF23-medium",
+        "model_version": "OFF23",
+        "model_filename": "mace/OFF23/MACE-OFF23_medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-off/tree/main/mace_off23",
+        "size": "medium",
+        "pretraining_data": "SPICE-based MACE-OFF23 organic training set",
+        "download_url": "https://raw.githubusercontent.com/ACEsuit/mace-off/91a78c5a9c300d1104700d9352c8bfe449227737/mace_off23/MACE-OFF23_medium.model",
+        "estimated_num_parameters": 1428368,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "off23-large": {
+        "model_name": "MACE-OFF23-large",
+        "model_version": "OFF23",
+        "model_filename": "mace/OFF23/MACE-OFF23_large.model",
+        "source_url": "https://github.com/ACEsuit/mace-off/tree/main/mace_off23",
+        "size": "large",
+        "pretraining_data": "SPICE-based MACE-OFF23 organic training set",
+        "download_url": "https://raw.githubusercontent.com/ACEsuit/mace-off/91a78c5a9c300d1104700d9352c8bfe449227737/mace_off23/MACE-OFF23_large.model",
+        "estimated_num_parameters": 4707312,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      },
+      "off24-medium": {
+        "model_name": "MACE-OFF24-medium",
+        "model_version": "OFF24",
+        "model_filename": "mace/OFF24/MACE-OFF24_medium.model",
+        "source_url": "https://github.com/ACEsuit/mace-off/tree/main/mace_off24",
+        "size": "medium",
+        "pretraining_data": "MACE-OFF organic training set extended with SPICE 2 configurations",
+        "download_url": "https://raw.githubusercontent.com/ACEsuit/mace-off/91a78c5a9c300d1104700d9352c8bfe449227737/mace_off24/MACE-OFF24_medium.model",
+        "estimated_num_parameters": 1428368,
+        "parameter_count_notes": "Sum of parameter tensor shapes in the linked checkpoint metadata; shared tensors counted once; optimizer state and buffers excluded."
+      }
+    },
+    "sevennet": {
+      "0-22May2024": {
+        "model_name": "SevenNet-0",
+        "model_version": "22May2024",
+        "model_filename": "sevennet/22May2024/checkpoint_sevennet_0.pth",
+        "source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html",
+        "size": "lmax=2, 5 layers",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_0__22May2024/checkpoint_sevennet_0.pth",
+        "estimated_num_parameters": 842440,
+        "parameter_count_notes": "Published model count in Matbench Discovery for SevenNet-0/l3i5; SevenNet-omat is rounded from 15,761,718 model-state tensor elements (includes small buffers, excludes optimizer state)."
+      },
+      "0-11Jul2024": {
+        "model_name": "SevenNet-0",
+        "model_version": "11Jul2024",
+        "model_filename": "sevennet/11Jul2024/checkpoint_sevennet_0.pth",
+        "source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html",
+        "size": "lmax=2, 5 layers",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_0__11Jul2024/checkpoint_sevennet_0.pth",
+        "estimated_num_parameters": 842440,
+        "parameter_count_notes": "Published model count in Matbench Discovery for SevenNet-0/l3i5; SevenNet-omat is rounded from 15,761,718 model-state tensor elements (includes small buffers, excludes optimizer state)."
+      },
+      "l3i5": {
+        "model_name": "SevenNet-l3i5",
+        "model_version": "209339d4eb4c1717f906c4cb715629159f00f88c",
+        "model_filename": "sevennet/209339d4eb4c1717f906c4cb715629159f00f88c/checkpoint_l3i5.pth",
+        "source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html",
+        "size": "lmax=3, 5 layers",
+        "pretraining_data": "MPtrj",
+        "download_url": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_l3i5/checkpoint_l3i5.pth",
+        "estimated_num_parameters": 1171144,
+        "parameter_count_notes": "Published model count in Matbench Discovery for SevenNet-0/l3i5; SevenNet-omat is rounded from 15,761,718 model-state tensor elements (includes small buffers, excludes optimizer state)."
+      },
+      "omat": {
+        "model_name": "SevenNet-omat",
+        "model_version": "v0.11.0.cp",
+        "model_filename": "sevennet/v0.11.0.cp/checkpoint_sevennet_omat.pth",
+        "source_url": "https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html",
+        "size": "lmax=3, 5 layers",
+        "pretraining_data": "OMat24",
+        "download_url": "https://github.com/MDIL-SNU/SevenNet/releases/download/v0.11.0.cp/checkpoint_sevennet_omat.pth",
+        "estimated_num_parameters": 15800000,
+        "parameter_count_notes": "Published model count in Matbench Discovery for SevenNet-0/l3i5; SevenNet-omat is rounded from 15,761,718 model-state tensor elements (includes small buffers, excludes optimizer state)."
+      }
+    },
+    "nep89": {
+      "20250409": {
+        "model_name": "NEP89",
+        "model_version": "20250409",
+        "model_filename": "nep89/20250409/nep89_20250409.txt",
+        "source_url": "https://github.com/brucefan1983/GPUMD/tree/master/potentials/nep/nep89_20250409",
+        "size": "Single published 89-element model",
+        "pretraining_data": "Combined inorganic and organic datasets",
+        "download_url": "https://raw.githubusercontent.com/brucefan1983/GPUMD/a0e55bc87390b93d009da37c798616982573bab2/potentials/nep/nep89_20250409/nep89_20250409.txt",
+        "estimated_num_parameters": 976331,
+        "parameter_count_notes": "From the released NEP4 header: 89*(35+2)*80+1 ANN parameters plus 89**2*5*9*2 descriptor coefficients; excludes descriptor scalers."
+      }
+    }
+  }
+}

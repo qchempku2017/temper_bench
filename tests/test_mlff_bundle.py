@@ -252,6 +252,7 @@ def test_deepmd_uses_only_weights_and_full_element_type_map(
     domain = finetune_training_unit.root_path / finetune_training_unit.domain
     write(domain / "validation.extxyz", make_frame("He", -1.0, "validation"), format="extxyz")
     spec = DPA4SpecBuilder(
+        model_name="test-model", model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={"numb_epoch": 7},
@@ -315,6 +316,7 @@ def test_nep_rejects_unsupported_checkpoint_headers(
     model = tmp_path / "nep.txt"
     model.write_text("nep3 1 H\n", encoding="utf-8")
     spec = NEP89SpecBuilder(
+        model_name="test-model", model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={},
@@ -399,6 +401,7 @@ def test_nep_rejects_training_elements_absent_from_checkpoint(
         encoding="utf-8",
     )
     spec = NEP89SpecBuilder(
+        model_name="test-model", model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={},

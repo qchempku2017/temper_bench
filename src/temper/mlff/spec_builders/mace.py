@@ -8,9 +8,6 @@ class MACESpecBuilder(BaseSpecBuilder):
     """Build a MACE recipe; see BaseSpecBuilder for source and override options."""
 
     mlff_type = "mace"
-    model_name = "MACE"
-    model_version = "2024.0"
-    model_filename = "mace.model"
     implementations = (MLFFImplementation(name="mace-torch", version="0.3.16"),)
     epoch_key = "max_num_epochs"
     patience_key = "patience"

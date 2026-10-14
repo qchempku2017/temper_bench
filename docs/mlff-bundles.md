@@ -16,17 +16,25 @@ Bash is required for native training.
 
 ## Building a specification
 
-Every builder accepts a source directory and optional release filenames.
+Every builder accepts either a catalog `variant` or all three explicit fields:
+`model_name`, `model_version`, and `model_filename`. These fields belong to the
+builder instance, so different sizes and pretraining branches can coexist.
+There is no implicit default model, and combining a variant with explicit model
+fields raises `ValueError`.
+
 Omitting the directory uses `DEFAULT_MLFF_PRETRAINED_MODELS_DIR`, whose default
-is `./pretrained_models`.
+is `./pretrained_models`. A relative directory is relative to the current working
+directory at `build()` time, not the repository or installed package. `~` is
+expanded. Checkpoint filenames use relative POSIX paths, including subdirectories.
 
 ~~~python
 from temper.mlff.spec_builders import MACESpecBuilder
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 spec = MACESpecBuilder(
-    # Optional; defaults to ./pretrained_models/mace.model.
-    pretrained_model_dir="/shared/models", model_filename="mace.model",
+    variant="mpa-0-medium",
+    # Looks for /shared/models/mace/mace_mpa_0/mace-mpa-0-medium.model.
+    pretrained_model_dir="/shared/models",
     # None means test the pretrained model without training.
     # An empty dict enables the pinned fine-tuning defaults.
     training_parameters={},
@@ -38,17 +46,98 @@ bundle = MLFFTrainBundle(training_unit=training_unit, mlff_spec=spec)
 submit_directory, packaged_bundle = bundle.write_submit_folder("submit/mace-run")
 ~~~
 
-All builders accept `pretrained_model_dir` and `model_filename`.
-No JSON sidecar is required. Default filenames are:
+For a custom or renamed local checkpoint, supply its identity explicitly:
 
-| Builder | Model filename |
-| --- | --- |
-| `DPA4SpecBuilder` | `dpa4.pt` |
-| `DPA4CSpecBuilder` | `dpa4c.pt` |
-| `MatterSimSpecBuilder` | `mattersim.pth` |
-| `MACESpecBuilder` | `mace.model` |
-| `SevenNetSpecBuilder` | `sevennet.pth` |
-| `NEP89SpecBuilder` | `nep89.txt` |
+~~~python
+custom = MACESpecBuilder(
+    model_name="my-mace-small-materials",
+    model_version="experiment-2026-10-14",
+    model_filename="custom/checkpoint.model",
+    pretrained_model_dir="/shared/models",
+)
+~~~
+
+The packaged [default_pretrained_models.json](../src/temper/mlff/default_pretrained_models.json)
+contains release metadata only. Download weights separately from each entry's
+`download_url` and place them at `pretrained_model_dir / model_filename`.
+No checkpoint is downloaded or read during initialization; `build()` reads and
+hashes the local file. No per-checkpoint JSON sidecar is required.
+
+~~~python
+
+from temper.mlff.spec_builders.base import pretrained_model_variants, pretrained_model_defaults
+from temper.mlff.spec_builders import mlff_spec_builder_factory
+
+variants = MACESpecBuilder.available_variants()  # tuple of case-sensitive keys
+metadata = pretrained_model_defaults("mace", "mpa-0-medium")
+family_catalog = pretrained_model_variants("mattersim")  # independent dictionaries
+builders = [
+    mlff_spec_builder_factory("mattersim")(variant=variant)
+    for variant in family_catalog
+]
+~~~
+
+The factory still returns a builder class. Catalog lookup works from installed
+distributions and does not depend on the source checkout. A preset resolves to
+ordinary spec fields; the runtime does not consult the catalog. Moving identical
+checkpoint bytes does not change the specification identity.
+
+### Pretrained release survey (2026-10-14)
+
+The catalog contains 47 fine-tunable checkpoint presets. Every entry has an
+integer `estimated_num_parameters`, describing the full pretrained model before
+fine-tuning or element/head selection. It is a parameter count, not a byte size.
+`parameter_count_notes` explains whether the value is published, nominal, or
+estimated from checkpoint tensor shapes. Estimates exclude optimizer state;
+SevenNet-omat's rounded estimate includes small model buffers.
+
+| Family | Catalog choices | Parameter range | Sources |
+| --- | --- | --- | --- |
+| DPA4 | OMat24 Nano/Mini/Neo/Air/Plus (`v20260805`); Nano through Max (`v20260911`); MatPES R2SCAN Mini/Neo/Air (`v20260628`) | 0.48M–99.01M | [AISSquare OMat24](https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24), [AISSquare MatPES](https://www.aissquare.com/models/detail?pageType=models&id=424&name=DPA4-MatPES-v20260628) |
+| DPA4C | OMat24 Nano/Mini/Neo/Air/Plus (`v20260911`) | 0.030M–1.457M | [AISSquare OMat24](https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24) |
+| MatterSim | v1.0.0 1M/5M | approximately 1M–5M | [Model card](https://github.com/microsoft/mattersim/blob/main/MODEL_CARD.md) |
+| MACE | MP-0, MP-0b/b2/b3, MPA-0, OMAT-0, MatPES PBE/r2SCAN, OFF23/OFF24, OMOL-0 (100M/4M training sets) | 0.69M–52.37M | [Foundation releases](https://github.com/ACEsuit/mace-foundations/releases), [OFF releases](https://github.com/ACEsuit/mace-off) |
+| SevenNet | 0 (May/July 2024), l3i5, omat | 0.84M–approximately 15.8M | [Model descriptions](https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html) |
+| NEP89 | `20250409` | approximately 0.976M | [Released model](https://github.com/brucefan1983/GPUMD/tree/master/potentials/nep/nep89_20250409) |
+
+AISSquare publishes OMat weights for **both DPA4 and DPA4C**. The empty
+DPA4C-OMat Hugging Face repository is not evidence that these weights are absent.
+AISSquare also provides the matching training configurations and fine-tuning
+commands. Use portable `.pt` checkpoints for training, not compiled `.pt2` exports.
+
+### Fine-tuning prerequisites and exclusions
+
+The newer AISSquare OMat releases require a DeePMD-kit development commit after
+2026-10-01, PyTorch 2.11 and CUDA 12.8. Their release notes still identify
+DeePMD-kit as 3.2.0, so that version string alone does not establish compatibility.
+The MatPES release also specifies DeePMD-kit main branch. Install the required
+backend on the execution host; catalog selection does not install or upgrade it.
+These prerequisites are recorded in each entry's `usage_notes`.
+
+The catalog excludes entries with known unsupported TEMPER training workflows:
+DeepMD OMol charge/spin conditioning, DPA4-Beta branch selection, SevenNet
+multi-task modality assignment, MACE-MH head coordination, and PolarMACE's
+specialized recipe. SevenNet-Nano is also excluded because its stated 0.13.1
+requirement differs from TEMPER's 0.13.0 integration. These exclusions describe
+TEMPER's present integration, not a claim that the upstream architectures cannot
+be fine-tuned. MACE-MDP is excluded because it predicts dipoles/polarizabilities
+rather than the benchmark's energies and forces.
+
+Molecular checkpoints require appropriate charge/spin labels and native training
+options. Consult the release notes and `usage_notes`; catalog selection cannot
+supply dataset-dependent physical inputs. Source verification and specification
+tests do not certify GPU training or evaluation with the installed backend.
+
+MACE counts were obtained by summing parameter tensor shapes in the linked
+release checkpoints, counting shared tensors once without executing checkpoint
+code. SevenNet-0 and l3i5 use the model authors' counts recorded in
+[Matbench Discovery](https://github.com/janosh/matbench-discovery/tree/main/models/sevennet);
+SevenNet-omat is rounded from model-state tensor shapes. NEP89's estimate is
+calculated from its published NEP4 architecture. MatterSim uses nominal sizes.
+
+Custom checkpoint initialization remains available for integrations the caller
+has validated. There is no moving `latest` alias: add a new variant key when a
+checkpoint changes rather than silently replacing an existing selection.
 
 Source filenames can change without changing the fixed names in submit folders.
 Subclasses share `BaseSpecBuilder`; runtime adapters share `BaseMLFFAdapter`

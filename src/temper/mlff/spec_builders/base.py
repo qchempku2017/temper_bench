@@ -1,14 +1,59 @@
 """Shared construction of content-addressed MLFF recipes."""
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, ClassVar
 
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import MLFFImplementation, MLFFSpec, PretrainedMLFFSpec
+from temper.schemas.utils import validate_submit_relative_path
 from temper.utils.defaults import DEFAULT_MLFF_PRETRAINED_MODELS_DIR
+
+
+# Utilities to load pretrained MLFF presets.
+def pretrained_model_variants(mlff_type: str) -> dict[str, dict[str, Any]]:
+    """Return an independent mapping of variant names to release metadata.
+
+    ``mlff_type`` is a builder family key, such as ``mace``. Each entry contains
+    the model name, release version, and checkpoint filename relative to the
+    caller's pretrained model directory, together with upstream sources and
+    usage notes and an estimated_num_parameters integer describing the full
+    pretrained model before adaptation. Entries provide fine-tunable weights;
+    callers must satisfy any backend prerequisites in their usage notes.
+    Reading the catalog neither downloads nor opens checkpoints.
+    Changes to the returned dictionaries do not affect subsequent calls.
+
+    Raises ``ValueError`` if the family is not present in the packaged catalog.
+    """
+    catalog = json.loads(
+        files("temper.mlff").joinpath("default_pretrained_models.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    try:
+        return catalog["models"][mlff_type]
+    except KeyError:
+        raise ValueError(f"No pretrained model catalog for family {mlff_type!r}.") from None
+
+
+def pretrained_model_defaults(mlff_type: str, variant: str) -> dict[str, Any]:
+    """Return release metadata for one exact, case-sensitive variant name.
+
+    The result is independent of the packaged catalog. An unknown variant
+    raises ``ValueError`` listing the available choices for this family.
+    """
+    variants = pretrained_model_variants(mlff_type)
+    try:
+        return variants[variant]
+    except KeyError:
+        raise ValueError(
+            f"Unknown {mlff_type} variant {variant!r}. "
+            f"Available variants: {', '.join(variants) or '(none)'}."
+        ) from None
 
 
 class BaseSpecBuilder(ABC):
@@ -16,18 +61,33 @@ class BaseSpecBuilder(ABC):
 
     Parameters
     ----------
+    variant : str or None, optional
+        Exact variant key from this family's packaged pretrained model catalog.
+        Select either a variant or all three explicit model fields below.
+        No checkpoint is downloaded; the selected file must exist at build time.
+    model_name, model_version : str or None, optional
+        Pretrained variant name and release identifier for a custom checkpoint.
+        Required together with model_filename when variant is absent; forbidden
+        when variant is supplied.
     pretrained_model_dir : str or Path, optional
         Directory containing pretrained files. Defaults to
-        DEFAULT_MLFF_PRETRAINED_MODELS_DIR.
-    model_filename : str, optional
-        Source filename; defaults to the subclass's release filename.
+        DEFAULT_MLFF_PRETRAINED_MODELS_DIR. A leading ~ is expanded; relative
+        directories are resolved against the working directory at build time.
+    model_filename : str or None, optional
+        Checkpoint filename or POSIX subpath relative to pretrained_model_dir.
+        Required for custom checkpoints and supplied by the catalog for variants.
     training_parameters : dict or None
         Native overrides; None selects zero-shot, {} enables training defaults.
     testing_parameters : dict or None
-        ASE calculator options; TEMPER manages hardware selection.
+        ASE calculator options; TEMPER manages hardware selection. Variant
+        options are included automatically. Conflicting task or model-type
+        options are rejected so the selected model identity stays accurate.
 
     Attributes
     ----------
+    variant : str or None
+        Catalog selection used to initialize this builder; None means the
+        caller supplied the checkpoint identity explicitly.
     model_name, model_version : str
         Pretrained model name and release identifier.
     model_filename : str
@@ -48,9 +108,6 @@ class BaseSpecBuilder(ABC):
     """
 
     registry: ClassVar[dict[str, type[BaseSpecBuilder]]] = {}
-    model_name: str
-    model_version: str
-    model_filename: str
     implementations: tuple[MLFFImplementation, ...]
     training_implementations: tuple[MLFFImplementation, ...] = ()
     training_defaults: dict[str, Any]
@@ -90,19 +147,63 @@ class BaseSpecBuilder(ABC):
     def __init__(
         self,
         *,
+        variant: str | None = None,
+        model_name: str | None = None,
+        model_version: str | None = None,
         pretrained_model_dir: str | Path | None = None,
         model_filename: str | None = None,
         training_parameters: dict[str, Any] | None = None,
         testing_parameters: dict[str, Any] | None = None,
     ) -> None:
+        explicit = (model_name, model_version, model_filename)
+        preset: dict[str, Any] = {}
+        if variant is not None:
+            if any(value is not None for value in explicit):
+                raise ValueError(
+                    "Specify either variant or explicit model_name, model_version "
+                    "and model_filename, not both."
+                )
+            preset = pretrained_model_defaults(self.mlff_type, variant)
+            model_name = preset["model_name"]
+            model_version = preset["model_version"]
+            model_filename = preset["model_filename"]
+        for name, value in (
+            ("model_name", model_name), ("model_version", model_version),
+            ("model_filename", model_filename),
+        ):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"{name} must be a non-empty string; provide variant or all "
+                    "three explicit model fields."
+                )
+        assert model_name is not None and model_version is not None and model_filename is not None,\
+            "Explicit model fields must be non-None after validation."
+
+        self.variant = variant
+        self.model_name: str = model_name
+        self.model_version: str = model_version
+        self.model_filename: str = validate_submit_relative_path(model_filename)
         self.pretrained_model_dir = Path(
             DEFAULT_MLFF_PRETRAINED_MODELS_DIR
             if pretrained_model_dir is None
             else pretrained_model_dir
         ).expanduser()
-        self.model_filename = model_filename or type(self).model_filename
         self.training_parameters: dict[str, Any] | None = training_parameters
-        self.testing_parameters = testing_parameters
+        options = deepcopy(preset.get("testing_parameters", {}))
+        for key, value in (testing_parameters or {}).items():
+            if key in options and options[key] != value:
+                raise ValueError(
+                    f"Variant {variant!r} requires testing_parameters[{key!r}] "
+                    f"to be {options[key]!r}; select another variant or use "
+                    "explicit model fields."
+                )
+            options[key] = deepcopy(value)
+        self.testing_parameters = options
+
+    @classmethod
+    def available_variants(cls) -> tuple[str, ...]:
+        """Return catalog variant keys without inspecting local checkpoint files."""
+        return tuple(pretrained_model_variants(cls.mlff_type))
 
     def prepare_training(self) -> dict[str, Any]:
         """Return independent native defaults merged with caller overrides."""
@@ -121,9 +222,13 @@ class BaseSpecBuilder(ABC):
         return parameters
 
     def build(self) -> MLFFSpec:
-        """Return a training parameters and model recipe in the form of MLFFSpec.
+        """Read and hash the local checkpoint and return its MLFFSpec recipe.
 
-        Raises ValueError for missing files or invalid training controls.
+        The returned spec contains the selected model identity, local artifact
+        reference, software requirements, and training/calculator parameters.
+        No weights are downloaded or modified. Raises ValueError for missing
+        files or invalid training controls. Building a recipe does not execute
+        the backend or verify that its checkpoint requirements are installed.
         """
         artifacts = {
             "model": LocalArtifactRef.from_path(

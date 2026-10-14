@@ -19,17 +19,18 @@ from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas import MLFFTestResult
 
 
-def test_registered_release_needs_only_class_metadata(tmp_path, monkeypatch):
+def test_registered_family_accepts_instance_model_identity(tmp_path, monkeypatch):
     monkeypatch.setattr(BaseSpecBuilder, "registry", dict(BaseSpecBuilder.registry))
 
     @BaseSpecBuilder.register(name="other-mace", alias="other")
     class OtherMACE(MACESpecBuilder):
         mlff_type = "other-mace"
-        model_filename = "other.model"
-        model_version = "2"
 
     (tmp_path / "other.model").write_bytes(b"weights")
-    builder = mlff_spec_builder_factory("other-mace")(pretrained_model_dir=tmp_path)
+    builder = mlff_spec_builder_factory("other-mace")(
+        pretrained_model_dir=tmp_path, model_name="OtherMACE",
+        model_version="2", model_filename="other.model",
+    )
     assert mlff_spec_builder_factory("other") is OtherMACE
     spec = builder.build()
     assert spec.mlff_type == "other-mace"

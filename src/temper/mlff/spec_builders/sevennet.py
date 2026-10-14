@@ -5,12 +5,9 @@ from temper.schemas.mlff_spec import MLFFImplementation
 
 @BaseSpecBuilder.register(name="sevennet")
 class SevenNetSpecBuilder(BaseSpecBuilder):
-    """Build a SevenNet-0 recipe; the runtime resumes its pretrained weights."""
+    """Build a SevenNet recipe; the runtime resumes its pretrained weights."""
 
     mlff_type = "sevennet"
-    model_name = "SevenNet-0"
-    model_version = "11July2024"
-    model_filename = "sevennet.pth"
     implementations = (MLFFImplementation(name="sevenn", version="0.13.0"),)
     epoch_key = "epoch"
     training_defaults = {

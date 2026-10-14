@@ -41,3 +41,6 @@ include = ["temper*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "temper._version.__version__"}
+
+[tool.setuptools.package-data]
+"temper.mlff" = ["default_pretrained_models.json"]

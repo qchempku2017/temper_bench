@@ -60,42 +60,37 @@ def test_model_paths_are_adjustable_and_content_addressed(tmp_path: Path) -> Non
     second = tmp_path / "second.model"
     first.write_bytes(b"same")
     second.write_bytes(b"same")
-    one = MACESpecBuilder(pretrained_model_dir=first.parent, model_filename=first.name).build()
-    two = MACESpecBuilder(pretrained_model_dir=second.parent, model_filename=second.name).build()
+    one = MACESpecBuilder(
+        model_name="test-model", model_version="test-release",
+        pretrained_model_dir=first.parent, model_filename=first.name,
+    ).build()
+    two = MACESpecBuilder(
+        model_name="test-model", model_version="test-release",
+        pretrained_model_dir=second.parent, model_filename=second.name,
+    ).build()
 
     assert one.pretrained_model.artifacts["model"].path == first
     assert one.mlff_spec_id == two.mlff_spec_id
 
     second.write_bytes(b"different")
-    changed = MACESpecBuilder(pretrained_model_dir=second.parent, model_filename=second.name).build()
+    changed = MACESpecBuilder(
+        model_name="test-model", model_version="test-release",
+        pretrained_model_dir=second.parent, model_filename=second.name,
+    ).build()
     assert changed.mlff_spec_id != one.mlff_spec_id
 
 
-def test_default_model_paths_cover_every_family(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
+def test_explicit_model_paths_cover_every_family(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "pretrained_models"
     root.mkdir()
-    for filename in (
-        "dpa4.pt",
-        "dpa4c.pt",
-        "mattersim.pth",
-        "mace.model",
-        "sevennet.pth",
-        "nep89.txt",
-    ):
-        (root / filename).write_bytes(filename.encode())
     monkeypatch.chdir(tmp_path)
-
-    specs = [
-        DPA4SpecBuilder().build(),
-        DPA4CSpecBuilder().build(),
-        MatterSimSpecBuilder().build(),
-        MACESpecBuilder().build(),
-        SevenNetSpecBuilder().build(),
-        NEP89SpecBuilder().build(),
-    ]
+    specs = []
+    for family in FAMILIES:
+        filename = family + ".weights"
+        (root / filename).write_bytes(family.encode())
+        specs.append(mlff_spec_builder_factory(family)(
+            model_name=family, model_version="test-release", model_filename=filename,
+        ).build())
     assert [spec.mlff_type for spec in specs] == list(FAMILIES)
 
 
@@ -130,8 +125,12 @@ def test_none_means_zeroshot_and_empty_dict_enables_defaults(
 ) -> None:
     model = tmp_path / "mace.model"
     model.write_bytes(b"mace")
-    zero = MACESpecBuilder(pretrained_model_dir=model.parent, model_filename=model.name).build()
+    zero = MACESpecBuilder(
+        model_name="test-model", model_version="test-release",
+        pretrained_model_dir=model.parent, model_filename=model.name,
+    ).build()
     fine = MACESpecBuilder(
+        model_name="test-model", model_version="test-release",
         pretrained_model_dir=model.parent, model_filename=model.name,
         training_parameters={},
     ).build()
