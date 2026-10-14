@@ -41,6 +41,75 @@ def test_prepare_after_relocation_without_original_inputs(
 
 
 @pytest.mark.parametrize("finetune", [False, True])
+def test_preparation_preserves_existing_configs_and_restores_only_missing_files(
+    finetune, tmp_path, finetune_training_unit, zeroshot_training_unit,
+    mlff_spec_factory, monkeypatch,
+):
+    bundle = MLFFTrainBundle(
+        training_unit=finetune_training_unit if finetune else zeroshot_training_unit,
+        mlff_spec=mlff_spec_factory("mace", with_training=finetune),
+    )
+    target, packaged = bundle.write_submit_folder(tmp_path / "job")
+    runner.prepare_bundle(target / "bundle.json")
+    test_config = target / packaged.files.test_input_files["config"]
+    edited = json.loads(test_config.read_text())
+    edited["calculator"]["parameters"]["default_dtype"] = "float32"
+    test_config.write_text(json.dumps(edited))
+    if finetune:
+        config = target / packaged.files.training_input_files["config"]
+        config.write_text(config.read_text() + "# caller edit\n")
+    before = {path: path.read_bytes() for path in target.rglob("*") if path.is_file()}
+
+    with monkeypatch.context() as patch:
+        patch.setattr(MACEAdapter, "training_file_contents", lambda *args: pytest.fail("Existing configs were rendered again"))
+        runner.prepare_bundle(target / "bundle.json")
+    assert all(path.read_bytes() == content for path, content in before.items())
+
+    # A missing script must not cause the edited native config to be rewritten.
+    if finetune:
+        script = target / packaged.files.training_input_files["script"]
+        script.unlink()
+        runner.prepare_bundle(target / "bundle.json")
+        assert script.read_bytes() == before[script]
+        assert config.read_bytes() == before[config]
+        assert test_config.read_bytes() == before[test_config]
+
+    test_config.unlink()
+    adapter = runner.prepare_bundle(target / "bundle.json")
+    assert json.loads(test_config.read_text()) == packaged.test_config()
+    adapter.spec.testing_parameters["default_dtype"] = "float64"
+    runner.write_configuration_files(adapter)
+    assert json.loads(test_config.read_text())["calculator"]["parameters"]["default_dtype"] == "float64"
+    if finetune:
+        assert "# caller edit" not in config.read_text()
+
+
+@pytest.mark.parametrize("family", ["dpa4", "dpa4c", "mace", "mattersim", "sevennet", "nep89"])
+def test_older_bundle_restores_configs_from_copied_inputs(
+    family, tmp_path, finetune_training_unit, mlff_spec_factory,
+):
+    spec = mlff_spec_factory(family)
+    target, packaged = MLFFTrainBundle(
+        training_unit=finetune_training_unit, mlff_spec=spec,
+    ).write_submit_folder(tmp_path / "old")
+    paths = [packaged.files.test_input_files["config"]] + [
+        path for key, path in packaged.files.training_input_files.items()
+        if key in {"config", "script"}
+    ]
+    assert all(not (target / path).exists() for path in paths)
+    runner.prepare_bundle(target / "bundle.json")
+    expected = {path: (target / path).read_bytes() for path in paths}
+    for path in paths:
+        (target / path).unlink()
+    remote = tmp_path / "remote"
+    target.rename(remote)
+    shutil.rmtree(finetune_training_unit.root_path)
+    spec.pretrained_model.artifacts["model"].path.unlink()
+    runner.prepare_bundle(remote / "bundle.json")
+    assert all((remote / path).read_bytes() == content for path, content in expected.items())
+
+
+@pytest.mark.parametrize("finetune", [False, True])
 def test_runner_trains_then_evaluates_from_another_directory(
     finetune, tmp_path, finetune_training_unit, zeroshot_training_unit,
     mlff_spec_factory, monkeypatch,
@@ -84,6 +153,7 @@ def test_runtime_uses_serialized_directories_and_checks_version(
     bundle = MLFFTrainBundle.model_validate_json(path.read_text())
     bundle.files.training_input_files["config"] = "work/native/mace.yaml"
     bundle.files.training_output_files["trained_model"] = "results/models/finetuned_mace.model"
+    # Configs have not been generated yet, so preparation uses the new mapping.
     path.write_text(bundle.model_dump_json())
     runner.prepare_bundle(path)
     assert (path.parent / "work/native/mace.yaml").exists()

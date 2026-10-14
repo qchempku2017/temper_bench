@@ -141,7 +141,10 @@ class BaseMLFFAdapter(ABC):
 
     @abstractmethod
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
-        """Render native configs without reading checkpoints or training models.
+        """Create native training config contents without importing backends or training.
+
+        Implementations may read copied inputs, including text model headers,
+        below root. They must not write files.
 
         Parameters
         ----------
@@ -157,7 +160,9 @@ class BaseMLFFAdapter(ABC):
 
     @abstractmethod
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
-        """Describe native training commands after prepare_training completes.
+        """Native training commands to be used in running script.
+
+        Does not contain prepare_training.
 
         Parameters
         ----------
@@ -172,37 +177,37 @@ class BaseMLFFAdapter(ABC):
         """
         raise NotImplementedError
 
-    def generate_training_files(self, training_stress: bool) -> None:
-        """Write native configuration files below the bundle root.
+    def training_file_contents(self, training_stress: bool) -> dict[str, str]:
+        """Return native configs and an optional training script as text.
 
-        training_stress enables stress losses when the data contain labels.
-        This prepares inspectable inputs without importing training backends.
+        Keys are paths relative to root, recorded as config and script in
+        files.training_input_files. Values contain the complete file contents;
+        this method writes nothing. Copied datasets and model headers may be
+        read, so inputs must have been copied before preparation calls it.
+
+        The script redirects backend output to the recorded training log. Python
+        API backends supply no shell commands and return no script entry.
+
+        Parameters
+        ----------
+        training_stress : bool
+            Enables stress losses when labels are present.
+
+        Returns
+        -------
+        dict[str, str]
+            Bundle-relative filenames mapped to their complete text contents.
         """
-        for relative, content in self._training_file_contents(training_stress).items():
-            self._write_text(relative, content)
-
-    def _write_text(self, relative: str, content: str) -> None:
-        destination = self.root / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content, encoding="utf-8", newline="\n")
-        logger.debug("Wrote training input %s", destination)
-
-    def generate_training_script(self, training_stress: bool) -> None:
-        """Write the recorded training script and send backend output to its log.
-
-        The script and log use their recorded bundle-relative paths.
-        training_stress specifies whether the training set has stress labels.
-        Python API backends supply no shell commands and write no script.
-        """
+        contents = self._training_file_contents(training_stress)
         lines = self._training_commands(training_stress)
         if lines:
-            self._write_text(
-                self.input_path("script"),
+            contents[self.input_path("script")] = (
                 "#!/usr/bin/env bash\nset -euo pipefail\n{\n"
                 + "\n".join(lines)
                 + "\n} > "
-                + shlex.quote(self.output_path("training_log")) + " 2>&1\n",
+                + shlex.quote(self.output_path("training_log")) + " 2>&1\n"
             )
+        return contents
 
     def prepare_training(self) -> None:
         """Prepare backend inputs after native configs have been written.
@@ -213,7 +218,10 @@ class BaseMLFFAdapter(ABC):
         """
 
     def prepare_evaluation(self) -> None:
-        """Prepare any host-specific model export required for evaluation."""
+        """Prepare any host-specific model export required for evaluation.
+
+        Currently, only DPA models need this.
+        """
 
     def cleanup_evaluation(self) -> None:
         """Remove the temporary evaluation model, including after failed runs."""

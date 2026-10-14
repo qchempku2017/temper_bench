@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from temper._version import __version__
-import json
 from pathlib import Path
+import json
 import logging
 import warnings
 
@@ -17,8 +17,54 @@ from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 logger = logging.getLogger(__name__)
 
 
+def write_configuration_files(
+    adapter: BaseMLFFAdapter, *, missing_only: bool = False,
+) -> None:
+    """Write configs and training scripts for an already populated bundle.
+
+    Paths resolve below adapter.root using adapter.files. Copied datasets
+    and weights must already exist there. No source inputs are copied and
+    no backend is imported. This function never removes the bundle folder.
+
+    Parameters
+    ----------
+    adapter : BaseMLFFAdapter
+        Adapter holding the loaded bundle and its absolute root. The bundle's
+        files field must be populated with the expected layout for the adapter
+        to be able to perform training and evaluation.
+    missing_only : bool, default False
+        If true, preserves existing files, including manual edits, and
+        creates only missing configs. When all expected files exist, their contents
+        are not rendered again. False rewrites configs
+        and scripts from the recipe, for example after changing recorded paths.
+    """
+    files = adapter.files
+    assert files is not None
+    contents: dict[str, str] = {}
+    # Write training configs and scripts for fine-tuning bundles.
+    if adapter.bundle.unit_type == "finetune":
+        native_paths = [
+            files.training_input_files[key]
+            for key in ("config", "script")
+            if key in files.training_input_files
+        ]
+        if not missing_only or any(not (adapter.root / path).exists() for path in native_paths):
+            contents.update(adapter.training_file_contents(bool(files.training_stress)))
+    # Write test config file.
+    config_path = files.test_input_files["config"]
+    if not missing_only or not (adapter.root / config_path).exists():
+        contents[config_path] = json.dumps(adapter.bundle.test_config(), indent=2) + "\n"
+    for relative, content in contents.items():
+        destination = adapter.root / relative
+        if missing_only and destination.exists():
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8", newline="\n")
+        logger.debug("Wrote configuration input %s", destination)
+
+
 def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
-    """Load an experiment and write inspectable configs without executing it.
+    """Load an experiment and prepare its directories without executing it.
 
     Parameters
     ----------
@@ -29,13 +75,14 @@ def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
     -------
     BaseMLFFAdapter
         Adapter holding the loaded bundle and its absolute root. Preparation
-        writes testing_inputs/test_config.json and, for fine-tuning, native
-        configs plus training_inputs/run.sh for CLI backends. Actual paths
-        come from bundle.files. TorchNEP uses a direct Python call.
+        writes missing native configs, training scripts, and test_config.json
+        using copied inputs and paths from bundle.files. Existing files and
+        manual edits are preserved on repeat calls. It does not recopy inputs.
+        Output parent directories are created for execution.
         This function does not import a model backend or require CUDA.
         Backend data conversion and checkpoint loading occur in run_pipeline.
 
-    Warns
+    Warnings
     -----
     RuntimeWarning
         If the writer's TEMPER release differs from this runtime. Unsupported
@@ -63,14 +110,7 @@ def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
         *([files.evaluation_model] if files.evaluation_model is not None else []),
     ):
         (adapter.root / relative).parent.mkdir(parents=True, exist_ok=True)
-    if bundle.unit_type == "finetune":
-        stress = bool(files.training_stress)
-        adapter.generate_training_files(stress)
-        adapter.generate_training_script(stress)
-    # Comment: Writing of test_config.json should be handled by BundleWriter, not here.
-    (adapter.root / files.test_input_files["config"]).write_text(
-        json.dumps(bundle.test_config(), indent=2) + "\n", encoding="utf-8",
-    )
+    write_configuration_files(adapter, missing_only=True)
     return adapter
 
 

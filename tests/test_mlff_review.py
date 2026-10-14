@@ -153,7 +153,7 @@ def test_packaging_and_preparation_log_levels(tmp_path, finetune_training_unit, 
         ).write_submit_folder(tmp_path / "job")
         runner.prepare_bundle(target / "bundle.json")
     assert any(r.levelno == logging.INFO and "Packaging" in r.message for r in caplog.records)
-    assert any(r.levelno == logging.DEBUG and "Wrote training input" in r.message for r in caplog.records)
+    assert any(r.levelno == logging.DEBUG and "Wrote configuration input" in r.message for r in caplog.records)
     bundle_id = str(MLFFTrainBundle.model_validate_json((target / "bundle.json").read_text()).mlff_train_bundle_id)
     assert all(bundle_id in r.message for r in caplog.records if "Packaging" in r.message or "Wrote bundle" in r.message)
 
