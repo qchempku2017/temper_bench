@@ -99,11 +99,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             split_cli(args.config_file)
             sysexit = 0
         elif args.command == "run_pipeline":
-            from temper.mlff.pipeline.runner import prepare_bundle, run_pipeline
-            if args.prepare_only:
-                prepare_bundle(args.bundle)
-            else:
-                run_pipeline(args.bundle)
+            from temper.entrypoints.run_pipeline import run_pipeline_cli
+            run_pipeline_cli(args.bundle, prepare_only=args.prepare_only)
             sysexit = 0
         else:
             parser.print_help()
