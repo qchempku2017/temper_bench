@@ -206,9 +206,9 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
         else:
             artifact_dumps.append((obj, path))
 
-    monkeypatch.setattr(entrypoint, "partition_domain_into_groups", partition)
-    monkeypatch.setattr(entrypoint, "split_grouped_domain", split)
-    monkeypatch.setattr(entrypoint, "write_all_sets_in_split_group_to_extxyz", export)
+    monkeypatch.setattr("temper.grouping.partition_domain_into_groups", partition)
+    monkeypatch.setattr("temper.splitting.split.split_grouped_domain", split)
+    monkeypatch.setattr("temper.splitting.io.write_all_sets_in_split_group_to_extxyz", export)
     monkeypatch.setattr(entrypoint, "dumpfn", record_dump)
 
     with caplog.at_level(logging.DEBUG, logger="temper.entrypoints.split"):

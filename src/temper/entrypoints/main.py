@@ -5,8 +5,6 @@ import argparse
 import logging
 from typing import Sequence
 
-from pathlib import Path
-from temper.utils.defaults import DEFAULT_SPLIT_CONFIG_FILE
 from temper.logging import (
     LOG_LEVEL_NAMES,
     PROGRESS_MODES,
@@ -24,7 +22,7 @@ def main_parser() -> argparse.ArgumentParser:
     """TEMPER bench main CLI options and arguments parser.
 
     Returns
-    ------
+    -------
     ArgumentParser
         TEMPER bench main CLI options and arguments parser.
     """
@@ -75,20 +73,31 @@ def main_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(title="Valid subcommands", dest="command")
 
-    split = subparsers.add_parser("split", help="Group and split local datasets (requires [preprocess]).")
-    split.add_argument(
-        "-c", "--config-file", type=Path, default=Path(DEFAULT_SPLIT_CONFIG_FILE),
-        help="JSON or YAML SplitConfig (default: DEFAULT_SPLIT_CONFIG_FILE or split_config.json).",
-    )
-    pipeline = subparsers.add_parser("run_pipeline", help="Fine-tune and evaluate a packaged MLFF bundle.")
-    pipeline.add_argument("bundle", type=Path)
-    pipeline.add_argument("--prepare-only", action="store_true", help="Prepare directories and restore missing configs without executing models.")
+    from temper.entrypoints.job import add_job_parser
+    from temper.entrypoints.run_pipeline import add_run_pipeline_parser
+    from temper.entrypoints.split import add_split_parser
+
+    add_split_parser(subparsers)
+    add_run_pipeline_parser(subparsers)
+    add_job_parser(subparsers)
 
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """TEMPER bench main CLI."""
+    """Run the TEMPER command-line interface and exit with its status.
+
+    Parameters
+    ----------
+    argv : Sequence[str] or None, optional
+        Arguments without the executable name. None uses the process arguments.
+
+    Raises
+    ------
+    SystemExit
+        Zero after success, one after an operation error, 130 after Ctrl+C,
+        or the argument parser's error code for invalid command syntax.
+    """
     parser = main_parser()
     args = parser.parse_args(argv)
     configure_cli_logging(args.log_level, progress_mode=args.progress)
@@ -102,6 +111,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             from temper.entrypoints.run_pipeline import run_pipeline_cli
             run_pipeline_cli(args.bundle, prepare_only=args.prepare_only)
             sysexit = 0
+        elif args.command == "job":
+            from temper.entrypoints.job import job_cli
+            sysexit = job_cli(args)
         else:
             parser.print_help()
             sysexit = 1

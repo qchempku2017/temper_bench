@@ -70,12 +70,29 @@ class BaseMLFFAdapter(ABC):
         None means the backend does not need a separate evaluation export.
     registry : dict[str, type[BaseMLFFAdapter]]
         Adapter classes indexed by family names and optional aliases.
+    retained_output_keys : tuple[str, ...]
+        Entries in training_output_files to download after a remote attempt.
+        Checkpoint and converted-dataset directories are excluded.
+    retained_output_patterns : tuple[str, ...]
+        Additional bundle-relative log/metric patterns; empty by default.
+    retained_output_globs : dict[str, tuple[str, ...]]
+        Patterns within named output directories. These retain diagnostic text
+        without copying native checkpoint trees.
 
     The writer turns these defaults into bundle-relative paths in bundle.files.
     During execution, adapters use those recorded paths, not these defaults.
     """
 
     registry: ClassVar[dict[str, type[BaseMLFFAdapter]]] = {}
+    retained_output_keys: ClassVar[tuple[str, ...]] = (
+        "trained_model", "training_log", "adapted_config", "learning_curve", "resolved_config",
+    )
+    retained_output_patterns: ClassVar[tuple[str, ...]] = ()
+    retained_output_globs: ClassVar[dict[str, tuple[str, ...]]] = {
+        "logs": ("*.log", "*.txt", "*.json"),
+        "metrics": ("*.csv", "*.json", "*.txt"),
+        "native_outputs": ("*.log", "*.csv", "*.json", "*.yaml", "*.out"),
+    }
 
     @classmethod
     def register(cls, name: str, alias: str | list[str] | None = None):

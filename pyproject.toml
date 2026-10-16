@@ -17,6 +17,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+remote = [
+    "dpdispatcher==1.0.3",
+]
+bohrium = [
+    "dpdispatcher[bohrium]==1.0.3",
+    "bohrium-sdk==0.15.0",
+]
 preprocess = [
     "numba",
     "quests==2026.2.22",

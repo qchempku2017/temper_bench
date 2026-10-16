@@ -117,6 +117,12 @@ class MLFFTrainBundle(ManagedIdentityModel):
     backend-dependent data, trains when requested, and evaluates models.
     Packaging fields do not change the experiment's deterministic identity.
 
+    Parameters
+    ----------
+    **data : object
+        Values for the attributes below. New local recipes normally provide
+        training_unit and mlff_spec only; files remains absent until packaging.
+
     Attributes
     ----------
     training_unit : TrainingUnit
@@ -232,7 +238,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
             ],
         }
 
-    def write_submit_folder(self, target_dir: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
+    def write_submit_folder(self, target_dir: str | Path | None = None, *, bundle_write_root: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
         """Copy inputs and write bundle.json and a launcher to a new directory.
 
         Runtime preparation creates native configs, training scripts, and the
@@ -242,7 +248,10 @@ class MLFFTrainBundle(ManagedIdentityModel):
         ----------
         target_dir : str, pathlib.Path, or None, optional
             New directory to create. It must not already exist. When omitted,
-            a caller-owned temporary directory is created and returned.
+            a readable model/domain/bundle/attempt directory is allocated.
+        bundle_write_root : str, pathlib.Path or None, optional
+            Automatic layout root, relative to the current directory. Defaults
+            to DEFAULT_BUNDLE_WRITE_ROOT or ./bundles. Cannot accompany target_dir.
 
         Returns
         -------
@@ -262,7 +271,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
         """
         from temper.mlff.bundle_writers import write_submit_folder
 
-        return write_submit_folder(self, target_dir)
+        return write_submit_folder(self, target_dir, bundle_write_root=bundle_write_root)
 
 
 __all__ = ["MLFFTrainBundle", "MLFFBundleFiles"]

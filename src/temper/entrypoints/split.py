@@ -1,16 +1,16 @@
 """Command-line entry point for splitting configured TemPER domains."""
 from __future__ import annotations
 
+import argparse
 import logging
 from pathlib import Path
 import time
+from typing import TYPE_CHECKING
 
 from monty.serialization import dumpfn, loadfn
 
-from temper.grouping import partition_domain_into_groups
-from temper.splitting.split import split_grouped_domain
-from temper.splitting.io import write_all_sets_in_split_group_to_extxyz
-from temper.schemas.split import SplitConfig
+if TYPE_CHECKING:
+    from temper.schemas.split import SplitConfig
 
 from temper.utils.defaults import (
     DEFAULT_SPLIT_CONFIG_FILE,
@@ -25,8 +25,28 @@ from temper.logging import format_elapsed, progress_task
 logger = logging.getLogger(__name__)
 
 
+def add_split_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Register the split command and its configuration-file argument.
+
+    Parameters
+    ----------
+    subparsers : argparse._SubParsersAction
+        Top-level parser's subcommand collection. Registration adds argument
+        definitions without loading datasets or preprocessing code. The config
+        path defaults to DEFAULT_SPLIT_CONFIG_FILE or split_config.json;
+        relative paths are resolved from the working directory when executed.
+    """
+    split = subparsers.add_parser("split", help="Group and split local datasets (requires [preprocess]).")
+    split.add_argument(
+        "-c", "--config-file", type=Path, default=Path(DEFAULT_SPLIT_CONFIG_FILE),
+        help="JSON or YAML SplitConfig (default: DEFAULT_SPLIT_CONFIG_FILE or split_config.json).",
+    )
+
+
 def _load_split_config(config_file: Path) -> SplitConfig:
     """Load and validate a JSON or YAML split configuration."""
+    from temper.schemas.split import SplitConfig
+
     if config_file.suffix.lower() not in {".json", ".yaml", ".yml"}:
         raise ValueError(
             f"Split configuration must be JSON or YAML, got {config_file}."
@@ -46,7 +66,19 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
     """Resolve configuration, persist provenance, then group, split, and export.
 
     Return None on success; errors propagate to the CLI exit-status handler.
+
+    Parameters
+    ----------
+    config_file : Path or str, optional
+        JSON or YAML split configuration. Relative paths are resolved from the
+        working directory. Defaults to DEFAULT_SPLIT_CONFIG_FILE. The command
+        writes a reproduction configuration beside this file and exports
+        datasets to the output directory specified in the configuration.
     """
+    from temper.grouping import partition_domain_into_groups
+    from temper.splitting.split import split_grouped_domain
+    from temper.splitting.io import write_all_sets_in_split_group_to_extxyz
+
     command_started_at = time.monotonic()
     config_file = Path(config_file)
     split_config = _load_split_config(config_file).resolve_domains()

@@ -7,7 +7,11 @@ __pycache__/
 
 # Virtual environment
 .venv/
+*.egg-info/
 
 # Test / tooling caches
 .pytest_cache/
 .mypy_cache/
+
+# Default local experiment/job store (retain and back up outside Git)
+/bundles/

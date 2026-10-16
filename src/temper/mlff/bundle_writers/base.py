@@ -1,12 +1,13 @@
 """Package inputs and a portable experiment record for an installed runtime."""
 from __future__ import annotations
 
-import hashlib
 import logging
 from temper._version import __version__
 from pathlib import Path
 import shutil
-import tempfile
+from temper.utils.file_hashing import copy_verified, hashing_session
+from temper.job_management.paths import bundle_root, bundle_directory, next_attempt
+from temper.job_management.storage_utils import store_lock
 
 from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
 from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
@@ -38,12 +39,13 @@ class MLFFBundleWriter:
         self, bundle: MLFFTrainBundle,
         adapter_class: type[BaseMLFFAdapter] | None = None,
     ) -> None:
-        self.bundle = bundle
+        self.bundle: MLFFTrainBundle = bundle
         self.adapter_class: type[BaseMLFFAdapter] = (
                 adapter_class or mlff_adapter_factory(bundle.mlff_spec.mlff_type)
         )
 
-    def write_submit_folder(self, target_dir: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
+    @hashing_session()
+    def write_submit_folder(self, target_dir: str | Path | None = None, *, bundle_write_root: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
         """Write copied inputs, bundle.json, and a run.sh launcher.
 
         Native training configs, training scripts, and test_config.json are
@@ -53,7 +55,12 @@ class MLFFBundleWriter:
         Parameters
         ----------
         target_dir : str, Path, or None
-            New directory to create. None creates a caller-owned temporary one.
+            Exact new directory to create. None allocates a readable attempt
+            below bundle_write_root. Existing directories are never replaced.
+        bundle_write_root : str, Path or None, optional
+            Root for automatic model/domain/bundle/attempt directories. Defaults
+            to DEFAULT_BUNDLE_WRITE_ROOT or ./bundles, relative to the current
+            directory. Mutually exclusive with target_dir.
 
         Returns
         -------
@@ -61,6 +68,14 @@ class MLFFBundleWriter:
             Absolute submit-directory path and independent packaged bundle.
             The returned record matches bundle.json; the source is unchanged.
         """
+        if target_dir is not None and bundle_write_root is not None:
+            raise ValueError("target_dir and bundle_write_root are mutually exclusive.")
+        if target_dir is None:
+            root = bundle_root(bundle_write_root)
+            with store_lock(root):
+                return self.write_submit_folder(next_attempt(bundle_directory(root, self.bundle)))
+        # Reconstruct nested models so in-place edits cannot retain stale IDs.
+        MLFFTrainBundle.model_validate(self.bundle.model_dump(), context={"verify_files": True})
         unit = self.bundle.training_unit
         spec = self.bundle.mlff_spec
         adapter = self.adapter_class
@@ -122,26 +137,19 @@ class MLFFBundleWriter:
         packaged.temper_version = __version__
 
         # Write into target directory.
-        if target_dir is None:
-            target = Path(tempfile.mkdtemp(prefix="temper-submit-"))
-        else:
-            target = Path(target_dir).expanduser().absolute()
-            target.mkdir(parents=True, exist_ok=False)
+        target = Path(target_dir).expanduser().absolute()
+        target.mkdir(parents=True, exist_ok=False)
         try:
             # Write datasets.
             for i, filename in enumerate(unit.test_sets):
-                self._copy(unit.dataset_source(filename), target / files.test_input_files[f"test_{i:03d}"])
+                self._copy(unit.dataset_source(filename), target / files.test_input_files[f"test_{i:03d}"], unit.dataset_sha256.get(filename))
             for key, filename in (("train", unit.train_set), ("validation", unit.val_set)):
                 if filename is not None:
-                    self._copy(unit.dataset_source(filename), target / files.training_input_files[key])
+                    self._copy(unit.dataset_source(filename), target / files.training_input_files[key], unit.dataset_sha256.get(filename))
             # Check hash and write pretrained model.
             artifact = spec.pretrained_model.artifacts["model"]
             source = artifact.path.expanduser().resolve()
-            with source.open("rb") as stream:
-                digest = hashlib.file_digest(stream, "sha256").hexdigest()
-            if digest != artifact.sha256:
-                raise ValueError(f"Local MLFF artifact changed after the specification was built: {source}.")
-            self._copy(source, target / files.pretrained_model)
+            self._copy(source, target / files.pretrained_model, artifact.sha256)
             # Write the portable bundle record for instructing remote pipeline runner.
             # Configuration files will be generated remotely by the runner.
             (target / "bundle.json").write_text(
@@ -164,7 +172,10 @@ class MLFFBundleWriter:
         return target, packaged
 
     @staticmethod
-    def _copy(source: Path, destination: Path) -> None:
+    def _copy(source: Path, destination: Path, expected: str | None = None) -> None:
         logger.debug("Copying %s to %s", source, destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        if expected is None:
+            shutil.copy2(source, destination)  # Legacy local packaging remains supported.
+        else:
+            copy_verified(source, destination, expected)
