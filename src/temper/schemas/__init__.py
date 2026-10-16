@@ -7,7 +7,7 @@ from temper.schemas.mlff_spec import (
     PretrainedMLFFSpec,
 )
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle, MLFFBundleFiles
-from temper.schemas.train_unit import TrainingUnit
+from temper.schemas.train_unit import TrainingUnit, load_training_units
 
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "PretrainedMLFFSpec",
     "SplitGroup",
     "TrainingUnit",
+    "load_training_units",
 ]
 
 

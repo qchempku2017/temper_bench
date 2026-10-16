@@ -638,10 +638,10 @@ def write_all_sets_in_split_group_to_extxyz(
     output_path: Path | str = DEFAULT_SPLIT_RESULTS_DIR,
     write_validation: bool = False,
     write_extra_tests: bool = True,
-    all_split_groups: List[SplitGroup] | None = None,
+    all_split_groups: list[SplitGroup] | None = None,
     resolver: FrameReferenceResolver | None = None,
     create_zeroshot_unit: bool = True,
-) -> Tuple[List[TrainingUnit], FrameReferenceResolver]:
+) -> tuple[list[TrainingUnit], FrameReferenceResolver]:
     """Export benchmark datasets and build their persisted data units.
 
     Extra testing sets from other groups will also be written if required.
@@ -664,13 +664,12 @@ def write_all_sets_in_split_group_to_extxyz(
         Files will be written into each domain subfolder under ``output_path``.
     write_validation : bool, optional
         Whether to export non-empty validation sets at every checkpoint.
-        Defaults to ``False``. The returned mapping always contains a
-        ``"validation"`` key; it is empty when validation export is disabled
-        or every validation set is empty.
+        Defaults to ``False``. Returned units have val_set=None when validation
+        export is disabled or the corresponding validation set is empty.
     write_extra_tests : bool, optional
         Whether to export extra testing sets from other groups. Defaults to
-        ``True``. All extra tests are written to the ``"extra_tests"`` subfolder
-        under ``output_dir``.
+        ``True``. Extra tests are written beside other test files in the domain
+        directory below output_path and reused across units.
     all_split_groups : list[SplitGroup], optional
         All split groups in the same domain. Required if ``write_extra_tests``
         is ``True``. Used to retrieve data of extra tests from.
@@ -686,16 +685,20 @@ def write_all_sets_in_split_group_to_extxyz(
 
     Returns
     -------
-    List[TrainingUnit], FrameReferenceResolver
+    tuple[list[TrainingUnit], FrameReferenceResolver]
         The fine-tuning units in checkpoint order, followed by the optional
         zero-shot unit, and the resolver used to load the frames. The
         resolver's internal cache may be reused to avoid repeated loading.
+        Every returned unit contains SHA-256 hashes of its actual dataset bytes;
+        shared files are hashed once within this export operation.
 
     Raises
     ------
     ValueError
         If ``write_extra_tests`` is ``True`` but ``all_split_groups`` is
         ``None``.
+    OSError
+        If exported files cannot be written or read for content hashing.
     """
     root_path = Path(root_path).expanduser().resolve()
     output_path = Path(output_path).expanduser().resolve()
@@ -705,13 +708,13 @@ def write_all_sets_in_split_group_to_extxyz(
             "all_split_groups must be provided if write_extra_tests is True."
         )
 
-    train_files: List[str] = []
-    val_files: List[str | None] = []
-    test_files: List[str] = []
-    train_frame_counts: List[int] = []
-    val_frame_counts: List[int] = []
-    train_atom_counts: List[int] = []
-    val_atom_counts: List[int] = []
+    train_files: list[str] = []
+    val_files: list[str | None] = []
+    test_files: list[str] = []
+    train_frame_counts: list[int] = []
+    val_frame_counts: list[int] = []
+    train_atom_counts: list[int] = []
+    val_atom_counts: list[int] = []
 
     # Phase 1: write training sets and optionally validation sets.
     for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
@@ -768,7 +771,7 @@ def write_all_sets_in_split_group_to_extxyz(
     # write the paths to them into TrainingUnit objects.
     if write_extra_tests:
         # Find groups by matching domain, grouping strategy, group name and repeat_id.
-        all_split_groups: List[SplitGroup] = [] if all_split_groups is None else all_split_groups
+        all_split_groups = [] if all_split_groups is None else all_split_groups
         for other_group in all_split_groups:
             if (
                 other_group.domain == split_group.domain
@@ -810,7 +813,7 @@ def write_all_sets_in_split_group_to_extxyz(
     # Phase 3: build fine-tuning units in checkpoint order. All units share
     # the same immutable test-set references and aggregate counts.
     shared_test_sets = tuple(test_files)
-    training_units: List[TrainingUnit] = [
+    training_units: list[TrainingUnit] = [
         TrainingUnit(
             train_set=train_files[i],
             val_set=val_files[i],
@@ -855,6 +858,9 @@ def write_all_sets_in_split_group_to_extxyz(
             )
         )
 
+    # Share digests within this export only; later loads read the bytes again.
+    hash_cache: dict[Path, str] = {}
+    training_units = [unit.with_dataset_hashes(hash_cache) for unit in training_units]
     return training_units, resolver
 
 
