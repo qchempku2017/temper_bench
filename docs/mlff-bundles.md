@@ -7,7 +7,8 @@ Local builders create model recipes; `MLFFBundleWriter` copies their inputs and
 serializes `MLFFTrainBundle` as `bundle.json`. An installed TEMPER runtime reads
 that record, writes missing configs and scripts, prepares backend-dependent
 data and checkpoint settings, fine-tunes, and evaluates.
-Upload, scheduling, and result download remain separate executor concerns.
+The [remote job commands](remote-jobs.md) handle upload, scheduling, persistent
+monitoring, explicit retries, result download and remote cleanup through dpdispatcher.
 
 Install `temper-bench[preprocess]` for local data splitting. Execution hosts
 need the base `temper-bench` package plus their selected MLFF backend, using
@@ -255,8 +256,12 @@ file access checks existence when needed.
 ## Submit-directory contract
 
 `write_submit_folder()` returns the new directory and a separate packaged
-bundle matching `bundle.json`. If no destination is supplied, it creates a
-temporary directory which the caller is responsible for removing.
+bundle matching `bundle.json`. If no destination is supplied, it allocates a
+readable model/version/domain/bundle/attempt directory below
+`DEFAULT_BUNDLE_WRITE_ROOT` (default `./bundles`). The `bundle_write_root` keyword
+overrides that root. An explicit target directory is still supported and must
+not already exist. See [Remote jobs](remote-jobs.md) for the naming and retention
+rules; ordinary packaging alone does not upload or remove its copied inputs.
 
 The default layout over the course of a fine-tuning run is:
 

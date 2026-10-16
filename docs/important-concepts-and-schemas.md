@@ -169,7 +169,25 @@ Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is a pers
 
 For a `SplitGroup` with `N` requested training checkpoints, export returns the `N` fine-tuning units in checkpoint order followed by one zero-shot unit. All `N + 1` records share the split's own test file and any configured cross-group test files, including identical aggregate test counts. Zero-shot support creates no empty train/validation placeholders and performs no additional dataset export.
 
-The `training_unit_id` fingerprints the parent split identity and the persisted dataset contract. Dataset shape already distinguishes fine-tuning from zero-shot through the identity-defining `train_set` and `train_n_frames`, so the derived property adds no separate identity input and the identity schema remains `temper.training-unit.v2`. Existing valid fine-tuning IDs therefore remain stable. `root_path` remains excluded, allowing an exported tree to move without changing logical identity. Version-1 manifests containing only `n_train` remain unsupported.
+The `training_unit_id` fingerprints the parent split identity and the persisted
+dataset contract. Newly exported units include `dataset_sha256`, a mapping from
+every dataset filename to its complete-byte SHA-256 digest, and use identity
+schema `temper.training-unit.v3`. Thus an in-place edit produces a different
+identity when explicitly rebuilding the unit. Normal loading detects the changed
+bytes and rejects the old record. Legacy metadata without hashes keeps its v2
+identity and requires explicit conversion before remote submission. Dataset shape
+already distinguishes fine-tuning from zero-shot through `train_set` and
+`train_n_frames`. `root_path` remains excluded, so an identical exported tree can
+move without changing identity. Version-1 manifests containing only `n_train`
+remain unsupported. Use `load_training_units(path)` to load a JSON list while
+hashing shared datasets once within that operation.
+
+Generic `ManagedIdentityModel` tracks validated field assignments, not arbitrary
+in-place mutations of nested dictionaries or referenced files. Submission and
+packaging reconstruct the nested records to catch stale metadata identities;
+TrainingUnit loading verifies dataset bytes, and copying verifies the actual
+bytes sent. Historical inspection can explicitly disable source-file checking
+with `context={"verify_files": False}`. This is not authorization to run stale inputs.
 
 ## 6. Local MLFF specifications and bundles
 
@@ -193,7 +211,13 @@ these fields; regenerate older bundles instead of reusing their old layout.
 
 ## Implemented scope versus roadmap
 
-The implemented Python API and split CLI cover metadata loading, grouping, repeatable splitting, QUESTS-backed selection, reconstruction, and `extxyz` export. The MLFF API additionally defines model recipes and materializes local folders containing native training instructions and standardized ASE evaluation scripts. Folder writing does not execute those scripts. Remote submission/orchestration, run records, result retrieval, and model-quality metrics are **not implemented** and remain in the [Roadmap](roadmap.md).
+The implemented Python API and split CLI cover metadata loading, grouping,
+repeatable splitting, QUESTS-backed selection, reconstruction, and content-hashed
+`extxyz` export. The MLFF API creates model recipes and portable folders;
+folder writing does not execute the calculation. [Remote jobs](remote-jobs.md)
+provides Slurm/PBS/Bohrium submission, persistent JSON attempt records,
+synchronization, explicit retries and verified result retrieval/cleanup.
+Model-quality metrics remain in the [Roadmap](roadmap.md).
 
 ## Further reading
 

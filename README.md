@@ -1,6 +1,6 @@
 # TEMPER benchmark
 
-TEMPER provides data preparation, portable experiment bundles, and an installed execution runtime for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and writes portable local submit folders. It does not submit those folders to remote systems.
+TEMPER provides data preparation, portable experiment bundles, and an installed execution runtime for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and submits bundles to SSH-accessible Slurm/PBS clusters or Bohrium with persistent local job history.
 
 ## What is implemented
 
@@ -14,6 +14,20 @@ The workflow is available through both the CLI and Python API:
 6. Pair each TrainingUnit with its specification using [`MLFFTrainBundle(training_unit=unit, mlff_spec=spec)`](src/temper/schemas/mlff_train_bundle.py) when preparing that unit for submission.
 7. Call `bundle.write_submit_folder()` to copy datasets, pretrained models, a versioned `bundle.json`, and a small `run.sh` launcher.
 8. Transfer the folder to a host with the same TEMPER version and the selected model backend installed, then run `temper_bench run_pipeline /path/to/bundle.json`. The runtime prepares native training files, fine-tunes when requested, and writes standardized ASE predictions.
+
+Alternatively, install `.[remote]` (or `.[bohrium]`) and let TEMPER submit,
+monitor, collect and clean remote attempts:
+
+```console
+temper_bench job submit recipe.json --resource-file cluster.yaml
+temper_bench job synchronize_remote --keep-watching
+temper_bench job list --failed
+temper_bench job resubmit --failed --dry-run
+```
+
+See [Remote jobs](docs/remote-jobs.md) for key-file SSH profiles, per-MLFF conda
+environments/images, interrupted-submission recovery and bulk resubmission.
+Failed calculations are reported and require an explicit retry command.
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 

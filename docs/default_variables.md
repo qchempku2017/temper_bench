@@ -25,6 +25,13 @@ an explicitly empty value remains an empty string.
 
 ## MLFF paths
 
+The job store and automatic bundle layout use `DEFAULT_BUNDLE_WRITE_ROOT`
+(default `./bundles`). Unlike the import-time constants listed here, this
+environment setting is read by `temper.job_management.paths.bundle_root()` at operation
+time. `--bundle-write-root` or the Python `bundle_write_root` keyword takes
+precedence. Relative values resolve against the current working directory.
+See [Remote jobs](remote-jobs.md) for the model/domain/bundle/attempt layout.
+
 `DEFAULT_MLFF_PRETRAINED_MODELS_DIR` is a string source root. Its default is
 `./pretrained_models`, and it may be replaced by any relative or absolute path
 through the environment variable of the same name.
