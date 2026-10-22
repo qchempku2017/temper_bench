@@ -45,6 +45,7 @@ class MatterSimAdapter(BaseMLFFAdapter):
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
         """Return the CUDA launcher command with recipe options and data paths."""
         parameters = dict(self.spec.training_parameters or {})
+        parameters["early_stop_patience"] = int(parameters["epochs"]) + 1
         parameters["include_forces"] = True
         parameters["include_stresses"] = training_stress
         if not training_stress:
@@ -58,7 +59,7 @@ class MatterSimAdapter(BaseMLFFAdapter):
             "--standalone",
             "--nproc_per_node=1",
             "--module",
-            "mattersim.training.finetune_mattersim",
+            "temper.mlff.pipeline.mattersim_final",
             "--train_data_path",
             self.input_path("train"),
             "--load_model_path",
@@ -84,3 +85,30 @@ class MatterSimAdapter(BaseMLFFAdapter):
                 "cp", f"{work}/last_model.pth", self.trained_model_path
             ),
         )
+
+    def train(self) -> None:
+        """Train without weight averaging and verify the final epoch was reached.
+
+        Notes
+        -----
+        The launcher runs the native CLI with EMA decay zero. The last_model
+        checkpoint therefore contains final-step weights. Native epoch indices
+        start at zero; validation-best checkpoints are never used for evaluation.
+
+        Raises
+        ------
+        RuntimeError
+            If the exported checkpoint does not record the configured last epoch.
+        OSError
+            If the exported checkpoint cannot be read.
+        subprocess.CalledProcessError
+            If native training fails.
+        """
+        import torch
+
+        super().train()
+        checkpoint = torch.load(self.root / self.trained_model_path,
+                                map_location="cpu", weights_only=False)
+        epochs = int((self.spec.training_parameters or {})["epochs"])
+        if checkpoint.get("last_epoch") != epochs - 1:
+            raise RuntimeError("MatterSim did not complete the configured final epoch.")

@@ -1,14 +1,13 @@
 """Select scientific results and verify downloads before remote deletion."""
 from __future__ import annotations
 
-import fnmatch
 from pathlib import Path, PurePosixPath
 from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.utils.file_hashing import file_sha256
 
 
-def result_selection(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
+def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     """Describe retained files and required successful outputs.
 
     Parameters
@@ -19,7 +18,7 @@ def result_selection(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     Returns
     -------
     tuple[list[str], list[str]]
-        Bundle-relative selection patterns and exact required success paths.
+        Exact bundle-relative download paths and required success paths.
         Failed attempts may lack any calculation output; available diagnostics
         are still collected. Converted datasets and intermediate checkpoints
         are never selected by broad output-directory recursion.
@@ -36,32 +35,23 @@ def result_selection(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     required = list(files.test_output_files.values())
     if bundle.unit_type == "finetune":
         required.append(files.training_output_files["trained_model"])
-    selected = ["stdout.log", "stderr.log", "slurm-*.out", "*.sub.o*", "*.sub.e*", "*.sub", "*.sub.run"]
+    selected = ["stdout.log", "stderr.log", "scheduler.stdout.log", "scheduler.stderr.log", "run.sh", "temper_job.sh"]
     selected += list(files.test_output_files.values())
     selected += [value for key, value in files.training_output_files.items() if key in adapter.retained_output_keys]
     selected += [value for key, value in files.training_input_files.items() if key in {"script", "config"}]
-    selected += [files.test_input_files["config"], *adapter.retained_output_patterns]
-    selected += [f"{files.training_output_files[key]}/{pattern}"
-                 for key, globs in adapter.retained_output_globs.items()
-                 if key in files.training_output_files for pattern in globs]
+    selected += [files.test_input_files["config"]]
+    for name in selected:
+        validate_result_path(name)
     return sorted(set(selected)), required
 
 
-def selected_file(name: str, patterns: list[str]) -> bool:
-    """Check a safe relative filename against retained-output patterns.
+def validate_result_path(name: str) -> None:
+    """Reject paths that cannot safely identify a file inside an attempt.
 
     Parameters
     ----------
     name : str
         POSIX path from an archive or remote directory listing.
-    patterns : list[str]
-        Patterns returned by result_selection.
-
-    Returns
-    -------
-    bool
-        Whether the file is selected. Absolute, parent-traversing and Windows
-        drive paths raise ValueError, even when they would not be selected.
 
     Raises
     ------
@@ -69,9 +59,32 @@ def selected_file(name: str, patterns: list[str]) -> bool:
         If a remote name could escape the local attempt directory.
     """
     path = PurePosixPath(name)
-    if path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name:
+    if not path.parts or path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name:
         raise ValueError("Unsafe remote result path.")
-    return any(fnmatch.fnmatchcase(path.as_posix(), pattern) for pattern in patterns)
+
+
+def selected_file(name: str, filenames: list[str]) -> bool:
+    """Check an exact relative filename; wildcard expansion is not performed.
+
+    Parameters
+    ----------
+    name : str
+        Bundle-relative POSIX filename from a remote listing or archive.
+    filenames : list[str]
+        Exact permitted filenames from get_download_files.
+
+    Returns
+    -------
+    bool
+        Whether the normalized filename is explicitly included.
+
+    Raises
+    ------
+    ValueError
+        If name is absolute or contains parent traversal or a Windows drive.
+    """
+    validate_result_path(name)
+    return PurePosixPath(name).as_posix() in filenames
 
 
 def verify_results(root: Path, manifest: dict[str, str], required: list[str]) -> None:
@@ -93,10 +106,13 @@ def verify_results(root: Path, manifest: dict[str, str], required: list[str]) ->
     OSError
         If a downloaded file cannot be read. Remote deletion must be postponed.
     """
+    for name in [*required, *manifest]:
+        validate_result_path(name)
+        if not (root / name).resolve().is_relative_to(root.resolve()):
+            raise ValueError("Result path escapes the attempt directory.")
     for name in required:
         if name not in manifest or (root / name).stat().st_size == 0:
             raise ValueError(f"Required result missing or empty: {name}")
     for name, expected in manifest.items():
-        selected_file(name, [])
         if file_sha256(root / name) != expected:
             raise ValueError(f"Downloaded result changed: {name}")

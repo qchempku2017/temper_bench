@@ -42,7 +42,7 @@ MODEL_FILES = {
 TRAINING_MARKERS = {
     "dpa4": "dp --pt train",
     "dpa4c": "dp --pt-expt train",
-    "mattersim": "mattersim.training.finetune_mattersim",
+    "mattersim": "temper.mlff.pipeline.mattersim_final",
     "mace": "mace_run_train --config",
     "sevennet": "sevenn train",
     "nep89": "temper_bench run_pipeline bundle.json",

@@ -1,7 +1,7 @@
-# Remote submissions and persistent job history
+# Local and remote submissions with persistent job history
 
 TEMPER can submit one MLFF bundle per job to an SSH-accessible Slurm or PBS
-cluster, or to Bohrium. Paratera uses an ordinary Slurm resource profile with
+cluster, to Bohrium, or to a local POSIX machine. Paratera uses an ordinary Slurm resource profile with
 SSH key-file authentication. No Paratera-specific Python API is used.
 
 Install the local submission dependencies:
@@ -25,19 +25,20 @@ in `src/temper/entrypoints/job.py` alongside `run_pipeline.py` and `split.py`:
 | Module | Purpose |
 | --- | --- |
 | `manager.py` | Submission, periodic monitoring, restart recovery, cancellation, and explicit retries. |
-| `records.py` | The `JobRecord` schema for one submission attempt. |
-| `resources.py` | Remote machine settings and MLFF-specific software environments. |
+| `schemas/records.py` | The `JobRecord` schema for one submission attempt. |
+| `schemas/resources.py` | Remote machine settings and MLFF-specific software environments. |
 | `store.py`, `storage_utils.py` | Local JSON history, attempt markers, atomic writes, and process locking. |
 | `paths.py` | Bundle roots and readable bundle/attempt directory names. |
 | `inputs.py` | Verification of packaged datasets and pretrained models. |
 | `collection.py` | Selection and verification of downloaded outputs and diagnostics. |
+| `local.py` | Detached local execution, durable receipts, and cancellation. |
 | `dispatcher.py` | SSH/Slurm/PBS and Bohrium operations through dpdispatcher. |
 
 For Python callers, import the objects from their defining modules:
 
 ```python
 from temper.job_management.manager import JobManager
-from temper.job_management.resources import RemoteResource
+from temper.job_management.schemas.resources import RemoteResource
 from temper.job_management.store import JobStore
 ```
 
@@ -58,8 +59,8 @@ backend: Slurm                 # PBS is also supported
 hostname: login.example.org
 username: your-account
 port: 22
-key_filename: keys/id_ed25519   # Relative to this YAML file
-known_hosts: keys/known_hosts  # Previously verified host keys
+key_filename: ~/.ssh/id_ed25519 # Original key on the submission machine
+known_hosts: ~/.ssh/known_hosts  # Previously verified host keys
 passphrase_env: TEMPER_SSH_PASSPHRASE  # Omit for an unencrypted key
 remote_root: /scratch/your-account/temper
 timeout: 30                    # Connection/command timeout in seconds
@@ -73,16 +74,23 @@ resources:
     - '#SBATCH --account=your-allocation'
 environments:
   mace:
-    conda_init: /opt/miniconda3/etc/profile.d/conda.sh
     conda_environment: temper-mace
   dpa4:
     modules: [cuda/12.4]
-    conda_init: /opt/miniconda3/etc/profile.d/conda.sh
     conda_environment: temper-deepmd
 ```
 
-`environment` provides the default setup. An entry under `environments` replaces
-that setup completely for its MLFF family; it does not merge individual fields.
+Specify an entry under `environments` for every MLFF family you submit. An empty
+entry (`mace: {}`) explicitly uses the job's existing environment. Missing family
+entries are errors. The selected environment is copied into the attempt's internal
+`resolved_environment` field; changing the original profile cannot change recovery.
+User profile files do not accept `environment` or `resolved_environment`.
+
+Conda activation initializes Bash with `conda shell.bash hook`; the executable
+must be available in the job's PATH. Optionally set `conda_init` to an absolute
+runner path to `conda.sh`. TEMPER does not edit shell startup files. Alternatively,
+use `venv_path: /home/your-account/venvs/temper-mace`; TEMPER sources its
+`bin/activate`. Conda and venv settings are mutually exclusive.
 Optional `variables` supplies non-secret environment values. Setup runs inside
 the task with failure checking: a failed module load or conda activation stops
 the task and is recorded in its diagnostics.
@@ -103,15 +111,32 @@ them in YAML. On POSIX, for example, `export TEMPER_SSH_PASSPHRASE=...` makes th
 value available to subsequent commands. A background watcher needs the same
 credential environment when restarted.
 
+Private keys are never copied into submission attempts or uploaded. Absolute
+paths and `~` are recommended. Relative `key_filename` and `known_hosts` paths
+resolve against the profile file's directory on the submission machine, so every
+attempt references the same original file. If no key is configured, an explicit
+`password_env: TEMPER_SSH_PASSWORD` enables password authentication. A configured
+key that fails does not silently fall back to a password. Credentials are read
+from the submitting process's environment only when connecting.
+
+Configure `remote_root` explicitly, for example `/home/your-account/temper_run`
+or a shared scratch directory visible to compute nodes. An omitted value falls
+back to `/tmp/temper-<user-digest>` with a warning at submission: `/tmp` may be
+cleared or may not be shared with compute nodes. Neither `$HOME` nor `~` is
+expanded in remote_root; provide an absolute remote path. Connection attempts
+are bounded to five total attempts, ten seconds apart for transient failures.
+Authentication and host-key failures are not retried. Remote submission commands
+are never automatically replayed after a lost response.
+
 A Bohrium profile looks like this:
 
 ```yaml
 name: bohrium-backup
 backend: Bohrium
-project_id: 12345
-machine_type: YOUR_BOHRIUM_MACHINE_TYPE
-platform: ali
-access_key_env: BOHRIUM_ACCESS_KEY
+bohrium_project_id: 12345
+bohrium_machine_type: YOUR_BOHRIUM_MACHINE_TYPE
+bohrium_platform: ali
+bohrium_access_key_env: BOHRIUM_ACCESS_KEY
 resources:
   number_node: 1
   cpu_per_node: 8
@@ -128,6 +153,31 @@ dependencies. Credentials are resolved locally at connection time. The saved
 profile contains the environment variable's **name**, never its value. Keep
 runtime variables, scheduler flags and recipe settings free of credentials:
 those settings are intentionally retained for reproducibility.
+
+## Local execution
+
+Use the same submit, status, synchronize, cancel, recover, and resubmit commands
+with this profile on a POSIX host (for example Linux or a configured WSL project):
+
+```yaml
+name: workstation
+backend: Local
+environments:
+  mace:
+    conda_environment: temper-mace
+```
+
+Native Windows local execution is not supported: the packaged MLFF commands
+require POSIX Bash. Windows can still submit to SSH and Bohrium resources.
+Local jobs use a detached supervisor and run inside their attempt directory.
+Stopping the submitting CLI or watcher leaves the job running. Dataset/model
+copies remain until calculation termination and verified collection. Collection
+hashes retained files in place; cleanup then removes copied inputs and unretained
+training-output directories. Configurations, final weights, and results remain.
+Cancellation requests are handled by the live supervisor, which terminates its
+calculation process group. Recovery reads a durable local receipt; it never
+blindly restarts a process. A lost supervisor without an exit receipt remains
+unknown after its heartbeat expires and requires investigation.
 
 ## Input identity and upgrading old recipes
 
@@ -191,7 +241,8 @@ TEMPER freezes absolute source paths when saving an attempt, so restarting from
 a different working directory works when the same store root is supplied.
 
 `--bundle-write-root` overrides `DEFAULT_BUNDLE_WRITE_ROOT`, whose fallback is
-`./bundles`. The root environment variable is read when the operation starts.
+`./bundles`. Like other values in `utils.defaults`, this environment variable
+is read once at import time; set it before starting Python.
 Python packaging accepts the matching keyword `bundle_write_root=...`.
 An explicit `target_dir` still means exactly that new destination and cannot be
 combined with the root keyword.
@@ -284,7 +335,12 @@ calculations themselves are never automatically relaunched.
 
 TEMPER retains the final trained model, test predictions, test metadata/summary,
 training logs, available scheduler/task diagnostics, and selected generated
-configs, scripts and metrics. Adapter output declarations control this selection.
+configs, scripts and metrics. Adapter output declarations list exact relative
+filenames; wildcards and recursive native-output downloads are not supported.
+Scheduler stdout/stderr use `scheduler.stdout.log` and `scheduler.stderr.log`
+(PBS may combine them). Optional diagnostics may be absent or empty; successful
+scientific outputs are checked separately. Native checkpoint directories and
+unlisted model variants are never selected.
 Converted training datasets, pretrained copies and intermediate checkpoint
 directories are excluded. A successful job must have every expected prediction,
 metadata/summary and final-model file, and those files must be nonempty.
@@ -292,7 +348,8 @@ metadata/summary and final-model file, and those files must be nonempty.
 SSH downloads are compared to remote SHA-256 digests. Bohrium result archives are
 read through ZIP CRC validation; only selected safe relative filenames are
 extracted. Downloads use partial files and then replace their final destinations.
-The collected manifest records SHA-256 values and is checked again before deletion.
+The record field `downloaded_file_hashes` stores SHA-256 values and is checked
+again before deletion.
 This verifies transfer completeness, not the scientific accuracy of predictions.
 
 A stopped failed job may legitimately have no final model or predictions.
@@ -371,3 +428,39 @@ consume cluster allocations or launch paid Bohrium jobs. Before a production
 campaign, run one small bundle on each actual resource to check site queue
 syntax, installed runtime versions, image contents, accounting visibility,
 provider result availability and deletion permissions.
+
+## Final-epoch model policy
+
+Evaluation and collection use the same final-epoch weights, never the validation
+best checkpoint. MACE saves every epoch, disables EMA/SWA and early stopping,
+and verifies the final epoch checkpoint exists before evaluation. MatterSim uses
+its last checkpoint with early stopping disabled; TEMPER's process-local launcher
+sets EMA decay to zero and verifies its recorded last epoch. SevenNet copies the
+checkpoint named for the configured final epoch. NEP uses `nep_final.txt` and
+checks the final epoch in `loss.out`; `nep_best.txt` is not retained. DeepMD retains
+the configured final training checkpoint after its `numb_epoch` budget.
+Intermediate checkpoints are not downloaded. Missing final outputs fail the job
+or result verification; an early checkpoint is never substituted.
+
+The native contracts were checked against MACE 0.3.16 (`tools/train.py` and
+`cli/run_train.py`), MatterSim 1.2.5 (`forcefield/potential.py`), and TorchNEP 1.0.2
+(`train.py`). Full GPU training and site-specific scheduler behavior must still
+be exercised on the intended compute resources.
+
+## Python names and saved-history compatibility
+
+`JobManager.list_attempts()` reads filtered local history without remote calls.
+`get_dataset_and_model_hashes(bundle)` excludes configuration files and scripts;
+`verify_dataset_and_model_hashes(bundle, root)` checks only those copied files.
+`get_download_files(bundle)` returns exact download names and required-success
+names. `JobRecord.source_bundle` contains the original serialized bundle with
+source-machine paths and hashes, used to reconstruct retries. It differs from
+the packaged `bundle.json`, which contains attempt-relative paths.
+
+Schema classes now live in `job_management.schemas`; the old `records` and
+`resources` modules retain compatibility imports. Saved `recipe` and `manifest`
+keys are accepted when reading old records; new writes use `source_bundle` and
+`downloaded_file_hashes`. Old saved Bohrium field names and frozen `environment`
+remain readable. New profile files should use the names documented above.
+Per-attempt `job.json` remains authoritative. Storage indexing is deferred pending
+benchmarks of large histories; no unified JSONL database has been introduced.

@@ -99,7 +99,9 @@ def test_adapters_use_recorded_paths_instead_of_rebuilding_defaults(
             assert kwargs["output_dir"] == str(remote / outputs["native_outputs"])
             output = Path(kwargs["output_dir"])
             output.mkdir()
-            (output / "nep_best.txt").write_bytes(b"trained")
+            (output / "nep_best.txt").write_bytes(b"earlier best")
+            (output / "nep_final.txt").write_bytes(b"trained")
+            (output / "loss.out").write_text(f"{bundle.mlff_spec.training_parameters['epoch']} 0.1\n")
         native.train_nep = train
         monkeypatch.setitem(sys.modules, "torchnep", native)
         adapter.train()

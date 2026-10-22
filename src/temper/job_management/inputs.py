@@ -4,18 +4,19 @@ from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.utils.file_hashing import file_sha256
 
 
-def input_hashes(bundle: MLFFTrainBundle) -> dict[str, str]:
-    """Map packaged input filenames to their original content hashes.
+def get_dataset_and_model_hashes(bundle: MLFFTrainBundle) -> dict[str, str]:
+    """Map packaged dataset and pretrained-model paths to recorded SHA-256 hashes.
 
     Parameters
     ----------
     bundle : MLFFTrainBundle
-        Packaged recipe. Legacy datasets without hashes are omitted.
+        Packaged bundle. Legacy datasets without hashes are omitted.
 
     Returns
     -------
     dict[str, str]
         Bundle-relative model and dataset paths mapped to SHA-256 values.
+        Configuration files and scripts are excluded; no files are read.
 
     Raises
     ------
@@ -36,13 +37,13 @@ def input_hashes(bundle: MLFFTrainBundle) -> dict[str, str]:
     return result
 
 
-def verify_packaged_inputs(bundle: MLFFTrainBundle, root: Path) -> None:
-    """Verify copied inputs without opening source-machine paths.
+def verify_dataset_and_model_hashes(bundle: MLFFTrainBundle, root: Path) -> None:
+    """Verify hash of copied inputs without opening source-machine paths.
 
     Parameters
     ----------
     bundle : MLFFTrainBundle
-        Packaged recipe loaded with verify_files=False validation context.
+        Packaged bundle loaded with verify_files=False validation context.
     root : Path
         Directory containing bundle.json and the copied inputs.
 
@@ -53,6 +54,6 @@ def verify_packaged_inputs(bundle: MLFFTrainBundle, root: Path) -> None:
     OSError
         If a copied input cannot be read.
     """
-    for name, expected in input_hashes(bundle).items():
+    for name, expected in get_dataset_and_model_hashes(bundle).items():
         if file_sha256(root / name) != expected:
             raise ValueError(f"Packaged input changed: {name}")

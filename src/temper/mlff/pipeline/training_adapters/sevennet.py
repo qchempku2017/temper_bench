@@ -1,6 +1,7 @@
 """SevenNet runtime adapter."""
 
 from __future__ import annotations
+from math import gcd
 
 from temper.mlff.pipeline.training_adapters.base import (
     BaseMLFFAdapter,
@@ -36,6 +37,9 @@ class SevenNetAdapter(BaseMLFFAdapter):
         data_divide_ratio = parameters.pop("data_divide_ratio")
 
         train = parameters
+        # Native SevenNet saves only at multiples of per_epoch. Include the
+        # final epoch even when the requested budget is not a multiple of ten.
+        train["per_epoch"] = gcd(int(train.get("per_epoch", 10)), int(train["epoch"]))
         train["device"] = "cuda"
         train["is_train_stress"] = training_stress
         if not training_stress:

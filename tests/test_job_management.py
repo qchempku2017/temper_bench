@@ -12,8 +12,8 @@ from collections.abc import Callable
 
 import pytest
 
-from temper.job_management.collection import result_selection, selected_file
-from temper.job_management.inputs import input_hashes, verify_packaged_inputs
+from temper.job_management.collection import get_download_files, selected_file
+from temper.job_management.inputs import get_dataset_and_model_hashes, verify_dataset_and_model_hashes
 from temper.job_management.manager import JobManager
 from temper.job_management.storage_utils import store_lock
 from temper.job_management.records import JobRecord
@@ -30,7 +30,7 @@ def recipe(finetune_training_unit: TrainingUnit, mlff_spec_factory: Callable) ->
 
 @pytest.fixture
 def resource() -> RemoteResource:
-    return RemoteResource(name="cluster", backend="Slurm", hostname="example.invalid", username="scientist", key_filename="key", remote_root="/scratch/temper")
+    return RemoteResource(name="cluster", backend="Slurm", hostname="example.invalid", username="scientist", key_filename="key", remote_root="/scratch/temper", environments={"mace": {}})
 
 
 class FakeBackend:
@@ -66,7 +66,7 @@ class FakeBackend:
         self.control["downloads"] += 1
         if self.control.get("download_error"):
             raise ConnectionError("secret-signed-url")
-        _, required = result_selection(self.bundle)
+        _, required = get_download_files(self.bundle)
         names = ["stderr.log"]
         if self.control["status"] == "success" and not self.control.get("missing_output"):
             names += required
@@ -148,14 +148,14 @@ def test_remote_input_validation_ignores_original_paths(recipe: MLFFTrainBundle,
     for name in recipe.training_unit.dataset_sha256:
         recipe.training_unit.dataset_source(name).unlink()
     loaded = MLFFTrainBundle.model_validate_json((root / "bundle.json").read_text(), context={"verify_files": False})
-    verify_packaged_inputs(loaded, root)
+    verify_dataset_and_model_hashes(loaded, root)
     (root / packaged.files.test_input_files["test_000"]).write_bytes(b"changed")
     with pytest.raises(ValueError, match="Packaged input changed"):
-        verify_packaged_inputs(loaded, root)
+        verify_dataset_and_model_hashes(loaded, root)
 
 
 def test_readable_attempt_paths_and_no_overwrite(recipe: MLFFTrainBundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("DEFAULT_BUNDLE_WRITE_ROOT", str(tmp_path / "bundles"))
+    monkeypatch.setattr("temper.job_management.paths.DEFAULT_BUNDLE_WRITE_ROOT", str(tmp_path / "bundles"))
     first, _ = recipe.write_submit_folder()
     second, _ = recipe.write_submit_folder()
     assert first.name == "attempt_001" and second.name == "attempt_002"
@@ -179,7 +179,7 @@ def test_success_collection_cleanup_and_duplicate_guard(managed: tuple, recipe: 
     record = manager.submit(recipe, resource)
     root = manager.store.path(record)
     packaged = MLFFTrainBundle.model_validate_json((root / "bundle.json").read_text(), context={"verify_files": False})
-    assert all(not (root / name).exists() for name in input_hashes(packaged))
+    assert all(not (root / name).exists() for name in get_dataset_and_model_hashes(packaged))
     assert recipe.training_unit.dataset_source(recipe.training_unit.train_set).exists()
     control["status"] = "success"
     result = manager.synchronize()[0]
@@ -321,9 +321,9 @@ def test_store_lock_excludes_second_writer(tmp_path: Path) -> None:
                 pytest.fail("A second writer acquired the store lock.")
 
 
-def test_result_selection_excludes_checkpoints_and_inputs(recipe: MLFFTrainBundle, tmp_path: Path) -> None:
+def test_get_download_files_excludes_checkpoints_and_inputs(recipe: MLFFTrainBundle, tmp_path: Path) -> None:
     _, packaged = recipe.write_submit_folder(tmp_path / "bundle")
-    patterns, required = result_selection(packaged)
+    patterns, required = get_download_files(packaged)
     assert packaged.files.training_output_files["trained_model"] in required
     assert not selected_file("training_outputs/mace/checkpoints/large.pt", patterns)
     assert not selected_file("training_inputs/data/train/coord.npy", patterns)
@@ -496,7 +496,7 @@ def test_tampered_local_result_prevents_pending_cleanup(managed: tuple, recipe: 
     control.update(status="success", cleanup_error=True)
     result = manager.synchronize()[0]
     root = manager.store.path(record)
-    (root / next(iter(result.manifest))).write_bytes(b"edited")
+    (root / next(iter(result.downloaded_file_hashes))).write_bytes(b"edited")
     control["cleanup_error"] = False
     cleanups = control["cleanups"]
     assert manager.synchronize()[0].cleanup_status == "pending"
@@ -509,7 +509,7 @@ def test_environment_is_frozen_per_family(managed: tuple, recipe: MLFFTrainBundl
     resource.environments["mace"] = RuntimeEnvironment(conda_init="/conda/conda.sh", conda_environment="mace-env")
     record = manager.submit(recipe, resource)
     resource.environments["mace"].conda_environment = "changed-later"
-    assert record.resource["environment"]["conda_environment"] == "mace-env"
+    assert record.resource["resolved_environment"]["conda_environment"] == "mace-env"
 
 
 def test_cli_upgrade_does_not_overwrite_original(recipe: MLFFTrainBundle, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -608,3 +608,165 @@ def test_zip_collection_rejects_traversal_without_writing(recipe: MLFFTrainBundl
     with pytest.raises(ValueError, match="Unsafe remote result path"):
         backend.collect()
     assert not (tmp_path / "stderr.log").exists()
+
+
+def test_saved_record_legacy_names_are_read_but_new_names_are_written() -> None:
+    record = JobRecord(bundle_id="id", attempt_folder_name="attempt", resource={},
+                       recipe={"files": None}, manifest={"stderr.log": "hash"})
+    assert record.source_bundle == {"files": None}
+    assert record.downloaded_file_hashes == {"stderr.log": "hash"}
+    saved = record.model_dump()
+    assert "recipe" not in saved and "manifest" not in saved
+    assert JobRecord.model_validate(saved) == record
+
+
+def test_environment_activation_and_conflicts() -> None:
+    from temper.job_management.schemas.resources import RuntimeEnvironment
+    conda = RuntimeEnvironment(conda_environment="model env").shell_lines()
+    assert conda[0] == "temper_conda_hook=$(conda shell.bash hook)"
+    assert conda[-1] == "conda activate 'model env'"
+    assert RuntimeEnvironment(venv_path="/opt/model env").shell_lines() == ["source '/opt/model env/bin/activate'"]
+    with pytest.raises(ValueError, match="either venv or Conda"):
+        RuntimeEnvironment(venv_path="/opt/venv", conda_environment="model")
+    with pytest.raises(ValueError, match="absolute"):
+        RuntimeEnvironment(venv_path="relative")
+
+
+def test_new_profiles_reject_default_environment(tmp_path: Path) -> None:
+    profile = tmp_path / "local.yaml"
+    profile.write_text("name: local\nbackend: Local\nenvironment: {}\n")
+    with pytest.raises(ValueError, match="environments keyed"):
+        RemoteResource.from_file(profile)
+
+
+def test_missing_family_and_remote_root(managed: tuple, recipe: MLFFTrainBundle, resource: RemoteResource) -> None:
+    manager, _ = managed
+    resource.environments = {}
+    with pytest.raises(ValueError, match="environments entry for mace"):
+        manager.submit(recipe, resource)
+    from temper.job_management.schemas.resources import RuntimeEnvironment
+    resource.environments = {"mace": RuntimeEnvironment()}
+    resource.remote_root = None
+    with pytest.warns(RuntimeWarning, match="/tmp may be cleared"):
+        record = manager.submit(recipe, resource)
+    assert record.resource["remote_root"].startswith("/tmp/temper-")
+    assert resource.remote_root is None
+
+
+def test_password_requires_explicit_source_and_keys_are_not_packaged(recipe: MLFFTrainBundle, tmp_path: Path) -> None:
+    profile = RemoteResource(name="cluster", backend="Slurm", hostname="host", username="user", password_env="PASSWORD")
+    assert profile.key_filename is None
+    with pytest.raises(ValueError, match="key_filename or password_env"):
+        RemoteResource(name="cluster", backend="Slurm", hostname="host", username="user")
+    _, bundle = recipe.write_submit_folder(tmp_path / "bundle")
+    names = get_dataset_and_model_hashes(bundle)
+    assert not set(names) & {bundle.files.training_input_files["config"], bundle.files.training_input_files["script"]}
+
+
+def test_download_selection_is_exact_and_diagnostics_can_be_empty(recipe: MLFFTrainBundle, tmp_path: Path) -> None:
+    from temper.job_management.collection import verify_results
+    root, bundle = recipe.write_submit_folder(tmp_path / "bundle")
+    names, required = get_download_files(bundle)
+    assert all(not any(char in name for char in "*?[") for name in names)
+    assert not selected_file("training_outputs/unexpected.json", names)
+    assert not selected_file("training_outputs/nep_best.txt", names)
+    (root / "stderr.log").touch()
+    hashes = {"stderr.log": file_sha256(root / "stderr.log")}
+    verify_results(root, hashes, [])
+    with pytest.raises(ValueError, match="Required result"):
+        verify_results(root, hashes, required)
+
+
+def test_ssh_connection_retry_budget_and_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("temper.job_management.dispatcher")
+    import temper.job_management.dispatcher as module
+    session = module._VerifiedSession.__new__(module._VerifiedSession)
+    session.ssh = SimpleNamespace(close=lambda: None)
+    attempts: list[int] = []
+    sleeps: list[int] = []
+    def fail() -> None:
+        attempts.append(1)
+        raise ConnectionError("offline")
+    monkeypatch.setattr(session, "_connect_once", fail)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+    with pytest.raises(ConnectionError):
+        session._setup_ssh()
+    assert len(attempts) == 5 and sleeps == [10] * 4
+    attempts.clear()
+    sleeps.clear()
+    def auth_failure() -> None:
+        attempts.append(1)
+        raise module.paramiko.AuthenticationException("wrong key")
+    monkeypatch.setattr(session, "_connect_once", auth_failure)
+    with pytest.raises(module.paramiko.AuthenticationException):
+        session._setup_ssh()
+    assert len(attempts) == 1 and not sleeps
+
+
+def test_local_collection_cleanup_and_uncertain_recovery(recipe: MLFFTrainBundle, tmp_path: Path) -> None:
+    from temper.job_management.local import LocalBackend
+    root, bundle = recipe.write_submit_folder(tmp_path / "bundle")
+    profile = RemoteResource(name="local", backend="Local", environments={"mace": {}})
+    record = JobRecord(bundle_id="id", attempt_folder_name="bundle", resource=profile.model_dump(mode="json"), source_bundle={})
+    backend = LocalBackend(record, root, lambda: None)
+    config = root / bundle.files.training_input_files["config"]
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("user configuration")
+    assert backend.status() == "unknown" and not backend.recover()
+    backend.cancel()
+    assert (root / ".local-cancel").exists()
+    (root / ".local-exit.json").write_text('{"returncode": 0, "cancelled": false}')
+    assert backend.status() == "success"
+    names, required = get_download_files(bundle)
+    for name in required:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"result")
+    intermediate = root / bundle.files.training_output_files["checkpoints"] / "epoch.pt"
+    intermediate.parent.mkdir(parents=True, exist_ok=True)
+    intermediate.write_bytes(b"checkpoint")
+    converted = root / "converted-data"
+    converted.mkdir()
+    (converted / "arrays.npy").write_bytes(b"converted")
+    backend._bundle.files.training_input_files["converted"] = "converted-data"
+    hashes = backend.collect()
+    assert set(required) <= hashes.keys()
+    backend.cleanup()
+    assert not intermediate.exists()
+    assert not converted.exists()
+    assert all((root / name).is_file() for name in required)
+    assert (root / bundle.files.training_input_files["config"]).is_file()
+    assert all(not (root / name).exists() for name in get_dataset_and_model_hashes(bundle))
+    record.dispatcher["local_launch_intent"] = True
+    with pytest.raises(RuntimeError, match="uncertain"):
+        backend.submit()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Local MLFF execution requires POSIX Bash")
+def test_local_supervisor_records_completion_and_cancellation(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+    import time
+    for cancel in (False, True):
+        root = tmp_path / str(cancel)
+        root.mkdir()
+        (root / "temper_job.sh").write_text("sleep 60\n" if cancel else "echo done\n")
+        process = subprocess.Popen([sys.executable, "-m", "temper.job_management.local", str(root)])
+        try:
+            if cancel:
+                deadline = time.monotonic() + 10
+                while not (root / ".local-heartbeat").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                assert (root / ".local-heartbeat").exists()
+                (root / ".local-cancel").touch()
+            process.wait(timeout=20)
+            result = json.loads((root / ".local-exit.json").read_text())
+            assert result["cancelled"] is cancel
+            if not cancel:
+                assert result["returncode"] == 0
+                assert (root / "stdout.log").read_text().strip() == "done"
+            assert (root / ".local-receipt.json").exists()
+        finally:
+            if process.poll() is None:
+                (root / ".local-cancel").touch()
+                process.wait(timeout=20)

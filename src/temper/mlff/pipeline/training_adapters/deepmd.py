@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import shutil
 from copy import deepcopy
 from pathlib import PurePosixPath
 
@@ -20,6 +21,7 @@ class _DeepMDAdapter(BaseMLFFAdapter):
         "trained_model": "model.ckpt.pt",
         "training_log": "training.log", "adapted_config": "train_adapted.json",
         "learning_curve": "lcurve.out",
+        "checkpoints": "deepmd/checkpoints",
     }
     training_input_filenames = {
         "script": "run.sh", "config": "input.json",
@@ -50,6 +52,8 @@ class _DeepMDAdapter(BaseMLFFAdapter):
             training.pop("validation_data", None)
         # DeepMD appends .pt to save_ckpt; freeze takes the resulting filename.
         training["save_ckpt"] = str(PurePosixPath(self.trained_model_path).with_suffix(""))
+        # Older packaged bundles predate the explicit checkpoint-directory map.
+        training["save_dir"] = self.files.training_output_files.get("checkpoints", "deepmd/checkpoints")
         training["disp_file"] = self.output_path("learning_curve")
         config["training"] = training
 
@@ -93,6 +97,35 @@ class _DeepMDAdapter(BaseMLFFAdapter):
             )
         ]
         return tuple(lines)
+
+    def train(self) -> None:
+        """Train to the native epoch budget and materialize the final checkpoint.
+
+        Notes
+        -----
+        DeepMD publishes its final checkpoint through a symlink. Replace that
+        link with an ordinary file so exact-file collection can reject all
+        remote symlinks while retaining a self-contained final model.
+
+        Raises
+        ------
+        ValueError
+            If the published checkpoint points outside the bundle directory.
+        OSError
+            If the final checkpoint is missing or cannot be copied.
+        subprocess.CalledProcessError
+            If native training fails before completing its budget.
+        """
+        super().train()
+        model = self.root / self.trained_model_path
+        if not model.resolve().is_relative_to(self.root.resolve()):
+            raise ValueError("DeepMD checkpoint points outside the bundle.")
+        if not model.is_file():
+            raise FileNotFoundError(model)
+        if model.is_symlink():
+            temporary = model.with_name(model.name + ".final")
+            shutil.copyfile(model, temporary)
+            os.replace(temporary, model)
 
     def prepare_evaluation(self) -> None:
         """Freeze fine-tuned portable weights on the evaluation host only."""

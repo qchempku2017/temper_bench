@@ -6,13 +6,12 @@ import os
 from pathlib import Path
 import re
 from typing import TYPE_CHECKING
+from temper.utils.defaults import DEFAULT_BUNDLE_WRITE_ROOT
 
 if TYPE_CHECKING:
     from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 
 
-# Comment: this had better be a default envvar in utils.defaults.
-#   Just import from there.
 def bundle_root(value: str | Path | None = None) -> Path:
     """Resolve an explicit or environment-configured bundle root.
 
@@ -27,7 +26,7 @@ def bundle_root(value: str | Path | None = None) -> Path:
     Path
         Absolute path; no directory is created.
     """
-    root = Path(value or os.environ.get("DEFAULT_BUNDLE_WRITE_ROOT", "./bundles")).expanduser().resolve()
+    root = Path(value or DEFAULT_BUNDLE_WRITE_ROOT).expanduser().resolve()
     # Explicit Windows long-path syntax works without changing machine policy.
     # A readable nested experiment path can otherwise exceed MAX_PATH once
     # native model output names are appended.

@@ -26,9 +26,8 @@ an explicitly empty value remains an empty string.
 ## MLFF paths
 
 The job store and automatic bundle layout use `DEFAULT_BUNDLE_WRITE_ROOT`
-(default `./bundles`). Unlike the import-time constants listed here, this
-environment setting is read by `temper.job_management.paths.bundle_root()` at operation
-time. `--bundle-write-root` or the Python `bundle_write_root` keyword takes
+(default `./bundles`). This string constant is read once when `utils.defaults`
+is imported. `--bundle-write-root` or the Python `bundle_write_root` keyword takes
 precedence. Relative values resolve against the current working directory.
 See [Remote jobs](remote-jobs.md) for the model/domain/bundle/attempt layout.
 

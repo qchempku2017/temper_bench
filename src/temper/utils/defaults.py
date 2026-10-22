@@ -108,6 +108,7 @@ def _env_submit_directory(name: str, default: str) -> str:
 ##################################
 # Default values for data storage.
 ##################################
+DEFAULT_BUNDLE_WRITE_ROOT: str = os.environ.get("DEFAULT_BUNDLE_WRITE_ROOT", "./bundles")
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
 # Default storage directory for training units.
 DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
@@ -172,6 +173,7 @@ DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)
 
 
 __all__ = [
+    "DEFAULT_BUNDLE_WRITE_ROOT",
     "DEFAULT_DATA_DIR",
     "DEFAULT_GROUPED_DOMAIN_FILE",
     "DEFAULT_MAX_N_TRAIN",

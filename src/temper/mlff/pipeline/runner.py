@@ -12,7 +12,7 @@ from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 from temper.mlff.pipeline.cuda_utils import require_cuda
 from temper.mlff.pipeline.evaluate_mlff import run_test
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
-from temper.job_management.inputs import verify_packaged_inputs
+from temper.job_management.inputs import verify_dataset_and_model_hashes
 
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def prepare_bundle(bundle_path: str | Path) -> BaseMLFFAdapter:
     path = Path(bundle_path).expanduser().resolve()
     logger.debug("Reading bundle from %s", path)
     bundle = MLFFTrainBundle.model_validate_json(path.read_text(encoding="utf-8"), context={"verify_files": False})
-    verify_packaged_inputs(bundle, path.parent)
+    verify_dataset_and_model_hashes(bundle, path.parent)
 
     installed = __version__
     if bundle.temper_version != installed:

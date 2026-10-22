@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from temper.job_management.paths import bundle_root
 from temper.job_management.storage_utils import atomic_json
-from temper.job_management.records import JobRecord, utc_now
+from temper.job_management.schemas.records import JobRecord, utc_now
 
 
 class JobStore:
@@ -51,10 +51,8 @@ class JobStore:
             raise ValueError("Attempt path must remain below the job store root.")
         return result
 
-    # Comment: I'm not sure whether the current records reading and updating mechanism is still efficient enough
-    #   when the numeber of bundles and attempts grows to thousands. Maybe we need to consider more efficient
-    #   storage solutions, such as one unified jsonl file for all attempts, while keeping the current job.json
-    #   and events.jsonl under each attempt folder for convenient debugging of the users only.
+    # TODO: Benchmark large histories and repeated full scans before adding an
+    # index. Keep per-attempt job.json authoritative until storage is redesigned.
     def records(self) -> list[JobRecord]:
         """Read all attempts without contacting remote resources.
 

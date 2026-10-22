@@ -1,4 +1,5 @@
 """MACE naive fine-tuning defaults."""
+from typing import Any
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_spec import MLFFImplementation
 
@@ -23,10 +24,35 @@ class MACESpecBuilder(BaseSpecBuilder):
         "scaling": "rms_forces_scaling",
         "batch_size": 4,
         "max_num_epochs": 100,
-        "ema": True,
+        "ema": False,
+        "swa": False,
+        "save_all_checkpoints": True,
+        "eval_interval": 1,
+        "restart_latest": False,
         "ema_decay": 0.999,
         "amsgrad": True,
         "clip_grad": 1.0,
         "default_dtype": "float32",
         "seed": 42,
     }
+
+    def prepare_training(self) -> dict[str, Any]:
+        """Build parameters that export the configured final epoch weights.
+
+        Returns
+        -------
+        dict[str, Any]
+            Native parameters with averaging disabled and every epoch saved.
+
+        Raises
+        ------
+        ValueError
+            If overrides enable averaging, checkpoint restart, sparse checkpoint
+            evaluation, or best-only checkpoint storage, or epochs are invalid.
+        """
+        parameters = super().prepare_training()
+        for key, expected in {"ema": False, "swa": False, "restart_latest": False,
+                              "save_all_checkpoints": True, "eval_interval": 1}.items():
+            if parameters.get(key) != expected:
+                raise ValueError(f"{key} must be {expected!r} for final-epoch evaluation.")
+        return parameters

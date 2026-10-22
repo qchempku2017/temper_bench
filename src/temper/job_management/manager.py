@@ -4,18 +4,20 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 import logging
+import hashlib
+import warnings
 import time
 from typing import Protocol
 from uuid import uuid4
 
-from temper.job_management.collection import result_selection, verify_results
-from temper.job_management.inputs import input_hashes, verify_packaged_inputs
+from temper.job_management.collection import get_download_files, verify_results
+from temper.job_management.inputs import get_dataset_and_model_hashes, verify_dataset_and_model_hashes
 from temper.job_management.paths import bundle_directory, next_attempt
 from temper.job_management.storage_utils import store_lock
 from temper.job_management.store import JobStore
-from temper.job_management.records import JobRecord, utc_now
+from temper.job_management.schemas.records import ComputationStatus, JobRecord, utc_now
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
-from temper.job_management.resources import RemoteResource
+from temper.job_management.schemas.resources import RemoteResource
 from temper.utils.file_hashing import hashing_session
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 class _Backend(Protocol):
     def upload(self) -> None: ...
     def submit(self) -> None: ...
-    def status(self) -> str: ...
+    def status(self) -> ComputationStatus: ...
     def recover(self, job_id: str | None = None) -> bool: ...
     def collect(self) -> dict[str, str]: ...
     def cleanup(self) -> None: ...
@@ -33,6 +35,9 @@ class _Backend(Protocol):
 
 
 def _backend(record: JobRecord, root: Path, checkpoint: Callable[[], None]) -> _Backend:
+    if record.resource["backend"] == "Local":
+        from temper.job_management.local import LocalBackend
+        return LocalBackend(record, root, checkpoint)
     try:
         from temper.job_management.dispatcher import DispatcherBackend
     except ImportError as error:
@@ -103,14 +108,26 @@ class JobManager:
         if reason:
             raise ValueError(reason)
         effective = resource.model_copy(deep=True)
-        effective.environment = effective.environments.get(bundle.mlff_spec.mlff_type, effective.environment)
+        family = bundle.mlff_spec.mlff_type
+        if effective.resolved_environment is None:
+            if family not in effective.environments:
+                raise ValueError(f"Resource requires an environments entry for {family}.")
+            effective.resolved_environment = effective.environments[family]
+        if effective.backend in {"Slurm", "PBS"} and effective.remote_root is None:
+            user_token = hashlib.sha256((effective.username or "").encode()).hexdigest()[:16]
+            effective.remote_root = f"/tmp/temper-{user_token}"
+            warnings.warn(
+                f"No remote_root configured; using {effective.remote_root}. Configure an absolute "
+                "home or shared scratch directory: /tmp may be cleared or unavailable to compute nodes.",
+                RuntimeWarning, stacklevel=2,
+            )
         effective.environments = {}
-        if effective.backend == "Bohrium" and not effective.environment.image:
+        if effective.backend == "Bohrium" and not effective.resolved_environment.image:
             raise ValueError("Bohrium requires an image for this MLFF family.")
         target = next_attempt(bundle_directory(self.store.root, bundle))
         root, packaged = bundle.write_submit_folder(target)
         record = JobRecord(bundle_id=identity, attempt_folder_name=root.relative_to(self.store.root).as_posix(),
-                           recipe=bundle.model_dump(mode="json"), resource=effective.model_dump(mode="json"),
+                           source_bundle=bundle.model_dump(mode="json"), resource=effective.model_dump(mode="json"),
                            dispatcher={"token": uuid4().hex})
         self.store.save(record, "prepared")
         self._launch(record, packaged)
@@ -133,13 +150,14 @@ class JobManager:
         try:
             backend = self._connect(record)
             if record.submission_status in {"prepared", "uploading"}:
-                verify_packaged_inputs(bundle, self.store.path(record))
+                verify_dataset_and_model_hashes(bundle, self.store.path(record))
                 record.submission_status = "uploading"
                 self.store.save(record, "uploading")
                 backend.upload()
                 record.submission_status = "uploaded"
                 self.store.save(record, "uploaded")
-            self._remove_copies(record, bundle)
+            if record.resource["backend"] != "Local":
+                self._remove_copies(record, bundle)
             record.submission_status = "submitting"
             self.store.save(record, "submission_intent")
             backend.submit()
@@ -156,8 +174,9 @@ class JobManager:
                 backend.close()
 
     def _remove_copies(self, record: JobRecord, bundle: MLFFTrainBundle) -> None:
+        """Remove copied datasets/models and upload archives, retaining scripts/configs."""
         root = self.store.path(record)
-        for name in input_hashes(bundle):
+        for name in get_dataset_and_model_hashes(bundle):
             (root / name).unlink(missing_ok=True)
         # Dispatcher archives contain the same large copies, not new results.
         for suffix in ("zip", "tgz", "tar"):
@@ -183,7 +202,7 @@ class JobManager:
             Query and persist status only; no upload, submission, cancellation,
             result download or remote deletion.
         download_only : bool, default False
-            Collect terminal results but postpone remote cleanup.
+            Collect results from remote but postpone remote running directory cleanup.
 
         Returns
         -------
@@ -192,15 +211,16 @@ class JobManager:
             One unreachable resource does not stop processing other attempts.
         """
         with store_lock(self.store.root):
-            records = self.select(bundle_id=bundle_id, resource=resource, domain=domain)
+            records = self.list_attempts(bundle_id=bundle_id, resource=resource, domain=domain)
             for record in records:
                 self.store.repair_markers(record)
                 if record.cleanup_status == "complete":
                     continue
-                self._synchronize(record, refresh_only, download_only)
+                self._synchronize_one(record, refresh_only, download_only)
             return records
 
-    def _synchronize(self, record: JobRecord, refresh_only: bool, download_only: bool) -> None:
+    def _synchronize_one(self, record: JobRecord, refresh_only: bool, download_only: bool) -> None:
+        """Synchronize one attempt. Refresh the record content with current status."""
         if record.submission_status != "submitted":
             return  # Recovery is explicit, never a hidden calculation retry.
         backend = None
@@ -225,16 +245,16 @@ class JobManager:
                 return
             root = self.store.path(record)
             bundle = MLFFTrainBundle.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
-            _, required = result_selection(bundle)
+            _, required = get_download_files(bundle)
             required = required if record.computation_status == "success" else []
             if record.collection_status != "verified":
-                record.manifest = backend.collect()
-                verify_results(root, record.manifest, required)
+                record.downloaded_file_hashes = backend.collect()
+                verify_results(root, record.downloaded_file_hashes, required)
                 record.collection_status = "verified"
                 record.error = None
                 self.store.save(record, "collected_and_verified")
             if not download_only:
-                verify_results(root, record.manifest, required)
+                verify_results(root, record.downloaded_file_hashes, required)
                 backend.cleanup()
                 record.cleanup_status = "complete"
                 record.error = None
@@ -245,7 +265,7 @@ class JobManager:
             if backend:
                 backend.close()
 
-    def select(self, *, bundle_id: str | None = None, resource: str | None = None,
+    def list_attempts(self, *, bundle_id: str | None = None, resource: str | None = None,
                domain: str | None = None, failed: bool = False) -> list[JobRecord]:
         """Read local attempts matching exact filters.
 
@@ -264,7 +284,7 @@ class JobManager:
         return [r for r in self.store.records()
                 if (bundle_id is None or r.bundle_id == bundle_id)
                 and (resource is None or r.resource["name"] == resource)
-                and (domain is None or r.recipe["training_unit"]["domain"] == domain)
+                and (domain is None or r.source_bundle["training_unit"]["domain"] == domain)
                 and (not failed or r.computation_status == "failed")]
 
     @hashing_session()
@@ -291,7 +311,7 @@ class JobManager:
         """
         with store_lock(self.store.root):
             all_records = self.store.records()
-            failed = self.select(bundle_id=bundle_id, resource=resource, domain=domain, failed=True)
+            failed = self.list_attempts(bundle_id=bundle_id, resource=resource, domain=domain, failed=True)
             latest = {record.bundle_id: record for record in failed}
             outcomes = []
             for identity, record in latest.items():
@@ -303,7 +323,7 @@ class JobManager:
                     outcomes.append({"bundle_id": identity, "action": "eligible"})
                     continue
                 try:
-                    bundle = MLFFTrainBundle.model_validate(record.recipe)
+                    bundle = MLFFTrainBundle.model_validate(record.source_bundle)
                     profile = replacement_resource or RemoteResource.model_validate(record.resource)
                     attempt = self._submit(bundle, profile)
                     outcomes.append({"bundle_id": identity, "action": attempt.submission_status, "attempt": attempt.attempt_folder_name})
@@ -327,7 +347,7 @@ class JobManager:
             diagnostics; stopping a watcher never calls this method.
         """
         with store_lock(self.store.root):
-            records = self.select(bundle_id=bundle_id)
+            records = self.list_attempts(bundle_id=bundle_id)
             for record in records:
                 if record.computation_status in {"success", "failed", "cancelled"}:
                     continue
@@ -336,7 +356,7 @@ class JobManager:
                 if record.submission_status in {"prepared", "uploading", "uploaded"}:
                     self._cancel_unsubmitted(record)
                 else:
-                    self._synchronize(record, False, False)
+                    self._synchronize_one(record, False, False)
             return records
 
     def _cancel_unsubmitted(self, record: JobRecord) -> None:
@@ -379,7 +399,7 @@ class JobManager:
             reads remote evidence. A failed calculation requires resubmit.
         """
         with store_lock(self.store.root):
-            records = self.select(bundle_id=bundle_id)
+            records = self.list_attempts(bundle_id=bundle_id)
             for record in records:
                 if record.submission_status == "submitted" or record.computation_status in {"success", "failed", "cancelled"}:
                     continue

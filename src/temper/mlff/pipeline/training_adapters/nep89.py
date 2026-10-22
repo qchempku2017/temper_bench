@@ -156,7 +156,7 @@ class NEP89Adapter(BaseMLFFAdapter):
 
         The pretrained header determines species and network dimensions.
         Dataset species must be covered, periodicity must be complete, and
-        validation data is required for selecting nep_best.txt.
+        validation data is required for monitoring training losses.
         """
         if self.training_unit.val_set is None:
             raise ValueError("NEP-89 fine-tuning requires a validation dataset.")
@@ -167,6 +167,7 @@ class NEP89Adapter(BaseMLFFAdapter):
         self._check_chemical_symbols(model_symbols)
 
         parameters = dict(self.spec.training_parameters or {})
+        parameters["early_stop"] = 0
         # run_seed belongs to train_nep's Python API, not the nep.in grammar.
         parameters.pop("run_seed", None)
         if not training_stress:
@@ -182,11 +183,18 @@ class NEP89Adapter(BaseMLFFAdapter):
         return ()
 
     def train(self) -> None:
-        """Fine-tune with TorchNEP, save its log, and copy the selected model.
+        """Fine-tune with TorchNEP and retain the configured final epoch model.
 
         All input and output paths resolve against the bundle root. Returns
-        None after copying nep_best.txt to the bundle's trained-model path.
+        None after copying nep_final.txt to the bundle's trained-model path.
         Backend exceptions propagate to stop the pipeline before evaluation.
+
+        Raises
+        ------
+        RuntimeError
+            If the loss history does not reach the configured epoch count.
+        OSError
+            If the final model or loss history cannot be read or copied.
         """
         from torchnep import train_nep
 
@@ -205,4 +213,8 @@ class NEP89Adapter(BaseMLFFAdapter):
                     slim_types=True,
                     run_seed=(self.spec.training_parameters or {}).get("run_seed", 42),
                 )
-        shutil.copy2(output / "nep_best.txt", self.root / self.trained_model_path)
+        rows = [line.split() for line in (output / "loss.out").read_text().splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+        if not rows or int(rows[-1][0]) != int((self.spec.training_parameters or {})["epoch"]):
+            raise RuntimeError("NEP did not complete the configured final epoch.")
+        shutil.copy2(output / "nep_final.txt", self.root / self.trained_model_path)

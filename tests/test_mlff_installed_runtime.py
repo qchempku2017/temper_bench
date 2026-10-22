@@ -128,6 +128,10 @@ def test_runner_trains_then_evaluates_from_another_directory(
         assert check
         events.append("train")
         (target / "training_outputs/finetuned_mace.model").write_bytes(b"trained")
+        parameters = bundle.mlff_spec.training_parameters
+        checkpoint = target / "training_outputs/mace/checkpoints" / f"temper_model_run-{parameters['seed']}_epoch-{parameters['max_num_epochs'] - 1}.pt"
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_bytes(b"last epoch")
 
     def calculator(config):
         model = Path(config["model"])
@@ -284,7 +288,9 @@ def test_nep_training_is_a_function_call_before_evaluation(
         assert "run_seed" not in Path(config).read_text()
         output = Path(kwargs["output_dir"])
         output.mkdir(parents=True)
-        (output / "nep_best.txt").write_bytes(b"trained")
+        (output / "nep_best.txt").write_bytes(b"earlier best")
+        (output / "nep_final.txt").write_bytes(b"trained")
+        (output / "loss.out").write_text("# epoch loss\n100 0.1\n")
         print("training completed")
     def calculator(config):
         events.append("evaluate")

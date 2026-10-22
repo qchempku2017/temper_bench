@@ -7,7 +7,7 @@ from pathlib import Path
 
 from temper.job_management.manager import JobManager
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
-from temper.job_management.resources import RemoteResource
+from temper.job_management.schemas.resources import RemoteResource
 from temper.utils.file_hashing import hashing_session
 
 
@@ -123,7 +123,7 @@ def job_cli(args: argparse.Namespace) -> int:
     elif action == "recover":
         records = manager.recover(args.bundle_id, args.job_id)
     else:
-        records = manager.select(**filters, failed=getattr(args, "failed", False))
+        records = manager.list_attempts(**filters, failed=getattr(args, "failed", False))
     if args.json or action == "inspect":
         print(json.dumps({"attempts": [record.model_dump(mode="json") for record in records], "errors": failures}, indent=2))
     else:

@@ -13,9 +13,9 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
-import shutil
 import stat
-from typing import Any
+import time
+from typing import Any, TYPE_CHECKING, cast
 from uuid import uuid4
 from zipfile import ZipFile
 
@@ -31,21 +31,27 @@ from dpdispatcher.machines.pbs import PBS
 from dpdispatcher.utils.job_status import JobStatus
 import paramiko
 
+if TYPE_CHECKING:
+    from dpdispatcher.machines.openapi import OpenAPI
+    from dpdispatcher.contexts.openapi_context import OpenAPIContext
+
 for _handler in list(_dispatcher_log.handlers):
     _dispatcher_log.removeHandler(_handler)
     _handler.close()
 
-from temper.job_management.collection import result_selection, selected_file
-from temper.job_management.inputs import input_hashes
-from temper.job_management.records import JobRecord
+from temper.job_management.collection import get_download_files, selected_file
+from temper.job_management.inputs import get_dataset_and_model_hashes
+from temper.job_management.schemas.records import ComputationStatus, JobRecord
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
-from temper.job_management.resources import RemoteResource
+from temper.job_management.schemas.resources import RemoteResource
 from temper.utils.file_hashing import file_sha256
 
 
+# Overwrite default SSH session implementation in DPDispatcher.
 class _VerifiedSession(SSHSession):
     def __init__(self, profile: RemoteResource) -> None:
-        self._known_hosts = profile.known_hosts
+        self._known_hosts: str | None = profile.known_hosts
+        self._password: str | None = os.environ[profile.password_env] if not profile.key_filename and profile.password_env else None
         super().__init__(hostname=profile.hostname, username=profile.username,
                          port=profile.port, key_filename=profile.key_filename,
                          passphrase=os.environ[profile.passphrase_env] if profile.passphrase_env else None,
@@ -53,6 +59,23 @@ class _VerifiedSession(SSHSession):
                          look_for_keys=False)
 
     def _setup_ssh(self) -> None:
+        for attempt in range(5):
+            try:
+                self._connect_once()
+                return
+            except (paramiko.AuthenticationException, paramiko.BadHostKeyException,
+                    FileNotFoundError, PermissionError):
+                self.ssh.close()
+                raise
+            except (OSError, EOFError):
+                self.ssh.close()
+                if attempt == 4:
+                    raise
+                time.sleep(10)
+
+    def _connect_once(self) -> None:
+        if self.ssh is not None:
+            self.ssh.close()
         self.ssh = paramiko.SSHClient()
         self.ssh.load_system_host_keys()
         if self._known_hosts:
@@ -60,24 +83,32 @@ class _VerifiedSession(SSHSession):
         self.ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
         proxy = paramiko.ProxyCommand(self.proxy_command) if self.proxy_command else None
         self.ssh.connect(self.hostname, port=self.port, username=self.username,
-                         key_filename=self.key_filename, passphrase=self.passphrase,
+                         key_filename=self.key_filename, passphrase=self.passphrase, password=self._password,
                          timeout=self.timeout, auth_timeout=self.timeout, banner_timeout=self.timeout,
                          allow_agent=False, look_for_keys=False, sock=proxy)
-        self.ssh.get_transport().set_keepalive(30)
+        transport = self.ssh.get_transport()
+        if transport is None:
+            raise ConnectionError("SSH connection has no transport.")
+        transport.set_keepalive(30)
         self._sftp = None
 
-    def ensure_alive(self, max_check: int = 1, sleep_time: int = 0) -> None:
-        """Reconnect once if necessary.
+    def ensure_alive(self, max_check: int = 5, sleep_time: int = 10) -> None:
+        """Reconnect with up to five attempts, ten seconds apart, if necessary.
 
         Parameters
         ----------
         max_check, sleep_time : int
-            Compatibility arguments; unused. TEMPER does not block in a retry loop.
+            Compatibility arguments; unused. Connection policy is five total
+            attempts with ten seconds between transient failures.
         """
-        if not self._check_alive():
+        try:
+            alive = self._check_alive()
+        except (EOFError, OSError, paramiko.SSHException):
+            alive = False
+        if not alive:
             self._setup_ssh()
 
-    def exec_command(self, cmd: str) -> tuple[Any, Any, Any]:
+    def exec_command(self, cmd: str) -> tuple[paramiko.channel.ChannelStdinFile, paramiko.channel.ChannelFile, paramiko.channel.ChannelStderrFile]:
         """Execute once, without replaying a command after a lost response.
 
         Parameters
@@ -87,8 +118,15 @@ class _VerifiedSession(SSHSession):
 
         Returns
         -------
-        tuple
+        tuple[ChannelStdinFile, ChannelFile, ChannelStderrFile]
             Paramiko stdin, stdout and stderr streams.
+
+        Raises
+        ------
+        OSError
+            If connection attempts fail or command execution times out.
+        paramiko.SSHException
+            If authentication, host verification, or channel creation fails.
         """
         self.ensure_alive()
         return self.ssh.exec_command(cmd, timeout=self.timeout)
@@ -97,6 +135,7 @@ class _VerifiedSession(SSHSession):
     def sftp(self) -> paramiko.SFTPClient:
         """Return an SFTP channel with the configured operation timeout.
 
+        This is used for all file transfers.
         Returns
         -------
         paramiko.SFTPClient
@@ -118,8 +157,16 @@ class _VerifiedSession(SSHSession):
         return False
 
 
+# Overwrite default SSH context implementation in DPDispatcher.
 class _VerifiedContext(SSHContext):
+    # The parent constructor creates its own SSH session and remote directory.
+    # TEMPER supplies the verified session and defers directory creation to upload.
+    # noinspection PyMissingConstructor
     def __init__(self, root: Path, profile: RemoteResource, token: str) -> None:
+        self.submission: Submission | None = None
+        self.submission_hash: str | None = None
+        if profile.remote_root is None:
+            raise ValueError("Resolve remote_root before constructing the SSH context.")
         self.init_local_root = self.temp_local_root = self.local_root = str(root)
         self.init_remote_root = self.temp_remote_root = profile.remote_root
         self.remote_root = str(PurePosixPath(profile.remote_root) / ("temper_" + token))
@@ -185,16 +232,18 @@ class DispatcherBackend:
             logging.getLogger("bohrium").setLevel(logging.CRITICAL)
             logging.getLogger("httpx").setLevel(logging.CRITICAL)
             logging.getLogger("httpcore").setLevel(logging.CRITICAL)
-            profile = {"access_key": os.environ[self.profile.access_key_env],
-                       "project_id": self.profile.project_id, "machine_type": self.profile.machine_type,
-                       "image_address": self.profile.environment.image, "platform": self.profile.platform,
+            if self.profile.resolved_environment is None:
+                raise ValueError("Bohrium requires a resolved runtime environment.")
+            profile = {"access_key": os.environ[self.profile.bohrium_access_key_env],
+                       "project_id": self.profile.bohrium_project_id, "machine_type": self.profile.bohrium_machine_type,
+                       "image_address": self.profile.resolved_environment.image, "platform": self.profile.bohrium_platform,
                        "ignore_exit_code": False, "job_name": "temper-" + token}
             if not profile["image_address"]:
                 raise ValueError("Bohrium requires an environment image.")
             context = OpenAPIContext(str(root), remote_profile=profile)
             machine = OpenAPI(context, retry_count=0)
             # In SDK 0.15.0 this value is the number of attempts, despite its
-            # name. One prevents replaying a create/insert after a lost reply.
+            # name. One prevents replaying a creation/insertion after a lost reply.
             context.client.max_retries = machine.client.max_retries = 1
             context.storage.client.max_retries = machine.storage.client.max_retries = 1
             # Authentication remains in SDK clients, not in serialized profiles.
@@ -204,12 +253,15 @@ class DispatcherBackend:
             context = _VerifiedContext(root, self.profile, token)
             machine = (Slurm if self.profile.backend == "Slurm" else PBS)(context=context, retry_count=0)
         if state.get("submission"):
-            self.submission: Submission = Submission.deserialize(state["submission"], machine=machine)
+            saved_submission = state["submission"]
+            if not isinstance(saved_submission, dict):
+                raise ValueError("Saved submission must be a JSON object.")
+            self.submission: Submission = Submission.deserialize(saved_submission, machine=machine)
             self.submission.belonging_tasks = self.submission.belonging_jobs[0].job_task_list
         else:
-            patterns, _ = result_selection(self._bundle)
+            patterns, _ = get_download_files(self._bundle)
             task = Task(command="bash temper_job.sh", task_work_path=".",
-                        forward_files=["bundle.json", "run.sh", "temper_job.sh", *input_hashes(self._bundle)],
+                        forward_files=["bundle.json", "run.sh", "temper_job.sh", *get_dataset_and_model_hashes(self._bundle)],
                         backward_files=patterns, outlog="stdout.log", errlog="stderr.log")
             resources = Resources(**{"number_node": 1, "cpu_per_node": 1, "gpu_per_node": 0,
                                      "queue_name": "", "group_size": 1, **self.profile.resources})
@@ -228,11 +280,21 @@ class DispatcherBackend:
             if hasattr(self._job, key):
                 state[key] = getattr(self._job, key)
 
+    def _cloud_machine(self) -> OpenAPI:
+        if self.profile.backend != "Bohrium":
+            raise TypeError("This operation requires the Bohrium backend.")
+        # Construction above pairs this discriminator with OpenAPI. Persisted
+        # submissions are reconstructed with the same concrete machine.
+        return cast("OpenAPI", self.submission.machine)
+
+    def _cloud_context(self) -> OpenAPIContext:
+        return cast("OpenAPIContext", self._cloud_machine().context)
+
     def _command(self, command: str) -> str:
         context = self.submission.machine.context
         stdin, stdout, stderr = context.ssh_session.exec_command(command)
         output = stdout.read().decode("utf-8")
-        error = stderr.read().decode("utf-8")
+        stderr.read()  # Drain diagnostics without persisting possibly secret text.
         if stdout.channel.recv_exit_status() != 0:
             raise RuntimeError("Remote command failed; inspect scheduler diagnostics.")
         return output
@@ -246,7 +308,10 @@ class DispatcherBackend:
             If upload fails; the manager preserves input copies and recovery
             state. This method never starts a calculation.
         """
-        script = "#!/usr/bin/env bash\nset -eo pipefail\n" + "\n".join(self.profile.environment.shell_lines()) + "\nexec bash run.sh\n"
+        environment = self.profile.resolved_environment
+        if environment is None:
+            raise ValueError("Resolve the runtime environment before uploading.")
+        script = "#!/usr/bin/env bash\nset -eo pipefail\n" + "\n".join(environment.shell_lines()) + "\nexec bash run.sh\n"
         (self.root / "temper_job.sh").write_text(script, encoding="utf-8", newline="\n")
         context = self.submission.machine.context
         if self.profile.backend != "Bohrium":
@@ -256,7 +321,7 @@ class DispatcherBackend:
             self.submission.upload_jobs()
         else:
             from dpdispatcher.contexts.openapi_context import zip_file_list
-            machine = self.submission.machine
+            machine = self._cloud_machine()
             machine.gen_local_script(self._job)
             archive = self._job.job_hash + ".zip"
             files = [self._job.script_file_name, self._job.script_file_name + ".run", *self._job.job_task_list[0].forward_files]
@@ -273,18 +338,21 @@ class DispatcherBackend:
                     del self._job.upload_path
                 self._snapshot()
                 self._checkpoint()
+            token: str | None = None
             if not self._job.job_id:
                 if self.record.dispatcher.get("cloud_create_intent"):
                     raise RuntimeError("Cloud draft creation response was lost; recover its ID before retrying upload.")
                 self.record.dispatcher["cloud_create_intent"] = True
                 self._checkpoint()
-                data = context.job.create(project_id=self.profile.project_id, name="temper-" + str(self.record.dispatcher["token"]))
+                data = context.job.create(project_id=self.profile.bohrium_project_id, name="temper-" + str(self.record.dispatcher["token"]))
                 self._job.job_id = data["jobId"]
                 self._job.upload_path = str(PurePosixPath(data["storePath"]) / archive)
                 self._job.jgid = data.get("jobGroupId", "")
                 self._snapshot()
                 self._checkpoint()
                 token = data["token"]
+            if token is None:
+                raise RuntimeError("Cloud draft has no upload token.")
             self._upload_cloud_archive(self.root / archive, token)
         self._snapshot()
 
@@ -310,7 +378,11 @@ class DispatcherBackend:
             parts = []
             number = 1
             while block := stream.read(chunk_size):
-                result = self._confirmed_response(storage.upload_by_part(key, initial, chunk_size=len(block), number=number, body=block, token=token))
+                result = self._confirmed_response(
+                    storage.upload_by_part(
+                        key, initial, chunk_size=len(block), number=number, body=block, token=token
+                    )
+                )
                 parts.append(result["partString"])
                 number += 1
             self._confirmed_response(storage.complete_upload_by_part(key, initial, parts, token))
@@ -331,9 +403,17 @@ class DispatcherBackend:
             context = machine.context
             context.write_file(self._job.script_file_name, machine.gen_script(self._job))
             context.write_file(self._job.script_file_name + ".run", machine.gen_script_command(self._job))
-            submit_command = "sbatch --parsable" if self.profile.backend == "Slurm" else "qsub"
+            output = shlex.quote(str(PurePosixPath(context.remote_root) / "scheduler.stdout.log"))
+            error = shlex.quote(str(PurePosixPath(context.remote_root) / "scheduler.stderr.log"))
+            submit_command = (f"sbatch --parsable --output={output} --error={error}"
+                              if self.profile.backend == "Slurm" else f"qsub -o {output} -e {error}")
             # The receipt is written remotely even if the local connection dies.
-            output = self._command(f"cd {shlex.quote(context.remote_root)} && {submit_command} {shlex.quote(self._job.script_file_name)} > .temper-receipt.tmp && mv .temper-receipt.tmp .temper-receipt && cat .temper-receipt")
+            output = self._command(
+                f"cd {shlex.quote(context.remote_root)}"
+                f" && {submit_command} {shlex.quote(self._job.script_file_name)} > .temper-receipt.tmp"
+                f" && mv .temper-receipt.tmp .temper-receipt"
+                f" && cat .temper-receipt"
+            )
             self._job.job_id = self._parse_id(output)
         if not self._job.job_id:
             raise RuntimeError("Scheduler returned no job identifier.")
@@ -350,6 +430,8 @@ class DispatcherBackend:
     def recover(self, job_id: str | None = None) -> bool:
         """Attach an uncertain submission to an existing remote job.
 
+        This handles the case where a previous launch succeeded but the local receipt was lost.
+        Will reassign the uncertain submission to the existing job ID if it is valid.
         Parameters
         ----------
         job_id : str or None, optional
@@ -375,7 +457,7 @@ class DispatcherBackend:
         self._snapshot()
         return bool(self._job.job_id)
 
-    def status(self) -> str:
+    def status(self) -> ComputationStatus:
         """Query computation state without submitting, downloading or deleting.
 
         Returns
@@ -387,7 +469,7 @@ class DispatcherBackend:
         if not self._job.job_id:
             return "unknown"
         if self.profile.backend == "Bohrium":
-            detail = self.submission.machine.job.detail(self._job.job_id)
+            detail = self._cloud_machine().job.detail(self._job.job_id)
             if not isinstance(detail, dict):
                 raise RuntimeError("Bohrium returned no job details.")
             status_code = detail.get("status")
@@ -395,10 +477,11 @@ class DispatcherBackend:
             if status_code == 2:
                 exit_code = detail.get("exitCode")
                 return "unknown" if exit_code is None else ("success" if exit_code == 0 else "failed")
-            return {-1: "failed", 5: "failed", 0: "waiting", 3: "waiting", 9: "waiting", 1: "running", 4: "running", 6: "running"}.get(status_code, "unknown")
+            states: dict[int, ComputationStatus] = {-1: "failed", 5: "failed", 0: "waiting", 3: "waiting", 9: "waiting", 1: "running", 4: "running", 6: "running"}
+            return states.get(status_code, "unknown") if type(status_code) is int else "unknown"
         return self._scheduler_status()
 
-    def _scheduler_status(self) -> str:
+    def _scheduler_status(self) -> ComputationStatus:
         context = self.submission.machine.context
         job_id = self._parse_id(str(self._job.job_id))
         if self.profile.backend == "Slurm":
@@ -465,11 +548,11 @@ class DispatcherBackend:
             On transport, checksum, unsafe-path or archive errors. Missing
             failed-calculation outputs are allowed; transfer errors are not.
         """
-        patterns, _ = result_selection(self._bundle)
+        patterns, _ = get_download_files(self._bundle)
         manifest: dict[str, str] = {}
         context = self.submission.machine.context
         if self.profile.backend == "Bohrium":
-            detail = self.submission.machine.job.detail(self._job.job_id)
+            detail = self._cloud_machine().job.detail(self._job.job_id)
             url = detail.get("resultUrl")
             if not url:
                 raise RuntimeError("Bohrium result archive is not available yet; retaining remote job.")
@@ -479,6 +562,7 @@ class DispatcherBackend:
             # connection attempts fail. Require a fresh successful response.
             with requests.get(url, stream=True, timeout=(self.profile.timeout, self.profile.timeout)) as response:
                 response.raise_for_status()
+                # Download results as zip files in 1MB blocks.
                 with archive.open("wb") as stream:
                     for block in response.iter_content(1024 * 1024):
                         stream.write(block)
@@ -492,7 +576,8 @@ class DispatcherBackend:
                     destination = self._destination(name)
                     temporary = destination.with_name(destination.name + ".partial")
                     with zipped.open(entry) as incoming, temporary.open("wb") as outgoing:
-                        shutil.copyfileobj(incoming, outgoing, 1024 * 1024)
+                        while block := incoming.read(1024 * 1024):
+                            outgoing.write(block)
                         outgoing.flush()
                         os.fsync(outgoing.fileno())
                     os.replace(temporary, destination)
@@ -553,7 +638,7 @@ class DispatcherBackend:
     def _cloud_action(self, action: str) -> None:
         from bohrium.resources.job.job import USE_SANDBOX
         prefix = "/openapi/v1/sandbox/job" if USE_SANDBOX else "/openapi/v1/job"
-        response = self.submission.machine.client.post(f"{prefix}/{action}/{self._job.job_id}")
+        response = self._cloud_machine().client.post(f"{prefix}/{action}/{self._job.job_id}")
         if action == "del" and response is not None and response.status_code == 404:
             return  # A repeated deletion may observe the already-removed job.
         self._confirmed_response(response)
@@ -572,6 +657,8 @@ class DispatcherBackend:
             return
         context = self.submission.machine.context
         remote = PurePosixPath(context.remote_root)
+        if self.profile.remote_root is None:
+            raise ValueError("Remote cleanup requires a resolved remote_root.")
         parent = PurePosixPath(self.profile.remote_root)
         if remote.parent != parent or remote.name != "temper_" + str(self.record.dispatcher["token"]):
             raise ValueError("Refusing to remove an unowned remote directory.")
@@ -597,6 +684,7 @@ class DispatcherBackend:
         if self.profile.backend != "Bohrium":
             self.submission.machine.context.close()
         else:
-            machine = self.submission.machine
-            for client in (machine.client, machine.context.client, machine.storage.client, machine.context.storage.client):
+            machine = self._cloud_machine()
+            context = self._cloud_context()
+            for client in (machine.client, context.client, machine.storage.client, context.storage.client):
                 client._client.close()
