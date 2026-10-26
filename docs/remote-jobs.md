@@ -105,7 +105,52 @@ state and preserves remote data. It does not interpret a broken query as failure
 SSH supports RSA/ECDSA/Ed25519 keys through Paramiko. Unknown or changed host
 keys are rejected. If `known_hosts` is omitted, Paramiko reads the user's normal
 known-hosts file. Have the cluster administrator verify new host fingerprints
-before adding them. `proxy_command` may specify an OpenSSH ProxyCommand for a
+before adding them.
+
+**Before the first TEMPER connection, manually log in once with OpenSSH from
+the machine and user account that will run TEMPER to populate `known_hosts`.**
+This step can be skipped only if a verified entry for the target SSH server is
+already available in a host-key file that TEMPER loads. TEMPER does not prompt
+to trust an unknown host or automatically add its key, even when your user public
+key has already been registered in the cluster's web console.
+
+For example, on Linux or WSL:
+
+```console
+ssh -i ~/.ssh/id_ed25519 -p 22 your-account@login.example.org
+```
+
+On Windows CMD, an equivalent example is:
+
+```console
+ssh -i "%USERPROFILE%\.ssh\id_ed25519" -p 22 your-account@login.example.org
+```
+
+Replace the private-key path, port, remote account, and hostname with your actual
+settings. Use the same hostname and port as the TEMPER resource profile; an entry
+saved for an IP address may not match a connection made through a DNS name.
+Non-default ports are recorded as `[hostname]:port`. For password authentication,
+omit `-i`. If a jump host is required, use the corresponding connection settings
+for this manual login as well.
+
+When OpenSSH asks whether to trust the server, compare the displayed fingerprint
+with the one supplied by the cluster administrator or platform, then enter `yes`
+only if they match. With the default OpenSSH configuration, this saves the server
+key in `~/.ssh/known_hosts` on Linux/WSL or `%USERPROFILE%\.ssh\known_hosts` on
+Windows. Complete the login and then run `exit` to return to your local shell.
+Point the profile's `known_hosts` at that file. If you use a custom file, pass
+`-o UserKnownHostsFile="/path/to/known_hosts"` to OpenSSH and configure TEMPER to
+read the same file. An explicitly configured file must exist and be readable.
+
+Windows and WSL normally have separate user home directories and `known_hosts`
+files. Repeat this preparation in the environment that will run TEMPER, or
+explicitly configure an accessible file containing the verified entry. The
+server key in `known_hosts` verifies the server's identity; your public key in
+the cluster console authorizes your account. They serve different purposes.
+If a previously recorded server key changes, confirm the replacement with the
+administrator before updating the entry.
+
+`proxy_command` may specify an OpenSSH ProxyCommand for a
 jump host. Set passphrases in the named local environment variable; do not put
 them in YAML. On POSIX, for example, `export TEMPER_SSH_PASSPHRASE=...` makes the
 value available to subsequent commands. A background watcher needs the same
@@ -153,6 +198,77 @@ dependencies. Credentials are resolved locally at connection time. The saved
 profile contains the environment variable's **name**, never its value. Keep
 runtime variables, scheduler flags and recipe settings free of credentials:
 those settings are intentionally retained for reproducibility.
+
+## Slow or intermittently responsive SSH clusters
+
+For Slurm/PBS clusters with slow command responses or intermittent transfer
+stalls, configure both the operation timeout and the polling interval. A quick
+SSH login does not imply that scheduler queries will return quickly: delays can
+also come from the cluster's gateway, scheduler, or shared filesystem.
+
+Add the following to your resource profile as an initial setting, then adjust
+it to the observed response times:
+
+```yaml
+timeout: 120
+```
+
+`timeout` defaults to 30 seconds and accepts an integer of at least 1, with no
+configured upper limit. For SSH resources, it controls connection, banner and
+authentication waits, command-channel opening and blocking reads/writes, and
+SFTP channel reads/writes. It is not a total deadline for a calculation, command,
+or file transfer. A download that continues making progress can take much longer
+than this value; a stalled read or a remote checksum command that produces no
+output for too long can still time out. Increasing this value also increases
+how long a failed operation may take to report an error.
+
+**Resource settings are saved with each attempt.** Editing `timeout` in the
+original YAML affects new attempts, but does not automatically change the value
+used to query or download an existing attempt. Those operations use the saved
+resource settings.
+
+To reduce repeated queries, increase the watcher's polling interval, for example
+to five minutes:
+
+```console
+temper_bench job synchronize_remote --resource paratera --keep-watching --interval 300
+```
+
+Replace `paratera` with the saved resource name. To apply the same interval when
+starting a watcher immediately after submission:
+
+```console
+temper_bench job submit bundle.json --resource-file cluster.yaml --keep-watching --interval 300
+```
+
+The Python equivalent is `manager.watch(interval=300, resource="paratera")`.
+The interval defaults to 60 seconds and must be positive. It is a watcher
+argument, not a resource YAML field, and can be changed when restarting a watcher
+for existing attempts. Without `--keep-watching`, synchronization runs once.
+
+The watcher finishes a synchronization pass before sleeping for the requested
+interval. A 45-second pass followed by `--interval 300` starts the next pass
+about 345 seconds after the previous one began; one watcher does not overlap
+passes when a query is slow. Synchronization can include result downloads and
+cleanup as jobs finish, so a pass can take longer than a status query alone.
+Increasing the interval reduces query frequency but does not extend any
+individual request's timeout, and it delays detection of completed jobs.
+
+SSH keepalive is separate from task polling. TEMPER currently configures a
+30-second keepalive interval to help preserve idle SSH connections; it does not
+run scheduler queries or impose a 30-second job deadline. This interval and the
+connection retry policy (up to five attempts, ten seconds apart for eligible
+transient errors) are not exposed as resource settings.
+
+The current timeout handling has limits. TEMPER does not override every
+Paramiko timeout, including its internal key-exchange waits. Some DPDispatcher
+status-query paths wait for a command's exit status without a total deadline;
+raising `timeout` therefore does not guarantee that every operation will finish
+or fail within that many seconds. A lost submission response leaves the attempt
+`uncertain`, because the scheduler may already have accepted the job. Use
+recovery to establish the existing job's identity rather than blindly submitting
+it again. Query or download errors are recorded separately from calculation
+failure; failed collection does not authorize remote cleanup.
 
 ## Local execution
 
