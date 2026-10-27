@@ -43,7 +43,7 @@ class MatterSimAdapter(BaseMLFFAdapter):
         return result
 
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
-        """Return the CUDA launcher command with recipe options and data paths."""
+        """Return the CUDA launcher command with bundle options and data paths."""
         parameters = dict(self.spec.training_parameters or {})
         parameters["early_stop_patience"] = int(parameters["epochs"]) + 1
         parameters["include_forces"] = True

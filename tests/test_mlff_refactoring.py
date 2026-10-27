@@ -121,7 +121,7 @@ def test_parameter_fields_and_independent_defaults(mlff_spec_factory):
         ("nep89", {"lambda_v": 0.4, "stage2_lambda_v": 0.3}),
     ],
 )
-def test_writers_preserve_recipe_overrides(
+def test_writers_preserve_bundle_overrides(
     family, overrides, tmp_path, finetune_training_unit, mlff_spec_factory,
 ):
     spec = mlff_spec_factory(family, training_parameters=overrides)

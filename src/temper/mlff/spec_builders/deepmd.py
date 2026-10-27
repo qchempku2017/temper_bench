@@ -50,14 +50,14 @@ class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
 
 @BaseSpecBuilder.register(name="dpa4")
 class DPA4SpecBuilder(_DeepMDSpecBuilder):
-    """Build a selected DPA-4 checkpoint recipe with 60 training epochs."""
+    """Build a selected DPA-4 checkpoint specification with 60 training epochs."""
 
     mlff_type = "dpa4"
 
 
 @BaseSpecBuilder.register(name="dpa4c")
 class DPA4CSpecBuilder(_DeepMDSpecBuilder):
-    """Build a selected DPA-4C checkpoint recipe with 100 training epochs."""
+    """Build a selected DPA-4C checkpoint specification with 100 training epochs."""
 
     mlff_type = "dpa4c"
     training_defaults = {**_DeepMDSpecBuilder.training_defaults, "numb_epoch": 100}

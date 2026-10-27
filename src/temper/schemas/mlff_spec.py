@@ -1,4 +1,4 @@
-"""Persisted MLFF recipes that are independent of benchmark datasets."""
+"""Persisted MLFF specifications that are independent of benchmark datasets."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def _model_identity(value: PretrainedMLFFSpec) -> dict[str, Any]:
 
 
 class MLFFSpec(ManagedIdentityModel):
-    """Persist one reproducible MLFF training and evaluation recipe.
+    """Persist one reproducible MLFF training and evaluation specification.
 
     The schema contains no dataset paths. It identifies the MLFF family,
     pinned software, content-addressed pretrained files, optional package-native

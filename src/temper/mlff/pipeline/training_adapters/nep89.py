@@ -152,7 +152,7 @@ class NEP89Adapter(BaseMLFFAdapter):
             )
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
-        """Return nep.in with checkpoint architecture and recipe controls.
+        """Return nep.in with checkpoint architecture and bundle controls.
 
         The pretrained header determines species and network dimensions.
         Dataset species must be covered, periodicity must be complete, and

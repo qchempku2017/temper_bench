@@ -12,7 +12,7 @@ TEMPER's implemented workflow turns labeled source structures into reproducible 
 | Grouping | [`GroupedDomain`](../src/temper/schemas/group.py:17) | Domain inventory, grouping strategy, and a mapping from group names to source filenames | One ordered frame pool per group |
 | Splitting | [`SplitGroup`](../src/temper/schemas/split.py:299) | Provenance, one train/validation trajectory, own-group test references, and cross-test assignments | Nested checkpoints for one group and repeat |
 | Reconstruction / export | [`FrameReferenceResolver`](../src/temper/splitting/io.py:54) and exported `.extxyz` files | Reconstructed labeled frames | Fine-tuning [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) records plus one zero-shot unit per split group |
-| MLFF specification / bundling | `MLFFSpec` and `MLFFTrainBundle` | One versioned model recipe paired with exactly one TrainingUnit | A self-contained local folder written through `write_submit_folder()` |
+| MLFF specification / bundling | `MLFFSpec` and `MLFFTrainBundle` | One versioned model bundle paired with exactly one TrainingUnit | A self-contained local folder written through `write_submit_folder()` |
 
 ```text
 Domain directory
@@ -213,7 +213,7 @@ these fields; regenerate older bundles instead of reusing their old layout.
 
 The implemented Python API and split CLI cover metadata loading, grouping,
 repeatable splitting, QUESTS-backed selection, reconstruction, and content-hashed
-`extxyz` export. The MLFF API creates model recipes and portable folders;
+`extxyz` export. The MLFF API creates model bundles and portable folders;
 folder writing does not execute the calculation. [Remote jobs](remote-jobs.md)
 provides Slurm/PBS/Bohrium submission, persistent JSON attempt records,
 synchronization, explicit retries and verified result retrieval/cleanup.

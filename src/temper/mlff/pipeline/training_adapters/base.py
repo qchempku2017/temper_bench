@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseMLFFAdapter(ABC):
-    """Translate a packaged recipe into one backend's native training inputs.
+    """Translate a packaged bundle into one backend's native training inputs.
 
     Parameters
     ----------

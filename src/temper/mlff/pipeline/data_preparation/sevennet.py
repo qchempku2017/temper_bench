@@ -3,7 +3,7 @@
 from pathlib import Path
 
 def prepare_config(config_path: Path, output_path: Path, *, bundle_root: Path) -> None:
-    """Write training YAML with checkpoint architecture and recipe controls.
+    """Write training YAML with checkpoint architecture and bundle controls.
 
     Parameters
     ----------

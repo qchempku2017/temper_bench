@@ -66,7 +66,7 @@ def copy_verified(source: Path, destination: Path, expected: str) -> None:
     destination : Path
         New copied input. Parent directories are created automatically.
     expected : str
-        SHA-256 recorded when the scientific recipe was created.
+        SHA-256 recorded when the scientific bundle was created.
 
     Raises
     ------

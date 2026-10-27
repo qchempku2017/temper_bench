@@ -1,4 +1,4 @@
-"""Shared construction of content-addressed MLFF recipes."""
+"""Shared construction of content-addressed MLFF specifications."""
 from __future__ import annotations
 
 import json
@@ -57,7 +57,7 @@ def pretrained_model_defaults(mlff_type: str, variant: str) -> dict[str, Any]:
 
 
 class BaseSpecBuilder(ABC):
-    """Construct a recipe from family metadata and native training defaults.
+    """Construct a specification from family metadata and native training defaults.
 
     Parameters
     ----------
@@ -222,12 +222,12 @@ class BaseSpecBuilder(ABC):
         return parameters
 
     def build(self) -> MLFFSpec:
-        """Read and hash the local checkpoint and return its MLFFSpec recipe.
+        """Read and hash the local checkpoint and return its MLFFSpec specification.
 
         The returned spec contains the selected model identity, local artifact
         reference, software requirements, and training/calculator parameters.
         No weights are downloaded or modified. Raises ValueError for missing
-        files or invalid training controls. Building a recipe does not execute
+        files or invalid training controls. Building a specification does not execute
         the backend or verify that its checkpoint requirements are installed.
         """
         artifacts = {

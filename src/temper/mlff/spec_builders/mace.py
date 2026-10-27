@@ -6,7 +6,7 @@ from temper.schemas.mlff_spec import MLFFImplementation
 
 @BaseSpecBuilder.register(name="mace")
 class MACESpecBuilder(BaseSpecBuilder):
-    """Build a MACE recipe; see BaseSpecBuilder for source and override options."""
+    """Build a MACE specification; see BaseSpecBuilder for source and override options."""
 
     mlff_type = "mace"
     implementations = (MLFFImplementation(name="mace-torch", version="0.3.16"),)

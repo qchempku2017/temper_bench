@@ -54,7 +54,7 @@ _LEGACY_TRAINING_KEYS = {
 
 @BaseSpecBuilder.register(name="nep89")
 class NEP89SpecBuilder(BaseSpecBuilder):
-    """Build NEP-89 recipes with architecture owned by the pretrained file."""
+    """Build NEP-89 specifications with architecture owned by the pretrained file."""
 
     mlff_type = "nep89"
     implementations = (

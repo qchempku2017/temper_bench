@@ -125,7 +125,7 @@ def test_unsupported_training_presets_are_not_catalog_choices(family, variant):
         pretrained_model_defaults(family, variant)
 
 
-def test_variant_and_explicit_recipe_have_same_identity(tmp_path):
+def test_variant_and_explicit_bundle_have_same_identity(tmp_path):
     entry = pretrained_model_defaults("mace", "mpa-0-medium")
     checkpoint = tmp_path / entry["model_filename"]
     checkpoint.parent.mkdir(parents=True)

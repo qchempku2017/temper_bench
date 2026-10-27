@@ -405,7 +405,7 @@ Normal loading verifies these hashes; an edited file requires explicitly
 rebuilding the unit instead of silently reusing its old identity. For a JSON list,
 use `temper.schemas.load_training_units(path)` to hash shared test datasets once
 within that load. `verify_files=False` is available for historical inspection
-without the source files. See [Remote jobs](remote-jobs.md#input-identity-and-upgrading-old-recipes)
+without the source files. See [Remote jobs](remote-jobs.md#input-identity-and-upgrading-old-bundles)
 for legacy conversion, copying and submission rules.
 
 Each split result records `extra_tested_groups`. If the input grouped domain has `specify_cross_tests`, the splitter uses that explicit mapping regardless of `add_extra_cross_tests`, after removing each source group's self-reference and deduplicating its targets. Otherwise, when `add_extra_cross_tests` is `True`, every group is assigned every other group as an extra test group; when it is `False`, no extra cross tests are assigned. The automatically generated other-group target ordering is not guaranteed because it is derived from sets. Extra group datasets remain separate from `SplitGroup.test_set` and are reconstructed for export through `extra_tested_groups`. See [Data format and grouping](raw-data-format.md#implemented-cross-test-behavior) for the metadata details.
