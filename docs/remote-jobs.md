@@ -29,7 +29,7 @@ in `src/temper/entrypoints/job.py` alongside `run_pipeline.py` and `split.py`:
 | `schemas/resources.py` | Remote machine settings and MLFF-specific software environments. |
 | `store.py`, `storage_utils.py` | Local JSON history, attempt markers, atomic writes, and process locking. |
 | `paths.py` | Bundle roots and readable bundle/attempt directory names. |
-| `inputs.py` | Verification of packaged datasets and pretrained models. |
+| `input_utils.py` | Verification of packaged datasets and pretrained models. |
 | `collection.py` | Selection and verification of downloaded outputs and diagnostics. |
 | `local.py` | Detached local execution, durable receipts, and cancellation. |
 | `dispatcher.py` | SSH/Slurm/PBS and Bohrium operations through dpdispatcher. |
@@ -43,7 +43,9 @@ from temper.job_management.store import JobStore
 ```
 
 The main CLI registers each command using its entrypoint module:
-`job.py`, `run_pipeline.py`, and `split.py` each define their own subparser.
+`create_bundles.py`, `job.py`, `run_pipeline.py`, and `split.py` each define
+their own command arguments. `create_bundles.py` pairs the exported training
+units with model specifications and writes bundles before submission.
 Bundle writers use the job-management package's path
 and storage helpers, and the execution runtime uses its packaged-input check.
 MLFF adapters declare which model-specific outputs to retain. Data-file hashing
@@ -196,7 +198,7 @@ environments:
 Each image must already contain the corresponding TEMPER runtime and MLFF
 dependencies. Credentials are resolved locally at connection time. The saved
 profile contains the environment variable's **name**, never its value. Keep
-runtime variables, scheduler flags and recipe settings free of credentials:
+runtime variables, scheduler flags and bundle settings free of credentials:
 those settings are intentionally retained for reproducibility.
 
 ## Slow or intermittently responsive SSH clusters
@@ -238,7 +240,7 @@ Replace `paratera` with the saved resource name. To apply the same interval when
 starting a watcher immediately after submission:
 
 ```console
-temper_bench job submit bundle.json --resource-file cluster.yaml --keep-watching --interval 300
+temper_bench job submit --resource-file cluster.yaml --keep-watching --interval 300
 ```
 
 The Python equivalent is `manager.watch(interval=300, resource="paratera")`.
@@ -295,7 +297,7 @@ calculation process group. Recovery reads a durable local receipt; it never
 blindly restarts a process. A lost supervisor without an exit receipt remains
 unknown after its heartbeat expires and requires investigation.
 
-## Input identity and upgrading old recipes
+## Input identity and refreshing bundles
 
 Data splitting now records SHA-256 hashes of the actual exported training,
 optional validation, and test files. These hashes participate in training-unit
@@ -307,11 +309,23 @@ Older units without hashes remain readable and usable for existing local
 packaging. Remote submission requires their explicit conversion:
 
 ```console
-temper_bench job upgrade_bundle old_bundle.json --output hashed_bundle.json
+temper_bench job refresh_bundle_identity bundle.json
 ```
 
-The destination must be new. This also provides an explicit way to rebuild a
-recipe after intentionally changing its data files. For changed MLFF parameters
+This recomputes dataset hashes and the training-unit and bundle identities,
+then replaces `bundle.json` at its current location. The original file remains
+intact until the complete replacement is ready.
+An existing attempt depends on its shared bundle. Refresh therefore rejects
+bundles in bundle directories containing attempts, and bundles inside an
+attempt directory. Create a separate bundle for a changed experiment.
+
+There is no `--output` or
+`--bundle-write-root` option for this command. Relative bundle paths and relative
+training-unit `root_path` values use the current working directory.
+Packaged file locations are cleared, so package the refreshed bundle again
+before training or evaluation. Existing job history is not rewritten.
+This also provides an explicit way to refresh a bundle after intentionally
+changing its data files. For changed MLFF parameters
 or pretrained weights, rebuild the MLFFSpec and bundle through their normal
 builders. Pretrained weights are checked against their stored hash while copying.
 
@@ -339,22 +353,25 @@ uses this metadata mode and then verifies the **copied** inputs relative to
 
 ## Submit and locate attempts
 
-Save a local recipe as JSON, then submit it:
-
-```python
-from pathlib import Path
-Path("recipe.json").write_text(bundle.model_dump_json(indent=2), encoding="utf-8")
-```
+Create bundles from split results, then submit all bundle directories under
+the same root:
 
 ```console
-temper_bench job submit recipe.json --resource-file cluster.yaml --bundle-write-root ./bundles
+temper_bench create_bundles ./split_results --model mace mpa-0-medium --bundle-write-root ./bundles
+temper_bench job submit --resource-file cluster.yaml --bundle-write-root ./bundles
 ```
 
-Pass several recipe files, or a JSON list such as `["recipes/a.json",
-"recipes/b.json"]`; list entries resolve relative to the list file. Dataset roots
-inside recipes retain their documented current-working-directory interpretation.
-TEMPER freezes absolute source paths when saving an attempt, so restarting from
-a different working directory works when the same store root is supplied.
+Submission reads `*/*/bundle__*/bundle.json` beneath the root: one bundle per
+model/domain/bundle directory. It excludes bundles inside `attempt_*` directories
+and submits each bundle ID once. Individual bundle paths and JSON lists are no
+longer command arguments. An empty root is an error. Existing successful,
+unfinished, uncertain, or not-yet-cleaned attempts still prevent another
+submission of the same bundle; those errors are reported while other bundles
+are processed. Use `resubmit` for explicit retries of failed calculations.
+
+`create_bundles` stores absolute dataset and pretrained-weight paths. Keep those
+inputs available until submission packages them. Restarting from a different
+working directory works when the same bundle root is supplied.
 
 `--bundle-write-root` overrides `DEFAULT_BUNDLE_WRITE_ROOT`, whose fallback is
 `./bundles`. Like other values in `utils.defaults`, this environment variable
@@ -370,8 +387,9 @@ bundles/
   <pretrained_model_name>__<model_version>/
     <domain>/
       bundle__<grouping>__<group>__<split>__<mode>__n<N>__repeat<R>__<full_bundle_id>/
+        bundle.json              # Bundle written by create_bundles
         attempt_001/
-          bundle.json
+          bundle.json            # Temporary packaged bundle used for launch
           job.json
           events.jsonl
           run.sh
@@ -396,7 +414,7 @@ semantics differ.
 Inputs are **ordinary copies** in `pretrained_models/`, `training_inputs/` and
 `testing_inputs/`. After confirmed upload and a durable recovery record, TEMPER
 removes only these copied datasets/weights and its upload archives. Your source
-files, recipe, scripts, small job records and eventual outputs remain. Explicit
+files, bundle, scripts, small job records and eventual outputs remain. Explicit
 resubmission validates and copies the original inputs again into a new attempt.
 
 ## One-pass synchronization and watching
@@ -498,7 +516,7 @@ temper_bench job resubmit --failed --resource paratera --resource-file bohrium.y
 ```
 
 Each bundle is retried at most once per command. Earlier attempts remain intact.
-There is no training/evaluation-stage resume: a new attempt runs the whole recipe.
+There is no training/evaluation-stage resume: a new attempt runs the whole bundle.
 Source changes are rejected; explicitly rebuild a new identity for changed science.
 An active, uncertain or incompletely collected attempt blocks another attempt.
 Any successful attempt blocks that bundle permanently within the retained store,
@@ -569,14 +587,33 @@ be exercised on the intended compute resources.
 `get_dataset_and_model_hashes(bundle)` excludes configuration files and scripts;
 `verify_dataset_and_model_hashes(bundle, root)` checks only those copied files.
 `get_download_files(bundle)` returns exact download names and required-success
-names. `JobRecord.source_bundle` contains the original serialized bundle with
-source-machine paths and hashes, used to reconstruct retries. It differs from
-the packaged `bundle.json`, which contains attempt-relative paths.
+names. `JobRecord.relative_source_bundle_path` references the shared bundle, normally
+`../bundle.json` relative to the attempt directory. The full bundle is stored
+once in the parent bundle directory, not repeated in each job record.
+The first submission fills the shared bundle's `files` field with the packaged
+input/output locations. Every attempt uses that same layout; changing packaging
+settings so they produce different locations is rejected before copying inputs.
+Loading checks that the shared bundle has the attempt's bundle ID. A missing
+bundle or a different identity is an error. Keep the shared bundle with its
+attempts; moving their containing directory together preserves the reference.
+
+After a confirmed remote submission, TEMPER removes the local attempt's
+`bundle.json`. The uploaded copy remains available to the remote runner until
+remote cleanup. Interrupted or uncertain submissions retain the local copy
+until recovery confirms launch. Local execution retains it until the calculation
+has finished and completion cleanup runs, because the local runner reads this
+file after submission returns. Result collection, cancellation, and status
+queries read the shared bundle, including its file locations. Neither the full
+bundle nor its file-location mapping is stored in `job.json`.
 
 Schema classes now live in `job_management.schemas`; the old `records` and
-`resources` modules retain compatibility imports. Saved `recipe` and `manifest`
-keys are accepted when reading old records; new writes use `source_bundle` and
-`downloaded_file_hashes`. Old saved Bohrium field names and frozen `environment`
+`resources` modules retain compatibility imports. Version-3 job records use
+`relative_source_bundle_path` and `downloaded_file_hashes`. The `manifest` spelling remains
+accepted for download hashes. Older version-1/2 records containing embedded
+bundles or file-location mappings require conversion before use; they are
+rejected rather than silently losing the information they contain. This command
+does not automatically rewrite existing history.
+Old saved Bohrium field names and frozen `environment`
 remain readable. New profile files should use the names documented above.
 Per-attempt `job.json` remains authoritative. Storage indexing is deferred pending
 benchmarks of large histories; no unified JSONL database has been introduced.

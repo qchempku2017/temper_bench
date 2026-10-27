@@ -1,6 +1,6 @@
 # TEMPER benchmark
 
-TEMPER provides data preparation, portable experiment bundles, and an installed execution runtime for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF recipes, and submits bundles to SSH-accessible Slurm/PBS clusters or Bohrium with persistent local job history.
+TEMPER provides data preparation, portable experiment bundles, and an installed execution runtime for a benchmark of machine-learned force fields (MLFFs). It reads labeled `extxyz` data, creates reproducible train/validation/test splits, describes versioned MLFF bundles, and submits bundles to SSH-accessible Slurm/PBS clusters or Bohrium with persistent local job history.
 
 ## What is implemented
 
@@ -19,7 +19,8 @@ Alternatively, install `.[remote]` (or `.[bohrium]`) and let TEMPER submit,
 monitor, collect and clean remote attempts:
 
 ```console
-temper_bench job submit recipe.json --resource-file cluster.yaml
+temper_bench create_bundles --model mace mpa-0-medium
+temper_bench job submit --resource-file cluster.yaml
 temper_bench job synchronize_remote --keep-watching
 temper_bench job list --failed
 temper_bench job resubmit --failed --dry-run
@@ -28,6 +29,12 @@ temper_bench job resubmit --failed --dry-run
 See [Remote jobs](docs/remote-jobs.md) for key-file SSH profiles, per-MLFF conda
 environments/images, interrupted-submission recovery and bulk resubmission.
 Failed calculations are reported and require an explicit retry command.
+
+`create_bundles` pairs split training units with the requested catalog models
+and writes bundles under the configured bundle root. `job submit` reads all
+bundle directories under that same root and packages their inputs into separate
+attempt directories. See [Creating bundles](docs/mlff-bundles.md#creating-bundles-from-split-results)
+for domain and training-atom filters, pretrained weight paths, and model overrides.
 
 The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](docs/split_config.example.json). By default it reads `split_config.json` from the current directory:
 

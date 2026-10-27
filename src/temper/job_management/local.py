@@ -12,7 +12,7 @@ import sys
 import time
 
 from temper.job_management.collection import get_download_files, validate_result_path
-from temper.job_management.inputs import get_dataset_and_model_hashes
+from temper.job_management.input_utils import get_dataset_and_model_hashes, load_bundle
 from temper.job_management.schemas.records import ComputationStatus, JobRecord
 from temper.job_management.schemas.resources import RemoteResource
 from temper.job_management.storage_utils import atomic_json
@@ -28,7 +28,8 @@ class LocalBackend:
     record : JobRecord
         Mutable attempt record. Submission stores a durable launch intent.
     root : Path
-        Absolute attempt directory containing bundle.json and run.sh.
+        Absolute attempt directory containing run.sh. During execution it also
+        contains bundle.json; completion cleanup removes that temporary bundle.
     checkpoint : Callable[[], None]
         Persist record changes before starting the supervisor.
 
@@ -51,8 +52,7 @@ class LocalBackend:
         self.record: JobRecord = record
         self.root: Path = root
         self._checkpoint: Callable[[], None] = checkpoint
-        self._bundle: MLFFTrainBundle = MLFFTrainBundle.model_validate_json(
-            (root / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
+        self._bundle: MLFFTrainBundle = load_bundle(record, root, require_packaged=True)
 
     def upload(self) -> None:
         """Prepare the local Bash wrapper without copying or deleting inputs.

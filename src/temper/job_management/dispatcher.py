@@ -40,9 +40,8 @@ for _handler in list(_dispatcher_log.handlers):
     _handler.close()
 
 from temper.job_management.collection import get_download_files, selected_file
-from temper.job_management.inputs import get_dataset_and_model_hashes
+from temper.job_management.input_utils import get_dataset_and_model_hashes, load_bundle
 from temper.job_management.schemas.records import ComputationStatus, JobRecord
-from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.schemas.resources import RemoteResource
 from temper.utils.file_hashing import file_sha256
 
@@ -196,7 +195,10 @@ class DispatcherBackend:
     record : JobRecord
         Durable attempt, including sanitized dispatcher state when resuming.
     root : Path
-        Absolute local attempt directory with bundle.json.
+        Absolute local attempt directory. bundle.json is required for upload,
+        then removed locally after confirmed submission. Later operations use
+        the shared bundle referenced by the job record, including the file
+        locations saved in that shared bundle.
     checkpoint : Callable[[], None]
         Persist the current record immediately, including cloud upload IDs.
 
@@ -218,7 +220,7 @@ class DispatcherBackend:
         self.root: Path = root
         self.profile: RemoteResource = RemoteResource.model_validate(record.resource)
         self._checkpoint = checkpoint
-        self._bundle = MLFFTrainBundle.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
+        self._bundle = load_bundle(record, root, require_packaged=True)
         state = record.dispatcher
         token = str(state.setdefault("token", uuid4().hex))
         if not re.fullmatch(r"[0-9a-f]{32}", token):

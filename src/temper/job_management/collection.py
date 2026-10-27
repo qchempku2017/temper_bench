@@ -13,7 +13,7 @@ def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     Parameters
     ----------
     bundle : MLFFTrainBundle
-        Packaged recipe with its configured output locations.
+        Packaged bundle with its configured output locations.
 
     Returns
     -------

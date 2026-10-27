@@ -11,9 +11,9 @@ from typing import Protocol
 from uuid import uuid4
 
 from temper.job_management.collection import get_download_files, verify_results
-from temper.job_management.inputs import get_dataset_and_model_hashes, verify_dataset_and_model_hashes
+from temper.job_management.input_utils import get_dataset_and_model_hashes, load_bundle, verify_dataset_and_model_hashes
 from temper.job_management.paths import bundle_directory, next_attempt
-from temper.job_management.storage_utils import store_lock
+from temper.job_management.storage_utils import atomic_json, store_lock
 from temper.job_management.store import JobStore
 from temper.job_management.schemas.records import ComputationStatus, JobRecord, utc_now
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
@@ -74,7 +74,7 @@ class JobManager:
         Parameters
         ----------
         bundle : MLFFTrainBundle
-            Local recipe with dataset hashes. Sources are reread and validated;
+            Local bundle with dataset hashes. Sources are reread and validated;
             nested mutations with stale identities are rejected.
         resource : RemoteResource
             Resource and MLFF-specific runtime environment to freeze in history.
@@ -84,6 +84,12 @@ class JobManager:
         JobRecord
             Submitted attempt, or a recoverable attempt containing an operation
             error. Calculation failures are never retried automatically.
+            After confirmed remote submission, the local attempt's bundle.json
+            is removed; its file locations remain in the shared bundle. Local
+            execution retains bundle.json until completion cleanup.
+            A single bundle is kept in the parent bundle directory and referenced
+            by relative path from each job record. It must remain available and
+            keep the same bundle identity while those attempts are retained.
 
         Raises
         ------
@@ -99,7 +105,7 @@ class JobManager:
     def _submit(self, bundle: MLFFTrainBundle, resource: RemoteResource) -> JobRecord:
         bundle = MLFFTrainBundle.model_validate(bundle.model_dump())
         if not bundle.training_unit.dataset_sha256:
-            raise ValueError("Legacy dataset identity: upgrade the bundle with job upgrade_bundle before submission.")
+            raise ValueError("Legacy dataset identity: run job refresh_bundle_identity before submission.")
         bundle.training_unit.root_path = bundle.training_unit.root_path.expanduser().resolve()
         for artifact in bundle.mlff_spec.pretrained_model.artifacts.values():
             artifact.path = artifact.path.expanduser().resolve()
@@ -124,10 +130,24 @@ class JobManager:
         effective.environments = {}
         if effective.backend == "Bohrium" and not effective.resolved_environment.image:
             raise ValueError("Bohrium requires an image for this MLFF family.")
-        target = next_attempt(bundle_directory(self.store.root, bundle))
+        directory = bundle_directory(self.store.root, bundle)
+        directory.mkdir(parents=True, exist_ok=True)
+        shared = directory / "bundle.json"
+        if shared.exists():
+            saved = MLFFTrainBundle.model_validate_json(shared.read_text(encoding="utf-8"))
+            if str(saved.mlff_train_bundle_id) != identity:
+                raise ValueError("Existing shared bundle has a different bundle ID.")
+            bundle = saved
+        else:
+            bundle.files = None
+            atomic_json(shared, bundle.model_dump(mode="json"))
+        target = next_attempt(directory)
         root, packaged = bundle.write_submit_folder(target)
+        if bundle.files is None:
+            atomic_json(shared, packaged.model_dump(mode="json"))
         record = JobRecord(bundle_id=identity, attempt_folder_name=root.relative_to(self.store.root).as_posix(),
-                           source_bundle=bundle.model_dump(mode="json"), resource=effective.model_dump(mode="json"),
+                           relative_source_bundle_path="../bundle.json",
+                           resource=effective.model_dump(mode="json"),
                            dispatcher={"token": uuid4().hex})
         self.store.save(record, "prepared")
         self._launch(record, packaged)
@@ -165,6 +185,8 @@ class JobManager:
             record.computation_status = "waiting"
             record.error = None
             self.store.save(record, "submitted")
+            if record.resource["backend"] != "Local":
+                self._remove_bundle_copy(record)
         except Exception as error:
             if record.submission_status == "submitting":
                 record.submission_status = "uncertain"
@@ -183,6 +205,12 @@ class JobManager:
             for path in root.glob("*." + suffix):
                 if len(path.stem) == 40 and all(c in "0123456789abcdef" for c in path.stem):
                     path.unlink()
+
+    def _remove_bundle_copy(self, record: JobRecord) -> None:
+        """Remove the temporary copy once the shared bundle can serve the attempt."""
+        root = self.store.path(record)
+        load_bundle(record, root, require_packaged=True)
+        (root / "bundle.json").unlink(missing_ok=True)
 
     def _error(self, record: JobRecord, error: Exception) -> None:
         # Backend exceptions may contain credentials or signed download URLs.
@@ -209,12 +237,22 @@ class JobManager:
         list[JobRecord]
             Selected refreshed records, including independent operation errors.
             One unreachable resource does not stop processing other attempts.
+
+        Notes
+        -----
+        Confirmed remote submissions no longer need a local bundle.json;
+        it is removed even when only refreshing status. For local execution,
+        that file is retained until completion cleanup.
         """
         with store_lock(self.store.root):
             records = self.list_attempts(bundle_id=bundle_id, resource=resource, domain=domain)
             for record in records:
                 self.store.repair_markers(record)
                 if record.cleanup_status == "complete":
+                    try:
+                        self._remove_bundle_copy(record)
+                    except Exception as error:
+                        self._error(record, error)
                     continue
                 self._synchronize_one(record, refresh_only, download_only)
             return records
@@ -226,6 +264,8 @@ class JobManager:
         backend = None
         try:
             backend = self._connect(record)
+            if record.resource["backend"] != "Local":
+                self._remove_bundle_copy(record)
             if record.computation_status not in {"success", "failed", "cancelled"}:
                 observation = backend.status()
                 record.checked_at = utc_now()
@@ -244,7 +284,7 @@ class JobManager:
             if record.computation_status not in {"success", "failed", "cancelled"}:
                 return
             root = self.store.path(record)
-            bundle = MLFFTrainBundle.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
+            bundle = load_bundle(record, root, require_packaged=True)
             _, required = get_download_files(bundle)
             required = required if record.computation_status == "success" else []
             if record.collection_status != "verified":
@@ -256,6 +296,7 @@ class JobManager:
             if not download_only:
                 verify_results(root, record.downloaded_file_hashes, required)
                 backend.cleanup()
+                self._remove_bundle_copy(record)
                 record.cleanup_status = "complete"
                 record.error = None
                 self.store.save(record, "remote_cleanup_complete")
@@ -284,7 +325,7 @@ class JobManager:
         return [r for r in self.store.records()
                 if (bundle_id is None or r.bundle_id == bundle_id)
                 and (resource is None or r.resource["name"] == resource)
-                and (domain is None or r.source_bundle["training_unit"]["domain"] == domain)
+                and (domain is None or load_bundle(r, self.store.path(r)).training_unit.domain == domain)
                 and (not failed or r.computation_status == "failed")]
 
     @hashing_session()
@@ -323,7 +364,7 @@ class JobManager:
                     outcomes.append({"bundle_id": identity, "action": "eligible"})
                     continue
                 try:
-                    bundle = MLFFTrainBundle.model_validate(record.source_bundle)
+                    bundle = load_bundle(record, self.store.path(record), verify_files=True)
                     profile = replacement_resource or RemoteResource.model_validate(record.resource)
                     attempt = self._submit(bundle, profile)
                     outcomes.append({"bundle_id": identity, "action": attempt.submission_status, "attempt": attempt.attempt_folder_name})
@@ -372,8 +413,9 @@ class JobManager:
             record.cleanup_status = "complete"
             record.error = None
             self.store.save(record, "cancelled_before_launch")
-            bundle = MLFFTrainBundle.model_validate_json((self.store.path(record) / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
+            bundle = load_bundle(record, self.store.path(record), require_packaged=True)
             self._remove_copies(record, bundle)
+            self._remove_bundle_copy(record)
         except Exception as error:
             self._error(record, error)
         finally:
@@ -414,7 +456,7 @@ class JobManager:
                     self._cancel_unsubmitted(record)
                     continue
                 if record.submission_status in {"prepared", "uploaded", "uploading"}:
-                    bundle = MLFFTrainBundle.model_validate_json((self.store.path(record) / "bundle.json").read_text(encoding="utf-8"), context={"verify_files": False})
+                    bundle = load_bundle(record, self.store.path(record), require_packaged=True)
                     self._launch(record, bundle)
                     continue
                 backend = None
@@ -424,6 +466,8 @@ class JobManager:
                         record.submission_status = "submitted"
                         record.error = None
                         self.store.save(record, "recovered_existing_job")
+                        if record.resource["backend"] != "Local":
+                            self._remove_bundle_copy(record)
                     else:
                         record.error = "No confirmed launch receipt; inspect the remote job before recovery."
                         self.store.save(record, "recovery_inconclusive")

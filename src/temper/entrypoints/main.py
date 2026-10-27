@@ -74,12 +74,14 @@ def main_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(title="Valid subcommands", dest="command")
 
     from temper.entrypoints.job import add_job_parser
+    from temper.entrypoints.create_bundles import add_create_bundles_parser
     from temper.entrypoints.run_pipeline import add_run_pipeline_parser
     from temper.entrypoints.split import add_split_parser
 
     add_split_parser(subparsers)
     add_run_pipeline_parser(subparsers)
     add_job_parser(subparsers)
+    add_create_bundles_parser(subparsers)
 
     return parser
 
@@ -110,6 +112,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         elif args.command == "run_pipeline":
             from temper.entrypoints.run_pipeline import run_pipeline_cli
             run_pipeline_cli(args.bundle, prepare_only=args.prepare_only)
+            sysexit = 0
+        elif args.command == "create_bundles":
+            from temper.entrypoints.create_bundles import create_bundles_cli
+            create_bundles_cli(
+                args.split_results, [(family, variant) for family, variant in args.model],
+                domains=args.domains, max_train_n_atoms=args.max_train_n_atoms,
+                pretrained_model_dir=args.pretrained_model_dir,
+                bundle_write_root=args.bundle_write_root,
+                model_override_config=args.model_override_config,
+            )
             sysexit = 0
         elif args.command == "job":
             from temper.entrypoints.job import job_cli

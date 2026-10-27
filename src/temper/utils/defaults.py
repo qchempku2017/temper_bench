@@ -108,9 +108,11 @@ def _env_submit_directory(name: str, default: str) -> str:
 ##################################
 # Default values for data storage.
 ##################################
+# Shared local root: create_bundles writes model/domain/bundles here;
+# job submit adds packaged attempts and job history beneath those bundles.
 DEFAULT_BUNDLE_WRITE_ROOT: str = os.environ.get("DEFAULT_BUNDLE_WRITE_ROOT", "./bundles")
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
-# Default storage directory for training units.
+# Split output root, also the default input directory for create_bundles.
 DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
 # Default split configuration read by the ``temper_bench split`` CLI.
 DEFAULT_SPLIT_CONFIG_FILE: str = os.environ.get(

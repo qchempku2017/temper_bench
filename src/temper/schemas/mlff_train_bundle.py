@@ -109,7 +109,7 @@ class MLFFBundleFiles(MSONableModel):
 
 
 class MLFFTrainBundle(ManagedIdentityModel):
-    """Pair one exported data unit with one MLFF recipe.
+    """Pair one exported training unit with one MLFF specification.
 
     Constructing this object does not copy data or run third-party software.
     write_submit_folder copies inputs and serializes a portable file mapping.
@@ -120,7 +120,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
     Parameters
     ----------
     **data : object
-        Values for the attributes below. New local recipes normally provide
+        Values for the attributes below. New local bundles normally provide
         training_unit and mlff_spec only; files remains absent until packaging.
 
     Attributes
@@ -128,7 +128,7 @@ class MLFFTrainBundle(ManagedIdentityModel):
     training_unit : TrainingUnit
         Exported train/validation/test dataset references.
     mlff_spec : MLFFSpec
-        Model, implementation, training, and testing recipe.
+        Specification of the model, software implementation, training, and testing settings.
     mlff_train_bundle_id : UUID or None
         Stored deterministic identity derived from the two nested identities.
     schema_version : Literal[2]
@@ -174,14 +174,14 @@ class MLFFTrainBundle(ManagedIdentityModel):
         return self.training_unit.unit_type
 
     def _validate_before_identity(self) -> None:
-        """Reject a fine-tuning dataset paired with a test-only recipe."""
+        """Reject a fine-tuning dataset paired with a test-only specification."""
         if self.unit_type == "finetune" and self.mlff_spec.training_parameters is None:
             raise ValueError(
                 "Fine-tuning TrainingUnit requires non-None MLFF training parameters."
             )
 
     def test_config(self) -> dict[str, Any]:
-        """Describe evaluation using the recipe and packaged file mapping.
+        """Describe evaluation using the bundle and packaged file mapping.
 
         Returns
         -------
@@ -238,7 +238,12 @@ class MLFFTrainBundle(ManagedIdentityModel):
             ],
         }
 
-    def write_submit_folder(self, target_dir: str | Path | None = None, *, bundle_write_root: str | Path | None = None) -> tuple[Path, MLFFTrainBundle]:
+    def write_submit_folder(
+            self,
+            target_dir: str | Path | None = None,
+            *,
+            bundle_write_root: str | Path | None = None
+    ) -> tuple[Path, MLFFTrainBundle]:
         """Copy inputs and write bundle.json and a launcher to a new directory.
 
         Runtime preparation creates native configs, training scripts, and the

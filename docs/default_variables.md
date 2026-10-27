@@ -16,7 +16,7 @@ an explicitly empty value remains an empty string.
 | Constant | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `DEFAULT_DATA_DIR` | `str` | `./data` | Root containing source data domains. |
-| `DEFAULT_SPLIT_RESULTS_DIR` | `str` | `./split_results` | Root for exported split data and TrainingUnits. |
+| `DEFAULT_SPLIT_RESULTS_DIR` | `str` | `./split_results` | Root for exported split data and TrainingUnits; default input to create_bundles. |
 | `DEFAULT_SPLIT_CONFIG_FILE` | `str` | `split_config.json` | Configuration read by the split CLI when no path is supplied. |
 | `DEFAULT_METADATA_FILE` | `str` | `metadata.json` | Metadata filename inside each source domain. |
 | `DEFAULT_GROUPED_DOMAIN_FILE` | `str` | `grouped_domains.json` | Persisted grouping output filename. |
@@ -25,7 +25,7 @@ an explicitly empty value remains an empty string.
 
 ## MLFF paths
 
-The job store and automatic bundle layout use `DEFAULT_BUNDLE_WRITE_ROOT`
+Bundle creation (`create_bundles`) and job submission share `DEFAULT_BUNDLE_WRITE_ROOT`
 (default `./bundles`). This string constant is read once when `utils.defaults`
 is imported. `--bundle-write-root` or the Python `bundle_write_root` keyword takes
 precedence. Relative values resolve against the current working directory.
@@ -34,6 +34,8 @@ See [Remote jobs](remote-jobs.md) for the model/domain/bundle/attempt layout.
 `DEFAULT_MLFF_PRETRAINED_MODELS_DIR` is a string source root. Its default is
 `./pretrained_models`, and it may be replaced by any relative or absolute path
 through the environment variable of the same name.
+`create_bundles --pretrained-model-dir` overrides this value for bundle creation.
+The selected weight files must exist; bundle creation does not download them.
 
 The following strings name directories inside every written submit folder.
 Their same-named environment variables may replace the defaults:

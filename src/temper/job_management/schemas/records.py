@@ -36,17 +36,18 @@ class JobRecord(BaseModel):
     Attributes
     ----------
     schema_version : int
-        Record format version, currently 1.
+        Record format version, currently 3. Bundles and their file locations
+        are stored in the shared bundle.json, not in this record.
     bundle_id : str
-        Full scientific bundle identity; unchanged between retries.
+        Full MLFF train bundle identity; unchanged between retries. Used for
+        validating whether the bundled dataset and model have changed.
     attempt_folder_name : str
         Relative attempt directory below the bundle root.
     resource : dict[str, JsonValue]
         Frozen non-secret resource settings; credential environment names only.
-    source_bundle : dict[str, JsonValue]
-        Serialized original MLFFTrainBundle, including absolute source paths and
-        content hashes. Used to rebuild retries; unlike packaged bundle.json,
-        its paths refer to the submission machine and its files may be absent.
+    relative_source_bundle_path : str
+        Bundle path relative to the attempt directory, normally ../bundle.json.
+        The bundle is shared by all attempts and must retain this bundle ID.
     submission_status : str
         prepared, uploading, uploaded, submitting, submitted or uncertain.
         Uncertain submissions must be reconciled before another launch.
@@ -73,11 +74,11 @@ class JobRecord(BaseModel):
     """
     # Model is not frozen so that store can update status.
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    schema_version: Literal[1] = 1
+    schema_version: Literal[3] = 3
     bundle_id: str
     attempt_folder_name: str
     resource: dict[str, JsonValue]
-    source_bundle: dict[str, JsonValue] = Field(validation_alias=AliasChoices("source_bundle", "recipe"))
+    relative_source_bundle_path: str = "../bundle.json"
     submission_status: Literal["prepared", "uploading", "uploaded", "submitting", "submitted", "uncertain"] = "prepared"
     computation_status: ComputationStatus = "unknown"
     collection_status: Literal["pending", "verified"] = "pending"

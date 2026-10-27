@@ -26,7 +26,7 @@ class MLFFBundleWriter:
 
     Parameters
     ----------
-    bundle : MLFFTrainBundle
+        bundle : MLFFTrainBundle
         Local experiment containing dataset and pretrained-model paths. Can be read and uploaded to
         remote executor.
     adapter_class : type[BaseMLFFAdapter] or None
@@ -67,6 +67,17 @@ class MLFFBundleWriter:
         tuple[Path, MLFFTrainBundle]
             Absolute submit-directory path and independent packaged bundle.
             The returned record matches bundle.json; the source is unchanged.
+
+        Raises
+        ------
+        ValueError
+            If both destination options are supplied, inputs or identities are
+            invalid, or current packaging settings differ from the bundle's
+            existing file locations. Existing locations must remain unchanged
+            so all attempts can use the same shared bundle.
+        OSError
+            If inputs cannot be read or the destination cannot be created or
+            written. An existing destination is never overwritten.
         """
         if target_dir is not None and bundle_write_root is not None:
             raise ValueError("target_dir and bundle_write_root are mutually exclusive.")
@@ -133,6 +144,12 @@ class MLFFBundleWriter:
             test_stress=unit.test_has_stress,
         )
         packaged = self.bundle.model_copy(deep=True)
+        if self.bundle.files is not None and self.bundle.files != files:
+            raise ValueError(
+                "Bundle already packaged but previously specified "
+                "file locations differ from the current settings. "
+                "Use the original settings for further attempts."
+            )
         packaged.files = files
         packaged.temper_version = __version__
 

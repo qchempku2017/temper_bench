@@ -51,8 +51,9 @@ class JobStore:
             raise ValueError("Attempt path must remain below the job store root.")
         return result
 
-    # TODO: Benchmark large histories and repeated full scans before adding an
-    # index. Keep per-attempt job.json authoritative until storage is redesigned.
+    # TODO: Benchmark repeated full scans when the amount of job histories is large,
+    #  before changing the job storage method.
+    #  Keep using the current per-attempt job.json until storage is redesigned.
     def records(self) -> list[JobRecord]:
         """Read all attempts without contacting remote resources.
 

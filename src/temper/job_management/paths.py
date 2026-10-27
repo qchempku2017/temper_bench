@@ -55,7 +55,7 @@ def bundle_directory(root: Path, bundle: MLFFTrainBundle) -> Path:
     root : Path
         Configured local store root.
     bundle : MLFFTrainBundle
-        Recipe with verified identities.
+        Bundle with verified identities.
 
     Returns
     -------

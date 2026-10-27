@@ -12,7 +12,7 @@ from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 from temper.mlff.pipeline.cuda_utils import require_cuda
 from temper.mlff.pipeline.evaluate_mlff import run_test
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
-from temper.job_management.inputs import verify_dataset_and_model_hashes
+from temper.job_management.input_utils import verify_dataset_and_model_hashes
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def write_configuration_files(
         If true, preserves existing files, including manual edits, and
         creates only missing configs. When all expected files exist, their contents
         are not rendered again. False rewrites configs
-        and scripts from the recipe, for example after changing recorded paths.
+        and scripts from the bundle, for example after changing recorded paths.
     """
     files = adapter.files
     assert files is not None

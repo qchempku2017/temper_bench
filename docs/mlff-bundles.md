@@ -3,7 +3,7 @@
 [Back to the project overview](../README.md) · [Default variables](default_variables.md) · [Important concepts and schemas](important-concepts-and-schemas.md)
 
 TEMPER supports DPA-4, DPA-4C, MatterSim, MACE, SevenNet, and NEP-89.
-Local builders create model recipes; `MLFFBundleWriter` copies their inputs and
+Local builders create model bundles; `MLFFBundleWriter` copies their inputs and
 serializes `MLFFTrainBundle` as `bundle.json`. An installed TEMPER runtime reads
 that record, writes missing configs and scripts, prepares backend-dependent
 data and checkpoint settings, fine-tunes, and evaluates.
@@ -14,6 +14,107 @@ Install `temper-bench[preprocess]` for local data splitting. Execution hosts
 need the base `temper-bench` package plus their selected MLFF backend, using
 preferably the same TEMPER release as the writer. Other releases warn on load.
 Bash is required for native training.
+
+## Creating bundles from split results
+
+After `temper_bench split`, use `create_bundles` to pair training units with
+pretrained models. Each requested model is combined with every selected unit:
+
+```console
+temper_bench create_bundles ./split_results --model mace mpa-0-medium --model dpa4 nano-omat24-v20260805 --bundle-write-root ./bundles
+temper_bench job submit --bundle-write-root ./bundles --resource-file cluster.yaml
+```
+
+Each `--model` takes a family key followed by a variant key from
+`default_pretrained_models.json`. Repeat the option for additional models.
+The catalog lists weights; it does not download them. Place them beneath
+`--pretrained-model-dir` using their catalog filenames before creating bundles.
+
+The split-results argument defaults to `DEFAULT_SPLIT_RESULTS_DIR`
+(`./split_results`). The pretrained directory defaults to
+`DEFAULT_MLFF_PRETRAINED_MODELS_DIR` (`./pretrained_models`), and the output
+root defaults to `DEFAULT_BUNDLE_WRITE_ROOT` (`./bundles`). These environment
+variables are read when TEMPER starts. Relative command-line paths use the
+current working directory; a leading `~` expands to the user's home directory.
+
+By default, the command reads every immediate domain directory containing
+`DEFAULT_TRAINING_UNITS_FILE` (normally `training_units.json`). It uses the
+supplied split-results root to locate datasets, even if the directory was moved
+after splitting. Written bundles contain absolute source paths, so they can be
+submitted from another working directory. Dataset hashes are checked; changed
+files are an error, not silently assigned new identities. Older units without
+hashes must be regenerated before this command can use them.
+
+Two options narrow the selection and may be used together:
+
+```console
+temper_bench create_bundles --model mace mpa-0-medium --domains water silicon --max-train-n-atoms 100000
+```
+
+`--domains` selects exact domain directory names. `--max-train-n-atoms` sets an
+inclusive limit on the **total atoms across all training frames**, not atoms per
+frame. Zero-shot units from selected domains are always included. A limit of
+zero therefore selects only zero-shot units. Negative limits, missing requested
+domains, and selections containing no units are errors. There is no option for
+selecting individual training-unit files or IDs.
+
+Bundles are written using the same directory naming function as job submission:
+
+```text
+bundles/
+  <model>__<version>/
+    <domain>/
+      bundle__...__<bundle-id>/
+        bundle.json
+```
+
+At this stage, `bundle.json` describes an experiment and has `files: null`.
+No datasets or weights are copied. `job submit` discovers every bundle-level
+bundle under the root and creates `attempt_001`, `attempt_002`, and so on for
+execution. It does not treat packaged bundles inside attempts as new inputs.
+The attempt's local `bundle.json` is temporary: remote submission removes it
+after launch is confirmed, while local execution retains it until completion
+cleanup. The first submission saves its packaged file locations in the shared
+parent bundle's `files` field for later status checks and result collection.
+Later attempts must use that same layout. Neither the bundle nor its file
+locations are repeated in `job.json`.
+Each job record references that shared bundle by relative path instead of
+embedding its full contents. Keep the parent bundle with its attempts and do
+not change its scientific identity. `refresh_bundle_identity` rejects bundles
+with existing attempts; create a separate bundle for a changed experiment.
+Repeated unit/model pairs are deduplicated by bundle ID. Repeating creation
+skips IDs already present, leaving their bundles and attempts unchanged. To
+use a new dataset location for an existing ID, use a fresh output root or
+explicitly update the existing bundle's source paths.
+
+All selected inputs are validated before bundles are written. A later filesystem
+write failure can leave some completed bundles; rerunning skips their IDs.
+The completion message reports how many bundles were created and skipped.
+
+### Model parameter overrides
+
+Use `--model_override_config overrides.yaml` (JSON is also accepted) to supply
+the existing spec builders' `training_parameters` and `testing_parameters`:
+
+```yaml
+mace:
+  mpa-0-medium:
+    training_parameters:
+      max_num_epochs: 50
+      batch_size: 8
+    testing_parameters:
+      default_dtype: float64
+```
+
+The outer keys are family and variant keys, matching `--model` selections.
+Unselected models and unknown setting names at this level are errors. Both
+parameter entries must be dictionaries; either may be omitted. Fine-tuning
+units use the builder's training defaults with these overrides. Zero-shot units
+always disable training and use only testing overrides. Testing overrides apply
+to both modes. Existing builder rules still apply, including model-specific
+testing requirements and TEMPER-managed training settings. Training dictionaries
+are merged at the top level by the builder; a supplied nested value replaces
+the corresponding default value as a whole.
 
 ## Building a specification
 
@@ -118,7 +219,7 @@ These prerequisites are recorded in each entry's `usage_notes`.
 The catalog excludes entries with known unsupported TEMPER training workflows:
 DeepMD OMol charge/spin conditioning, DPA4-Beta branch selection, SevenNet
 multi-task modality assignment, MACE-MH head coordination, and PolarMACE's
-specialized recipe. SevenNet-Nano is also excluded because its stated 0.13.1
+specialized bundle. SevenNet-Nano is also excluded because its stated 0.13.1
 requirement differs from TEMPER's 0.13.0 integration. These exclusions describe
 TEMPER's present integration, not a claim that the upstream architectures cannot
 be fine-tuned. MACE-MDP is excluded because it predicts dipoles/polarizabilities
@@ -161,7 +262,7 @@ a `device` key in either dictionary: the submit host, not the machine creating
 the bundle, determines hardware.
 
 Builders own training policy. Runtime adapters add packaged input paths and
-disable stress losses when labels are absent; they preserve recipe overrides.
+disable stress losses when labels are absent; they preserve bundle overrides.
 Nested dictionaries are replaced as complete native sections.
 
 | Family | Epoch key | Default epochs |
@@ -190,7 +291,7 @@ The [DPA-4 release guidance](https://huggingface.co/deepmodelingcommunity/DPA4-O
 recommends a 1e-4 starting rate; the ending rate and DPA-4C schedule are TEMPER
 defaults, not independently verified release recommendations. The
 [DPA-4C model card](https://huggingface.co/deepmodelingcommunity/DPA4C-OMat)
-currently provides no recipe. Override the complete `learning_rate` section
+currently provides no bundle. Override the complete `learning_rate` section
 when a chosen release specifies another schedule.
 
 DeepMD writes its adapted configuration to `training_outputs/train_adapted.json`
@@ -212,7 +313,7 @@ SevenNet uses `train.continue.checkpoint` to load local SevenNet-0 weights,
 with fresh optimizer, scheduler and epoch counters. On the runner,
 `temper.mlff.pipeline.data_preparation.sevennet` uses SevenNet's
 [checkpoint YAML export](https://github.com/MDIL-SNU/SevenNet/blob/v0.13.0/sevenn/checkpoint.py)
-to obtain the model architecture, then applies the recipe's trainability
+to obtain the model architecture, then applies the bundle's trainability
 settings. Native training reads `training_outputs/sevennet_resolved.yaml`.
 The checkpoint supplies the architecture and weights, as in the
 [fine-tuning tutorial](https://github.com/MDIL-SNU/sevennet_tutorial/blob/main/notebooks/SevenNet_finetune_tutorial.ipynb).
@@ -457,7 +558,7 @@ During execution adapters use recorded paths for dataset conversion, checkpoint
 resolution, training, and temporary model export and cleanup.
 
 `prepare_bundle()` preserves existing configs. After deliberately changing a
-packaged recipe or its recorded paths, regenerate derived configs explicitly with
+packaged bundle or its recorded paths, regenerate derived configs explicitly with
 `temper.mlff.pipeline.runner.write_configuration_files(adapter)` using an adapter bound to
 that updated bundle and its root. Removing selected configs also lets preparation
 restore just those files. Rewriting configs replaces manual edits; moving the
