@@ -15,7 +15,9 @@ def cuda_runtime(monkeypatch):
     runtime = ModuleType("cuda_utils")
     runtime.torch_device = lambda: "cuda"
     runtime.require_cuda = lambda: None
-    monkeypatch.setitem(sys.modules, "temper.mlff.pipeline.cuda_utils", runtime)
+    monkeypatch.setitem(
+        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime
+    )
 
 
 def _config(family, **parameters):
@@ -33,7 +35,10 @@ def test_deepmd_uses_cuda(family, monkeypatch) -> None:
     calculator.DP = lambda **kwargs: calls.append(kwargs) or "dp"
     monkeypatch.setitem(sys.modules, "deepmd", package)
     monkeypatch.setitem(sys.modules, "deepmd.calculator", calculator)
-    assert calculator_factory.build_calculator(_config(family, head="Energy")) == "dp"
+    assert (
+        calculator_factory.build_calculator(_config(family, head="Energy"))
+        == "dp"
+    )
     assert calls == [{"model": "pretrained_models/model", "head": "Energy"}]
 
 
@@ -51,8 +56,17 @@ def test_mattersim_uses_cuda(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "mattersim", package)
     monkeypatch.setitem(sys.modules, "mattersim.forcefield", forcefield)
-    assert calculator_factory.build_calculator(_config("mattersim", custom=True)) == "mattersim"
-    assert calls == [{"load_path": "pretrained_models/model", "custom": True, "device": "cuda"}]
+    assert (
+        calculator_factory.build_calculator(_config("mattersim", custom=True))
+        == "mattersim"
+    )
+    assert calls == [
+        {
+            "load_path": "pretrained_models/model",
+            "custom": True,
+            "device": "cuda",
+        }
+    ]
 
 
 def test_sevennet_uses_cuda(monkeypatch) -> None:
@@ -64,8 +78,13 @@ def test_sevennet_uses_cuda(monkeypatch) -> None:
     )
     monkeypatch.setitem(sys.modules, "sevenn", package)
     monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
-    assert calculator_factory.build_calculator(_config("sevennet", modal="mpa")) == "sevennet"
-    assert calls == [{"model": "pretrained_models/model", "modal": "mpa", "device": "cuda"}]
+    assert (
+        calculator_factory.build_calculator(_config("sevennet", modal="mpa"))
+        == "sevennet"
+    )
+    assert calls == [
+        {"model": "pretrained_models/model", "modal": "mpa", "device": "cuda"}
+    ]
 
 
 def test_mace_resolves_device_on_runner(monkeypatch) -> None:
@@ -78,10 +97,17 @@ def test_mace_resolves_device_on_runner(monkeypatch) -> None:
     calculators.MACECalculator = (
         lambda **kwargs: calls.append(kwargs) or "mace"
     )
-    monkeypatch.setitem(sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device)
+    monkeypatch.setitem(
+        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device
+    )
     monkeypatch.setitem(sys.modules, "mace", package)
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
-    assert calculator_factory.build_calculator(_config("mace", default_dtype="float64")) == "mace"
+    assert (
+        calculator_factory.build_calculator(
+            _config("mace", default_dtype="float64")
+        )
+        == "mace"
+    )
     assert calls == [
         {
             "model_paths": ["pretrained_models/model"],
@@ -98,21 +124,28 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
     runtime_device.torch_device = lambda: "cuda"
     calorine = ModuleType("calorine")
     calculators = ModuleType("calorine.calculators")
-    calculators.GPUNEP = lambda *args, **kwargs: calls.append(
-        ("gpu", args, kwargs)
-    ) or "gpu"
-    calculators.CPUNEP = lambda *args, **kwargs: calls.append(
-        ("cpu", args, kwargs)
-    ) or "cpu"
-    monkeypatch.setitem(sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device)
+    calculators.GPUNEP = (
+        lambda *args, **kwargs: calls.append(("gpu", args, kwargs)) or "gpu"
+    )
+    calculators.CPUNEP = (
+        lambda *args, **kwargs: calls.append(("cpu", args, kwargs)) or "cpu"
+    )
+    monkeypatch.setitem(
+        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device
+    )
     monkeypatch.setitem(sys.modules, "calorine", calorine)
     monkeypatch.setitem(sys.modules, "calorine.calculators", calculators)
-    monkeypatch.setattr(calculator_factory.shutil, "which", lambda name: "/bin/gpumd")
-    assert calculator_factory.build_calculator(_config("nep89", timestep=1)) == "gpu"
+    monkeypatch.setattr(
+        calculator_factory.shutil, "which", lambda name: "/bin/gpumd"
+    )
+    assert (
+        calculator_factory.build_calculator(_config("nep89", timestep=1))
+        == "gpu"
+    )
     assert calls[0] == (
         "gpu",
         ("pretrained_models/model",),
-        {"timestep": 1},
+        {"timestep": 1, "gpu_identifier_index": None},
     )
 
     calls.clear()
@@ -137,12 +170,17 @@ def test_torch_device_order_and_cuda_visibility(monkeypatch) -> None:
     with pytest.raises(RuntimeError, match="CUDA GPU"):
         device.torch_device()
 
+
 @pytest.mark.parametrize("visible", ("", "-1"))
 def test_hidden_cuda_never_falls_back(monkeypatch, visible):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", visible)
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(
-        cuda=SimpleNamespace(is_available=lambda: True),
-    ))
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(
+            cuda=SimpleNamespace(is_available=lambda: True),
+        ),
+    )
     assert not device.cuda_available()
     with pytest.raises(RuntimeError, match="CUDA GPU"):
         device.require_cuda()
@@ -152,8 +190,12 @@ def test_hidden_cuda_never_falls_back(monkeypatch, visible):
 
 def test_cpu_only_torch_raises(monkeypatch):
     monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(
-        cuda=SimpleNamespace(is_available=lambda: False),
-    ))
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        SimpleNamespace(
+            cuda=SimpleNamespace(is_available=lambda: False),
+        ),
+    )
     with pytest.raises(RuntimeError, match="CUDA GPU"):
         device.torch_device()

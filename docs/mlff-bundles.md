@@ -163,7 +163,9 @@ The packaged [default_pretrained_models.json](../src/temper/mlff/default_pretrai
 contains release metadata only. Download weights separately from each entry's
 `download_url` and place them at `pretrained_model_dir / model_filename`.
 No checkpoint is downloaded or read during initialization; `build()` reads and
-hashes the local file. No per-checkpoint JSON sidecar is required.
+hashes the local file. DeepMD fine-tuning additionally requires the matching explicit JSON beside
+the checkpoint, with the same filename stem, unless `training_parameters.model`
+is supplied explicitly. Other families do not require this JSON.
 
 ~~~python
 
@@ -180,13 +182,13 @@ builders = [
 ~~~
 
 The factory still returns a builder class. Catalog lookup works from installed
-distributions and does not depend on the source checkout. A preset resolves to
+distributions and does not depend on the source checkout. A catalog selection resolves to
 ordinary spec fields; the runtime does not consult the catalog. Moving identical
 checkpoint bytes does not change the specification identity.
 
-### Pretrained release survey (2026-10-14)
+### Pretrained release survey (updated 2026-10-27)
 
-The catalog contains 47 fine-tunable checkpoint presets. Every entry has an
+The catalog contains 36 checkpoint choices. Every entry has an
 integer `estimated_num_parameters`, describing the full pretrained model before
 fine-tuning or element/head selection. It is a parameter count, not a byte size.
 `parameter_count_notes` explains whether the value is published, nominal, or
@@ -195,8 +197,8 @@ SevenNet-omat's rounded estimate includes small model buffers.
 
 | Family | Catalog choices | Parameter range | Sources |
 | --- | --- | --- | --- |
-| DPA4 | OMat24 Nano/Mini/Neo/Air/Plus (`v20260805`); Nano through Max (`v20260911`); MatPES R2SCAN Mini/Neo/Air (`v20260628`) | 0.48M–99.01M | [AISSquare OMat24](https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24), [AISSquare MatPES](https://www.aissquare.com/models/detail?pageType=models&id=424&name=DPA4-MatPES-v20260628) |
-| DPA4C | OMat24 Nano/Mini/Neo/Air/Plus (`v20260911`) | 0.030M–1.457M | [AISSquare OMat24](https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24) |
+| DPA4 | OMat24 Nano/Mini/Neo/Air/Plus (`v20260805`); MatPES R2SCAN Mini/Neo/Air (`v20260628`) | 0.48M–8.85M | [AIS Square OMat24](https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24) |
+| DPA4C | OMat24 Air (`v20260819`) | 433,673 | [AIS Square OMat24](https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24) |
 | MatterSim | v1.0.0 1M/5M | approximately 1M–5M | [Model card](https://github.com/microsoft/mattersim/blob/main/MODEL_CARD.md) |
 | MACE | MP-0, MP-0b/b2/b3, MPA-0, OMAT-0, MatPES PBE/r2SCAN, OFF23/OFF24, OMOL-0 (100M/4M training sets) | 0.69M–52.37M | [Foundation releases](https://github.com/ACEsuit/mace-foundations/releases), [OFF releases](https://github.com/ACEsuit/mace-off) |
 | SevenNet | 0 (May/July 2024), l3i5, omat | 0.84M–approximately 15.8M | [Model descriptions](https://sevennet.readthedocs.io/en/latest/user_guide/pretrained.html) |
@@ -209,13 +211,17 @@ commands. Use portable `.pt` checkpoints for training, not compiled `.pt2` expor
 
 ### Fine-tuning prerequisites and exclusions
 
-The newer AISSquare OMat releases require a DeePMD-kit development commit after
-2026-10-01, PyTorch 2.11 and CUDA 12.8. Their release notes still identify
-DeePMD-kit as 3.2.0, so that version string alone does not establish compatibility.
-The MatPES release also specifies DeePMD-kit main branch. Install the required
-backend on the execution host; catalog selection does not install or upgrade it.
-These prerequisites are recorded in each entry's `usage_notes`.
+The September 2026 AIS Square releases are excluded: their model cards
+require a development commit after 2026-10-01. The tested formal-release pairs
+are DPA4 Nano `v20260805` and DPA4C Air `v20260819`, with DeepMD 3.2.0 from
+the official GPU offline installer. Both need their matching explicit JSON
+files. See [the validation record](deployment/review-validation-20261027.md)
+for exact hashes, environment requirements and local/remote test status.
 
+The other August sizes have catalog metadata but have not been GPU-tested in
+this review. MatPES release notes specify the main branch; those entries are
+not certified for formal 3.2.0. Catalog availability alone does not establish
+backend compatibility or install dependencies.
 The catalog excludes entries with known unsupported TEMPER training workflows:
 DeepMD OMol charge/spin conditioning, DPA4-Beta branch selection, SevenNet
 multi-task modality assignment, MACE-MH head coordination, and PolarMACE's
@@ -276,13 +282,16 @@ Nested dictionaries are replaced as complete native sections.
 Epoch counts must be positive integers. Early stopping is disabled or patience
 is placed beyond the requested run in the builder.
 
-DeepMD always uses all 118 elements, H through Og in atomic-number order, as
-its type map, independently of the species present in a dataset;
-its descriptor and fitting network come from the checkpoint via
-`--use-pretrain-script`. Both pinned backends use the same
+DeepMD uses the complete ordered type map from the matching explicit model
+JSON, independently of the species present in a downstream dataset. The two
+tested August OMat24 pairs contain all 118 elements, H through Og; TEMPER does
+not impose that map on other checkpoints. Its descriptor and fitting network
+come from the checkpoint via `--use-pretrain-script`. DeepMD 3.2.0 follows the
 [fine-tuning rules](https://github.com/deepmodeling/deepmd-kit/blob/v3.2.0/deepmd/utils/finetune.py),
-which require the target type map and remap pretrained types to it. `training_parameters` contains native training keys,
-plus `loss` and `learning_rate` dictionaries that the runtime adapter places at the
+which require the target type map and remap pretrained types to it. The flag
+does not replace every outer model setting, so preserve the matching model
+section. `training_parameters` contains native training keys, plus `model`,
+`optimizer`, `loss` and `learning_rate` dictionaries that the adapter places at the
 top level of input.json. Defaults use HybridMuon (weight decay 0.001), gradient
 norm 1, MAE normalized-force loss, energy/force weights 20, virial weight 5,
 seed 42, save frequency 400 and display frequency 100. Both data batches use
@@ -290,8 +299,8 @@ seed 42, save frequency 400 and display frequency 100. Both data batches use
 The [DPA-4 release guidance](https://huggingface.co/deepmodelingcommunity/DPA4-OMat24#fine-tune-on-a-downstream-dataset)
 recommends a 1e-4 starting rate; the ending rate and DPA-4C schedule are TEMPER
 defaults, not independently verified release recommendations. The
-[DPA-4C model card](https://huggingface.co/deepmodelingcommunity/DPA4C-OMat)
-currently provides no bundle. Override the complete `learning_rate` section
+[DPA-4C model card](https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24)
+provides the matching JSON. Override the complete `learning_rate` section
 when a chosen release specifies another schedule.
 
 DeepMD writes its adapted configuration to `training_outputs/train_adapted.json`
@@ -496,20 +505,23 @@ To select one GPU for the entire pipeline, run e.g.
 
 | TEMPER key | Pinned implementation |
 | --- | --- |
-| `dpa4`, `dpa4c` | DeepMD-kit 3.2.0 |
+| `dpa4`, `dpa4c` | Official DeepMD-kit 3.2.0 offline installer for the recorded August AIS Square checkpoint/JSON pairs |
 | `mattersim` | MatterSim 1.2.5 |
 | `mace` | mace-torch 0.3.16 |
 | `sevennet` | SevenNet 0.13.0 |
-| `nep89` | TorchNEP 1.0.2, GPUMD 5.7, calorine 3.5 |
+| `nep89` | TorchNEP 1.0.2, GPUMD 5.7, calorine 4.1 |
 
 MatterSim defaults to 200 epochs, seed 42, learning rate 2e-4 and scheduler
-step size 10. As checked on 2026-10-08, 1.2.5 remains the latest
+step size 10. As checked on 2026-10-27, 1.2.5 remains the latest
 [PyPI release](https://pypi.org/project/mattersim/), and its
 [CUDA device and batched-index issue](https://github.com/microsoft/mattersim/issues/163)
-remains open. Batch size therefore still defaults to 1 and training emits a
-warning. The runtime adapter does not force this value: patched installations can
-set `training_parameters={"batch_size": 4}`. This does not claim that stock
-1.2.5 GPU fine-tuning is fixed.
+requires the audited dependency fixes in
+[deployment compatibility](deployment-compatibility.md). Batch size still
+defaults to 1, but the runtime adapter does not force this value: patched
+installations can set `training_parameters={"batch_size": 4}`. Validation must
+use at least two frames per batch. Version 1.2.5 alone does not establish
+whether the fixes are installed; TEMPER no longer declares every such
+installation defective. Stock 1.2.5 is not certified for GPU fine-tuning.
 
 The submit environment for NEP fine-tuning must provide exactly TorchNEP
 1.0.2 together with a compatible PyTorch and NumPy installation. TorchNEP is
@@ -584,3 +596,20 @@ to the terminal. Failed training reports the log's location and stops before
 evaluation. `temper_bench --verbose run_pipeline bundle.json` adds DEBUG file and
 adapter details; `--quiet` suppresses routine progress. Python callers can
 configure the `temper` logger with the standard logging module.
+
+
+### Explicit DeepMD model configurations
+
+For DPA4 and DPA4C, the builder copies `model` from the matching upstream JSON
+into the specification. This includes the full `type_map` in checkpoint order
+and outer model options that `--use-pretrain-script` does not copy. The source
+JSON is not needed on the execution machine because its model settings are
+embedded in the bundle and participate in its scientific identity. Presets
+are not supported. The JSON's training data paths and original training budget
+are not reused; TEMPER supplies bundle paths and the requested fine-tuning
+controls. Explicit model settings can also be supplied as
+`training_parameters={"model": model_section, "numb_epoch": 10}`.
+
+MACE label defaults are defined once in the spec builder: `energy_key=energy`,
+`forces_key=forces`, and `stress_key=stress`. User overrides take precedence.
+Regenerate older MACE bundles instead of relying on runtime YAML migration.

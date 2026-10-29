@@ -1,4 +1,5 @@
 """NEP-89 TorchNEP fine-tuning defaults."""
+
 from __future__ import annotations
 from typing import Any
 from temper.mlff.spec_builders.base import BaseSpecBuilder
@@ -51,22 +52,25 @@ _LEGACY_TRAINING_KEYS = {
 }
 
 
-
 @BaseSpecBuilder.register(name="nep89")
 class NEP89SpecBuilder(BaseSpecBuilder):
-    """Build NEP-89 specifications with architecture owned by the pretrained file."""
+    """Build NEP-89 specifications with architecture owned by the
+    pretrained file."""
 
     mlff_type = "nep89"
     implementations = (
         MLFFImplementation(name="gpumd", version="5.7", kind="executable"),
-        MLFFImplementation(name="calorine", version="3.5"),
+        MLFFImplementation(name="calorine", version="4.1"),
     )
-    training_implementations = (MLFFImplementation(name="torchnep", version="1.0.2"),)
+    training_implementations = (
+        MLFFImplementation(name="torchnep", version="1.0.2"),
+    )
     training_defaults = _TRAINING_DEFAULTS
     epoch_key = "epoch"
 
     def prepare_training(self) -> dict[str, Any]:
-        """Return native controls, rejecting incompatible architecture overrides."""
+        """Return native controls, rejecting incompatible architecture
+        overrides."""
         if self.training_parameters is None:
             return self.training_defaults
         keys = self.training_parameters.keys()

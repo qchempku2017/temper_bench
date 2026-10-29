@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_on": "2026-10-14",
+  "verified_on": "2026-10-27",
   "notes": "Curated fine-tunable checkpoints, not an exhaustive release archive. Entries with known unsupported TEMPER training workflows are excluded. Backend prerequisites in usage_notes must be satisfied; metadata verification is not a GPU execution test. estimated_num_parameters describes the full pretrained model before downstream adaptation, not checkpoint bytes or optimizer state. Filenames are relative to pretrained_model_dir; weights are not downloaded automatically. See docs/mlff-bundles.md.",
   "models": {
     "dpa4": {
@@ -8,45 +8,61 @@
         "model_name": "DPA4-Nano-OMat24",
         "model_version": "v20260805",
         "model_filename": "dpa4/v20260805/DPA4-Nano-OMat24-v20260805.pt",
-        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
-        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Nano-OMat24-v20260805.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.pt",
+        "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.json",
+        "sha256": "ded047546c2b44a50e2c850680d77279e2bf3e107c10f1c2fe39a5c344e693f6",
+        "configuration_sha256": "214559a9e0aa9feb68a279a3bdc7770f06949c368531888dda01c3f51e8ac639",
         "size": "Nano",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 480650,
-        "parameter_count_notes": "Published count for this release in the linked model card."
+        "parameter_count_notes": "Parameter count for the pretrained architecture; excludes optimizer state.",
+        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations."
       },
       "mini-omat24-v20260805": {
         "model_name": "DPA4-Mini-OMat24",
         "model_version": "v20260805",
         "model_filename": "dpa4/v20260805/DPA4-Mini-OMat24-v20260805.pt",
-        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
-        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Mini-OMat24-v20260805.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.pt",
         "size": "Mini",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 655504,
-        "parameter_count_notes": "Published count for this release in the linked model card."
+        "parameter_count_notes": "Published count for this release in the linked model card.",
+        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "sha256": "13edeea63448c0f8a0b38e08fd8ba196fb1e2fad5f12486b1cd23320829da268",
+        "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.json",
+        "configuration_sha256": "378b24017192e0f36ce0ad84a02ce679e59b61e739ef10fd7b9800623df77e8e"
       },
       "neo-omat24-v20260805": {
         "model_name": "DPA4-Neo-OMat24",
         "model_version": "v20260805",
         "model_filename": "dpa4/v20260805/DPA4-Neo-OMat24-v20260805.pt",
-        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
-        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Neo-OMat24-v20260805.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.pt",
         "size": "Neo",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 1125372,
-        "parameter_count_notes": "Published count for this release in the linked model card."
+        "parameter_count_notes": "Published count for this release in the linked model card.",
+        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "sha256": "fd7f34ae28f921201e4a0328ddf56179892752084f8363e7796038201471c989",
+        "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.json",
+        "configuration_sha256": "3ca5ec05a3d3f626034e463f09ebf1673fe377aca40381062efb50825061409b"
       },
       "air-omat24-v20260805": {
         "model_name": "DPA4-Air-OMat24",
         "model_version": "v20260805",
         "model_filename": "dpa4/v20260805/DPA4-Air-OMat24-v20260805.pt",
-        "source_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24",
-        "download_url": "https://huggingface.co/deepmodelingcommunity/DPA4-OMat24/resolve/173bfd5a26f90a756ee891777270ef117078d9be/DPA4-Air-OMat24-v20260805.pt",
+        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
+        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.pt",
         "size": "Air",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 5148611,
-        "parameter_count_notes": "Published count for this release in the linked model card."
+        "parameter_count_notes": "Published count for this release in the linked model card.",
+        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "sha256": "7ac5fb696fc057229ceebc33f31f7a96b2f3616ac5b63a512acd1848f2d41a09",
+        "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.json",
+        "configuration_sha256": "0e5317895549379bcc5442560a074b11f1a0bfd65fd18d9b739eda59704f8709"
       },
       "plus-omat24-v20260805": {
         "model_name": "DPA4-Plus-OMat24",
@@ -57,91 +73,8 @@
         "size": "Plus",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 8849376,
-        "parameter_count_notes": "Published count for this release in the linked model card."
-      },
-      "nano-omat24-v20260911": {
-        "model_name": "DPA4-Nano-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Nano-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260911.pt",
-        "size": "Nano",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 480650,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "mini-omat24-v20260911": {
-        "model_name": "DPA4-Mini-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Mini-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260911.pt",
-        "size": "Mini",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 655390,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "neo-omat24-v20260911": {
-        "model_name": "DPA4-Neo-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Neo-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260911.pt",
-        "size": "Neo",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 1125244,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "air-omat24-v20260911": {
-        "model_name": "DPA4-Air-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Air-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260911.pt",
-        "size": "Air",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 5148371,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "plus-omat24-v20260911": {
-        "model_name": "DPA4-Plus-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Plus-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Plus-OMat24-v20260911.pt",
-        "size": "Plus",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 8849084,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "pro-omat24-v20260911": {
-        "model_name": "DPA4-Pro-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Pro-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Pro-OMat24-v20260911.pt",
-        "size": "Pro",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 25211308,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "max-omat24-v20260911": {
-        "model_name": "DPA4-Max-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4/v20260911/DPA4-Max-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=423&name=DPA4-OMat24",
-        "download_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Max-OMat24-v20260911.pt",
-        "size": "Max",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 99010408,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+        "parameter_count_notes": "Published count for this release in the linked model card.",
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
       },
       "mini-matpes-v20260628": {
         "model_name": "DPA4-Mini-MatPES",
@@ -153,7 +86,7 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 655504,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
       },
       "neo-matpes-v20260628": {
         "model_name": "DPA4-Neo-MatPES",
@@ -165,7 +98,7 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 1125372,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
       },
       "air-matpes-v20260628": {
         "model_name": "DPA4-Air-MatPES",
@@ -177,69 +110,24 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 5148611,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires DeePMD-kit main branch (3.2.0), PyTorch 2.11 and CUDA 12.8. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
       }
     },
     "dpa4c": {
-      "nano-omat24-v20260911": {
-        "model_name": "DPA4C-Nano-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4c/v20260911/DPA4C-Nano-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
-        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260911.pt",
-        "size": "Nano",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 29809,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "mini-omat24-v20260911": {
-        "model_name": "DPA4C-Mini-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4c/v20260911/DPA4C-Mini-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
-        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260911.pt",
-        "size": "Mini",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 145513,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "neo-omat24-v20260911": {
-        "model_name": "DPA4C-Neo-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4c/v20260911/DPA4C-Neo-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
-        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260911.pt",
-        "size": "Neo",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 342089,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "air-omat24-v20260911": {
+      "air-omat24-v20260819": {
         "model_name": "DPA4C-Air-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4c/v20260911/DPA4C-Air-OMat24-v20260911.pt",
+        "model_version": "v20260819",
+        "model_filename": "dpa4c/v20260819/DPA4C-Air-OMat24-v20260819.pt",
         "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
-        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260911.pt",
+        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.pt",
+        "configuration_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.json",
+        "sha256": "ff596ce704c9b4bc7149fbb0a0f12df611924cccb045917e8abb95b6a6cd4ad8",
+        "configuration_sha256": "e916352fb7cc81bad5cc040e0205b093ab5cb3d9c7e3d5e11b642221e565583a",
         "size": "Air",
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 433673,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
-      },
-      "plus-omat24-v20260911": {
-        "model_name": "DPA4C-Plus-OMat24",
-        "model_version": "v20260911",
-        "model_filename": "dpa4c/v20260911/DPA4C-Plus-OMat24-v20260911.pt",
-        "source_url": "https://www.aissquare.com/models/detail?pageType=models&id=433&name=DPA4C-OMat24",
-        "download_url": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Plus-OMat24-v20260911.pt",
-        "size": "Plus",
-        "pretraining_data": "OMat24",
-        "estimated_num_parameters": 1456961,
-        "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires a DeePMD-kit development commit after 2026-10-01, PyTorch 2.11 and CUDA 12.8; the 3.2.0 version string alone does not establish compatibility. Use the portable .pt checkpoint for fine-tuning, not a compiled .pt2 export."
+        "parameter_count_notes": "Parameter count for the pretrained architecture; excludes optimizer state.",
+        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations."
       }
     },
     "mattersim": {

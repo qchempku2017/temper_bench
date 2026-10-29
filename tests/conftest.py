@@ -1,4 +1,5 @@
 """Shared deterministic fixtures for schema and grouping tests."""
+
 from __future__ import annotations
 
 import sys
@@ -26,7 +27,6 @@ from temper.mlff.spec_builders import (
 )
 from temper.schemas.train_unit import TrainingUnit
 
-
 NEP_MODEL = b"""nep4_zbl 2 H He
 zbl 1 2
 cutoff 6 5 20 20
@@ -38,7 +38,9 @@ ANN 80 0
 """
 
 
-def make_frame(symbols: str, energy: float, tag: str, *, stress: bool = True) -> Atoms:
+def make_frame(
+    symbols: str, energy: float, tag: str, *, stress: bool = True
+) -> Atoms:
     """Create a small extxyz-compatible frame with deterministic properties."""
     atoms = Atoms(symbols)
     atoms.positions = [(index, 0, 0) for index in range(len(atoms))]
@@ -58,14 +60,22 @@ def extxyz_domain(tmp_path: Path) -> Path:
     """A two-file domain with two deterministic frames per source file."""
     domain = tmp_path / "demo_domain"
     domain.mkdir()
-    write(domain / "alpha_t_300_run.extxyz", [
-        make_frame("H2", -1.0, "shared"),
-        make_frame("H2", -1.1, "shared"),
-    ], format="extxyz")
-    write(domain / "beta_t_600_run.extxyz", [
-        make_frame("He", -0.2, "shared"),
-        make_frame("He", -0.3, "shared"),
-    ], format="extxyz")
+    write(
+        domain / "alpha_t_300_run.extxyz",
+        [
+            make_frame("H2", -1.0, "shared"),
+            make_frame("H2", -1.1, "shared"),
+        ],
+        format="extxyz",
+    )
+    write(
+        domain / "beta_t_600_run.extxyz",
+        [
+            make_frame("He", -0.2, "shared"),
+            make_frame("He", -0.3, "shared"),
+        ],
+        format="extxyz",
+    )
     return domain
 
 
@@ -74,8 +84,20 @@ def metadata_payload() -> dict:
     """Required metadata paired with the files created by extxyz_domain."""
     return {
         "info": [
-            {"filename": "alpha_t_300_run.extxyz", "name": "alpha", "source": "unit-test", "domain": "demo_domain", "system_type": ["molecule"]},
-            {"filename": "beta_t_600_run.extxyz", "name": "beta", "source": "unit-test", "domain": "demo_domain", "system_type": ["atom"]},
+            {
+                "filename": "alpha_t_300_run.extxyz",
+                "name": "alpha",
+                "source": "unit-test",
+                "domain": "demo_domain",
+                "system_type": ["molecule"],
+            },
+            {
+                "filename": "beta_t_600_run.extxyz",
+                "name": "beta",
+                "source": "unit-test",
+                "domain": "demo_domain",
+                "system_type": ["atom"],
+            },
         ]
     }
 
@@ -184,9 +206,7 @@ def mlff_spec_factory(tmp_path: Path):
     ):
         if family in {"dpa4", "dpa4c"}:
             builder_type = (
-                DPA4SpecBuilder
-                if family == "dpa4"
-                else DPA4CSpecBuilder
+                DPA4SpecBuilder if family == "dpa4" else DPA4CSpecBuilder
             )
             paths = {
                 "pretrained_model_path": artifact(
@@ -225,10 +245,28 @@ def mlff_spec_factory(tmp_path: Path):
             raise ValueError(f"Unsupported test MLFF family: {family}.")
 
         if with_training:
-            training = {} if training_parameters is None else training_parameters
+            training = (
+                {} if training_parameters is None else training_parameters
+            )
         else:
             training = None
         model_path = paths["pretrained_model_path"]
+        if family in {"dpa4", "dpa4c"}:
+            import json
+            from ase.data import chemical_symbols
+
+            model_path.with_suffix(".json").write_text(
+                json.dumps(
+                    {
+                        "model": {
+                            "type": "dpa4" if family == "dpa4" else "standard",
+                            "type_map": chemical_symbols[1:],
+                            "descriptor": {"type": family},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
         source = {
             "model_name": family,
             "model_version": "test-release",

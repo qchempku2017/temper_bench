@@ -22,14 +22,13 @@ from temper.mlff.pipeline.training_adapters.nep89 import _nep_architecture
 
 from conftest import make_frame
 
-
 FAMILIES = ("dpa4", "dpa4c", "mattersim", "mace", "sevennet", "nep89")
 DEEPMD_TYPE_MAP = (
-    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni "
-    "Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe "
-    "Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au "
-    "Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf "
-    "Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
+    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni"
+    " Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I"
+    " Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir"
+    " Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md"
+    " No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og"
 ).split()
 MODEL_FILES = {
     "dpa4": ("dpa4.pt",),
@@ -61,12 +60,15 @@ def test_bundle_schema_preserves_pair_and_adds_packaging_fields(
         "training_unit",
         "mlff_spec",
         "mlff_train_bundle_id",
-        "schema_version", "temper_version", "files",
+        "schema_version",
+        "temper_version",
+        "files",
     }
     assert bundle.unit_type == "finetune"
-    assert "file_mode" not in inspect.signature(
-        bundle.write_submit_folder
-    ).parameters
+    assert (
+        "file_mode"
+        not in inspect.signature(bundle.write_submit_folder).parameters
+    )
     assert not hasattr(bundle, "materialize_submit_folder")
 
 
@@ -127,7 +129,9 @@ def test_zeroshot_writes_fixed_copied_inputs(
         assert copied.is_file()
         assert not copied.is_symlink()
 
-    config = json.loads((target / "testing_inputs/test_config.json").read_text())
+    config = json.loads(
+        (target / "testing_inputs/test_config.json").read_text()
+    )
     assert config["schema_version"] == 2
     assert config["calculator"]["parameters"] == {}
     assert config["test_datasets"][0]["properties"] == [
@@ -154,25 +158,40 @@ def test_finetune_writes_native_training_and_automatic_stress(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory(family),
     )
-    target = write_prepared(bundle.write_submit_folder(tmp_path / f"fine-{family}")[0])
+    target = write_prepared(
+        bundle.write_submit_folder(tmp_path / f"fine-{family}")[0]
+    )
     run_script = training_script(target)
     assert TRAINING_MARKERS[family] in run_script
     assert (target / "training_inputs" / "train.extxyz").is_file()
     assert (target / "training_inputs" / "validation.extxyz").is_file()
     if family in {"mace", "mattersim", "sevennet", "nep89"}:
-        testing = json.loads((target / "testing_inputs/test_config.json").read_text())
+        testing = json.loads(
+            (target / "testing_inputs/test_config.json").read_text()
+        )
         assert Path(testing["model"]).name.startswith("finetuned_")
     if family == "nep89":
-        test_config = json.loads((target / "testing_inputs/test_config.json").read_text())
+        test_config = json.loads(
+            (target / "testing_inputs/test_config.json").read_text()
+        )
         assert {
             item["name"] for item in test_config["package_requirements"]
         } == {"torchnep", "calorine"}
 
     if family in {"dpa4", "dpa4c"}:
-        config = json.loads((target / "training_inputs" / "input.json").read_text())
+        config = json.loads(
+            (target / "training_inputs" / "input.json").read_text()
+        )
         assert config["loss"]["start_pref_v"] == 5.0
-        assert config["model"] == {"type_map": DEEPMD_TYPE_MAP}
-        assert config["training"]["numb_epoch"] == (60 if family == "dpa4" else 100)
+        assert config["model"] == bundle.mlff_spec.training_parameters["model"]
+        assert config["optimizer"] == {
+            "type": "HybridMuon",
+            "weight_decay": 0.001,
+        }
+        assert "optimizer" not in config["training"]
+        assert config["training"]["numb_epoch"] == (
+            60 if family == "dpa4" else 100
+        )
         assert "--use-pretrain-script" in run_script
         assert "--output training_outputs/train_adapted.json" in run_script
         assert config["training"]["save_ckpt"] == "training_outputs/model.ckpt"
@@ -194,10 +213,16 @@ def test_finetune_writes_native_training_and_automatic_stress(
         )
         assert config["train"]["is_train_stress"] is True
         assert config["train"]["epoch"] == 100
-        assert set(config["model"]) == {"train_shift_scale", "train_denominator"}
+        assert set(config["model"]) == {
+            "train_shift_scale",
+            "train_denominator",
+        }
         assert not (target / "runtime").exists()
         assert "temper.mlff.pipeline.data_preparation" not in run_script
-        assert "sevenn train training_outputs/sevennet_resolved.yaml" in run_script
+        assert (
+            "sevenn train training_outputs/sevennet_resolved.yaml"
+            in run_script
+        )
     else:
         config = (target / "training_inputs" / "nep.in").read_text()
         assert "type 2 H He" in config
@@ -214,9 +239,7 @@ def test_no_stress_is_omitted_from_training_and_each_test(
     finetune_training_unit,
     mlff_spec_factory,
 ) -> None:
-    domain = (
-        finetune_training_unit.root_path / finetune_training_unit.domain
-    )
+    domain = finetune_training_unit.root_path / finetune_training_unit.domain
     for filename in (
         "train.extxyz",
         "validation.extxyz",
@@ -228,14 +251,18 @@ def test_no_stress_is_omitted_from_training_and_each_test(
         frame.set_pbc(True)
         write(domain / filename, frame, format="extxyz")
 
-    target = write_prepared(MLFFTrainBundle(
-        training_unit=finetune_training_unit,
-        mlff_spec=mlff_spec_factory("mace"),
-    ).write_submit_folder(tmp_path / "no-stress")[0])
+    target = write_prepared(
+        MLFFTrainBundle(
+            training_unit=finetune_training_unit,
+            mlff_spec=mlff_spec_factory("mace"),
+        ).write_submit_folder(tmp_path / "no-stress")[0]
+    )
     training = YAML(typ="safe").load(
         (target / "training_inputs" / "mace.yaml").read_text()
     )
-    testing = json.loads((target / "testing_inputs/test_config.json").read_text())
+    testing = json.loads(
+        (target / "testing_inputs/test_config.json").read_text()
+    )
     assert training["stress_weight"] == 0.0
     assert all(
         dataset["properties"] == ["energy", "forces"]
@@ -243,49 +270,72 @@ def test_no_stress_is_omitted_from_training_and_each_test(
     )
 
 
-def test_deepmd_uses_only_weights_and_full_element_type_map(
+def test_deepmd_embeds_matching_json_and_full_element_type_map(
     tmp_path: Path,
     finetune_training_unit,
 ) -> None:
     model = tmp_path / "dpa4.pt"
     model.write_bytes(b"checkpoint")
+    model.with_suffix(".json").write_text(
+        json.dumps(
+            {
+                "model": {"type": "dpa4", "type_map": DEEPMD_TYPE_MAP},
+            }
+        )
+    )
     domain = finetune_training_unit.root_path / finetune_training_unit.domain
-    write(domain / "validation.extxyz", make_frame("He", -1.0, "validation"), format="extxyz")
+    write(
+        domain / "validation.extxyz",
+        make_frame("He", -1.0, "validation"),
+        format="extxyz",
+    )
     spec = DPA4SpecBuilder(
-        model_name="test-model", model_version="test-release",
+        model_name="test-model",
+        model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={"numb_epoch": 7},
     ).build()
 
-    target = write_prepared(MLFFTrainBundle(
-        training_unit=finetune_training_unit,
-        mlff_spec=spec,
-    ).write_submit_folder(tmp_path / "deepmd-template")[0])
-    config = json.loads((target / "training_inputs" / "input.json").read_text())
+    target = write_prepared(
+        MLFFTrainBundle(
+            training_unit=finetune_training_unit,
+            mlff_spec=spec,
+        ).write_submit_folder(tmp_path / "deepmd-template")[0]
+    )
+    config = json.loads(
+        (target / "training_inputs" / "input.json").read_text()
+    )
     run_script = training_script(target)
 
-    assert config["model"] == {"type_map": DEEPMD_TYPE_MAP}
+    assert config["model"] == {"type": "dpa4", "type_map": DEEPMD_TYPE_MAP}
     assert set(spec.pretrained_model.artifacts) == {"model"}
-    assert list((target / "pretrained_models").iterdir()) == [target / "pretrained_models/dpa4.pt"]
+    assert list((target / "pretrained_models").iterdir()) == [
+        target / "pretrained_models/dpa4.pt"
+    ]
     assert config["training"]["numb_epoch"] == 7
     assert config["training"]["disp_freq"] == 100
-    assert not {
-        "numb_steps",
-        "stop_batch",
-        "num_step",
-        "num_steps",
-        "numb_step",
-        "num_epochs",
-        "num_epoch",
-        "numb_epochs",
-    } & config["training"].keys()
+    assert (
+        not {
+            "numb_steps",
+            "stop_batch",
+            "num_step",
+            "num_steps",
+            "numb_step",
+            "num_epochs",
+            "num_epoch",
+            "numb_epochs",
+        }
+        & config["training"].keys()
+    )
     assert config["learning_rate"]["start_lr"] == 1e-4
-    assert "--finetune pretrained_models/dpa4.pt --use-pretrain-script" in run_script
+    assert (
+        "--finetune pretrained_models/dpa4.pt --use-pretrain-script"
+        in run_script
+    )
     assert "--output training_outputs/train_adapted.json" in run_script
     assert "cp " not in run_script
     assert "freeze" not in run_script
-
 
 
 def test_nep_without_stress_disables_virial_losses(
@@ -300,10 +350,12 @@ def test_nep_without_stress_disables_virial_losses(
         frame.set_pbc(True)
         write(domain / filename, frame, format="extxyz")
 
-    target = write_prepared(MLFFTrainBundle(
-        training_unit=finetune_training_unit,
-        mlff_spec=mlff_spec_factory("nep89"),
-    ).write_submit_folder(tmp_path / "nep-no-stress")[0])
+    target = write_prepared(
+        MLFFTrainBundle(
+            training_unit=finetune_training_unit,
+            mlff_spec=mlff_spec_factory("nep89"),
+        ).write_submit_folder(tmp_path / "nep-no-stress")[0]
+    )
     config = (target / "training_inputs" / "nep.in").read_text()
     assert "lambda_v 0.0" in config
     assert "stage2_lambda_v 0.0" in config
@@ -316,30 +368,37 @@ def test_nep_rejects_unsupported_checkpoint_headers(
     model = tmp_path / "nep.txt"
     model.write_text("nep3 1 H\n", encoding="utf-8")
     spec = NEP89SpecBuilder(
-        model_name="test-model", model_version="test-release",
+        model_name="test-model",
+        model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={},
     ).build()
 
     with pytest.raises(ValueError, match="nep4"):
-        write_prepared(MLFFTrainBundle(
-            training_unit=finetune_training_unit,
-            mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "bad-nep")[0])
+        write_prepared(
+            MLFFTrainBundle(
+                training_unit=finetune_training_unit,
+                mlff_spec=spec,
+            ).write_submit_folder(tmp_path / "bad-nep")[0]
+        )
 
 
 @pytest.mark.parametrize(
     ("header", "message"),
     (
         (
-            "nep4 2 H\ncutoff 6 5\nn_max 4 4\nbasis_size 8 8\n"
-            "l_max 4 2 1\nANN 80 0\n",
+            (
+                "nep4 2 H\ncutoff 6 5\nn_max 4 4\nbasis_size 8 8\n"
+                "l_max 4 2 1\nANN 80 0\n"
+            ),
             "element count",
         ),
         (
-            "nep4_zbl 1 H\nzbl 1 3\ncutoff 6 5\nn_max 4 4\n"
-            "basis_size 8 8\nl_max 4 2 1\nANN 80 0\n",
+            (
+                "nep4_zbl 1 H\nzbl 1 3\ncutoff 6 5\nn_max 4 4\n"
+                "basis_size 8 8\nl_max 4 2 1\nANN 80 0\n"
+            ),
             "half the outer cutoff",
         ),
     ),
@@ -401,17 +460,20 @@ def test_nep_rejects_training_elements_absent_from_checkpoint(
         encoding="utf-8",
     )
     spec = NEP89SpecBuilder(
-        model_name="test-model", model_version="test-release",
+        model_name="test-model",
+        model_version="test-release",
         pretrained_model_dir=model.parent,
         model_filename=model.name,
         training_parameters={},
     ).build()
 
     with pytest.raises(ValueError, match="absent.*'H'"):
-        write_prepared(MLFFTrainBundle(
-            training_unit=finetune_training_unit,
-            mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "missing-nep-element")[0])
+        write_prepared(
+            MLFFTrainBundle(
+                training_unit=finetune_training_unit,
+                mlff_spec=spec,
+            ).write_submit_folder(tmp_path / "missing-nep-element")[0]
+        )
 
 
 def test_mixed_stress_within_dataset_is_rejected(
@@ -457,10 +519,12 @@ def test_train_validation_stress_disagreement_is_rejected(
     frame.set_pbc(True)
     write(validation, frame, format="extxyz")
     with pytest.raises(ValueError, match="disagree"):
-        write_prepared(MLFFTrainBundle(
-            training_unit=finetune_training_unit,
-            mlff_spec=mlff_spec_factory("mace"),
-        ).write_submit_folder(tmp_path / "mismatch")[0])
+        write_prepared(
+            MLFFTrainBundle(
+                training_unit=finetune_training_unit,
+                mlff_spec=mlff_spec_factory("mace"),
+            ).write_submit_folder(tmp_path / "mismatch")[0]
+        )
 
 
 def test_artifact_hash_is_checked_again_before_copy(
@@ -471,10 +535,12 @@ def test_artifact_hash_is_checked_again_before_copy(
     spec = mlff_spec_factory("mace", with_training=False)
     spec.pretrained_model.artifacts["model"].path.write_bytes(b"changed")
     with pytest.raises(ValueError, match="changed after"):
-        write_prepared(MLFFTrainBundle(
-            training_unit=zeroshot_training_unit,
-            mlff_spec=spec,
-        ).write_submit_folder(tmp_path / "changed")[0])
+        write_prepared(
+            MLFFTrainBundle(
+                training_unit=zeroshot_training_unit,
+                mlff_spec=spec,
+            ).write_submit_folder(tmp_path / "changed")[0]
+        )
 
 
 def test_writer_uses_configured_submit_directories(
@@ -489,15 +555,19 @@ def test_writer_uses_configured_submit_directories(
     monkeypatch.setattr(
         writer_base, "DEFAULT_MLFF_MODELS_DIR", "inputs/models"
     )
-    target = write_prepared(MLFFTrainBundle(
-        training_unit=zeroshot_training_unit,
-        mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder(tmp_path / "custom-layout")[0])
+    target = write_prepared(
+        MLFFTrainBundle(
+            training_unit=zeroshot_training_unit,
+            mlff_spec=mlff_spec_factory("mace", with_training=False),
+        ).write_submit_folder(tmp_path / "custom-layout")[0]
+    )
 
     assert (target / "inputs" / "datasets" / "test_000.extxyz").is_file()
     assert (target / "inputs" / "models" / "mace.model").is_file()
     assert not (target / "runtime").exists()
-    config = json.loads((target / "inputs/datasets/test_config.json").read_text())
+    config = json.loads(
+        (target / "inputs/datasets/test_config.json").read_text()
+    )
     assert config["summary_output"] == "testing_outputs/summary.json"
 
 
@@ -505,10 +575,12 @@ def test_temporary_submit_folder_is_caller_owned(
     zeroshot_training_unit,
     mlff_spec_factory,
 ) -> None:
-    target = write_prepared(MLFFTrainBundle(
-        training_unit=zeroshot_training_unit,
-        mlff_spec=mlff_spec_factory("mace", with_training=False),
-    ).write_submit_folder()[0])
+    target = write_prepared(
+        MLFFTrainBundle(
+            training_unit=zeroshot_training_unit,
+            mlff_spec=mlff_spec_factory("mace", with_training=False),
+        ).write_submit_folder()[0]
+    )
     try:
         assert target.is_dir()
     finally:
@@ -516,25 +588,33 @@ def test_temporary_submit_folder_is_caller_owned(
 
 
 def test_base_writer_has_no_copy_strategy_surface() -> None:
-    assert "file_mode" not in inspect.signature(
-        MLFFBundleWriter.write_submit_folder
-    ).parameters
+    assert (
+        "file_mode"
+        not in inspect.signature(
+            MLFFBundleWriter.write_submit_folder
+        ).parameters
+    )
 
 
 def write_prepared(target):
-    """Exercise backend generation on the runtime side of the bundle boundary."""
+    """Exercise backend generation on the runtime side of the bundle
+    boundary."""
     from temper.mlff.pipeline.runner import prepare_bundle
+
     prepare_bundle(target / "bundle.json")
     return target
 
 
 def test_writer_accepts_adapter_class_without_instantiating_or_rendering(
-    tmp_path, finetune_training_unit, mlff_spec_factory,
+    tmp_path,
+    finetune_training_unit,
+    mlff_spec_factory,
 ):
     from temper.mlff.pipeline.training_adapters.mace import MACEAdapter
 
     bundle = MLFFTrainBundle(
-        training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
+        training_unit=finetune_training_unit,
+        mlff_spec=mlff_spec_factory("mace"),
     )
     before = bundle.model_dump()
 
@@ -544,12 +624,18 @@ def test_writer_accepts_adapter_class_without_instantiating_or_rendering(
         def __init__(self, *args):
             pytest.fail("Packaging instantiated a runtime adapter")
 
-    target, packaged = MLFFBundleWriter(bundle, FailingAdapter).write_submit_folder(tmp_path / "job")
+    target, packaged = MLFFBundleWriter(
+        bundle, FailingAdapter
+    ).write_submit_folder(tmp_path / "job")
     assert (target / "pretrained_models/custom.model").is_file()
     assert packaged.files.pretrained_model == "pretrained_models/custom.model"
     assert not (target / packaged.files.test_input_files["config"]).exists()
-    assert not (target / packaged.files.training_input_files["config"]).exists()
-    assert not (target / packaged.files.training_input_files["script"]).exists()
+    assert not (
+        target / packaged.files.training_input_files["config"]
+    ).exists()
+    assert not (
+        target / packaged.files.training_input_files["script"]
+    ).exists()
     assert bundle.model_dump() == before
 
     sentinel = target / "keep.txt"
