@@ -15,7 +15,7 @@ The workflow is available through both the CLI and Python API:
 7. Call `bundle.write_submit_folder()` to copy datasets, pretrained models, a versioned `bundle.json`, and a small `run.sh` launcher.
 8. Transfer the folder to a host with the same TEMPER version and the selected model backend installed, then run `temper_bench run_pipeline /path/to/bundle.json`. The runtime prepares native training files, fine-tunes when requested, and writes standardized ASE predictions.
 
-Alternatively, install `.[remote]` (or `.[bohrium]`) and let TEMPER submit,
+Alternatively, install `.[remote,preprocess]` and let TEMPER submit,
 monitor, collect and clean remote attempts:
 
 ```console
@@ -41,12 +41,22 @@ The end-to-end command reads every option from a JSON or YAML [`SplitConfig`](do
 Install TEMPER from the repository and invoke its command-line entry point:
 
 ```console
-python -m pip install ".[preprocess]"
+python -m pip install ".[remote,preprocess]"
 temper_bench split
 ```
 
-The `preprocess` extra installs QUESTS and Numba and is required for local data
-splitting. For an execution host, install only the base package:
+On the workstation that prepares data and submits jobs, `preprocess` installs
+QUESTS and Numba for splitting, and `remote` installs the submission dependency.
+Add `gpu` (`.[remote,preprocess,gpu]`) for GPU-accelerated entropy calculations;
+install a compatible GPU-enabled PyTorch build as described below. Descriptor
+calculation still uses the CPU.
+
+Add `bohrium` only when submitting to Bohrium. Follow the
+[Bohrium documentation](https://docs.bohrium.com/) for installation, account,
+project, and credential setup before selecting that execution resource.
+
+On the remote execution machine, activate the environment containing the
+chosen MLFF's training and ASE dependencies, then install only base TEMPER:
 
 ```console
 python -m pip install .
@@ -54,8 +64,9 @@ temper_bench run_pipeline /path/to/bundle.json
 ```
 
 Install the selected MLFF backend separately in that host's environment. The
-bundle records its backend requirements and TEMPER version; local and remote
-A different TEMPER release emits a warning; unsupported bundle formats still fail validation. No Python schema or runtime files are uploaded.
+bundle records its backend requirements and TEMPER version. A different TEMPER
+release emits a warning; unsupported bundle formats still fail validation.
+No Python schema or runtime files are uploaded.
 See [MLFF bundles](docs/mlff-bundles.md) for the folder contract and preparation-only command.
 
 ### Optional GPU support

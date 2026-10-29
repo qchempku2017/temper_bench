@@ -1,0 +1,15 @@
+# Linux Python 3.12 compatibility recipe; full inventory is in docs/deployment.
+# Install CUDA PyTorch from the official cu128 index and use the patched wheels where specified.
+ase==3.29.0
+e3nn==0.6.0
+mattersim==1.2.5+temper.1
+numpy==2.5.2
+pydantic==2.14.1
+torch==2.11.0+cu128
+torchaudio==2.11.0+cu128
+torch-ema==0.3
+torch-geometric==2.8.1
+torchmetrics==1.9.0
+torch-sim-atomistic==0.6.2
+torchvision==0.26.0+cu128
+triton==3.6.0

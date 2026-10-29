@@ -1,0 +1,26 @@
+﻿[
+    {
+        "name":  "mace-torch",
+        "version":  "0.3.16",
+        "url":  "https://files.pythonhosted.org/packages/c9/ab/8867aa6400aa332688151cad2c00ad9173d9ac7f3e83bc4bf4f4726c596f/mace_torch-0.3.16.tar.gz",
+        "sha256":  "5fbc84d319a92ab15e3e686533547a0afd2632261132e31cb0705a4347508935"
+    },
+    {
+        "name":  "mattersim",
+        "version":  "1.2.5",
+        "url":  "https://files.pythonhosted.org/packages/6b/8f/f69685c2f7574e7942bc02cb592be0fc46d03d55339467aff2214af19365/mattersim-1.2.5.tar.gz",
+        "sha256":  "2691b8376690b80947f93dc3f683985b2ec44aa9a0b16fda376678ef15aed8b9"
+    },
+    {
+        "name":  "calorine",
+        "version":  "4.1",
+        "url":  "https://files.pythonhosted.org/packages/c6/6d/e69fdc8cd3a87cd6d7edc8dc92fec8bb74ca72459e94822885a2ff55df6d/calorine-4.1.tar.gz",
+        "sha256":  "28aa2d5cf18c88b8d5ca7bc26b27c600b7837dd8f03a151418d6c27b82ff6254"
+    },
+    {
+        "name":  "dpdispatcher",
+        "version":  "1.1.0",
+        "url":  "https://files.pythonhosted.org/packages/2c/48/c2d6a7c2e399f40a5e2fa53943636bbfee3fe4b94778098f193cd1878c65/dpdispatcher-1.1.0.tar.gz",
+        "sha256":  "5953d6846c52c3b72ab3cc1e6db46cde9547c5ce4769590cdfa7ff2de11dc48a"
+    }
+]

@@ -1,0 +1,21 @@
+--- a/mattersim/forcefield/potential.py
++++ b/mattersim/forcefield/potential.py
+@@ -567,6 +567,7 @@
+             self.model.eval()
+ 
+         for batch_idx, graph_batch in enumerate(dataloader):
++            graph_batch = graph_batch.to(self.device)
+             if self.model_name == "graphormer" or self.model_name == "geomformer":
+                 raise NotImplementedError
+             else:
+--- a/mattersim/datasets/utils/converter.py
++++ b/mattersim/datasets/utils/converter.py
+@@ -268,7 +268,7 @@
+                 args["forces"] = torch.FloatTensor(forces)
+             if stress is not None:
+                 args["stress"] = torch.FloatTensor(stress).unsqueeze(0)
+-            return Data(**args)
++            return M3GNetData(**args)
+ 
+         elif self.model_type == "graphormer":
+             raise NotImplementedError

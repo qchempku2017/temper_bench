@@ -1,0 +1,218 @@
+[
+  {
+    "family": "mace",
+    "variant": "MACE-MP-0 small",
+    "sha256": "2ddb079cee0e131eaaf6912ba581b394551ead283e95c99cfe78c605d10b5736",
+    "source": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model"
+  },
+  {
+    "family": "mattersim",
+    "variant": "MatterSim 1M",
+    "sha256": "28b0b0b0f13efefee06b47ea4c9105a26bd3e2c8396da193430da96b3b49a8be",
+    "source": "https://raw.githubusercontent.com/microsoft/mattersim/aedf510ec536cf24163edad4570eaceafdb7cb2b/pretrained_models/mattersim-v1.0.0-1M.pth"
+  },
+  {
+    "family": "nep89",
+    "variant": "NEP89",
+    "sha256": "75168ece02e840e4a32644f982b78d43cba697f5b64b4c8134ab66c7a8c28be1",
+    "source": "https://raw.githubusercontent.com/brucefan1983/GPUMD/a0e55bc87390b93d009da37c798616982573bab2/potentials/nep/nep89_20250409/nep89_20250409.txt"
+  },
+  {
+    "family": "sevennet",
+    "variant": "SevenNet-0 11Jul2024",
+    "sha256": "7052cb42b7b3be42b40b97fa0d21077a48c54b5548948fc4dcf346629f813c36",
+    "source": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_0__11Jul2024/checkpoint_sevennet_0.pth"
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Air-OMat24-v20260805",
+    "sha256": "7ac5fb696fc057229ceebc33f31f7a96b2f3616ac5b63a512acd1848f2d41a09",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.pt",
+    "configuration_source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.json",
+    "configuration_sha256": "0e5317895549379bcc5442560a074b11f1a0bfd65fd18d9b739eda59704f8709",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749020",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Air-OMol25-100M-v20260820",
+    "sha256": "7967e59eb0e9454f595a2116bec5daf6672b420c08c9d4d88a665ee363b9a1b6",
+    "source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Air-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Air-OMol25-100M-v20260820.json",
+    "configuration_sha256": "4fc5ca040f3c736184b04e58e5a621bedde16c8c2646eea5b5f8206e048c98c2",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749128",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Mini-OMat24-v20260805",
+    "sha256": "13edeea63448c0f8a0b38e08fd8ba196fb1e2fad5f12486b1cd23320829da268",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.pt",
+    "configuration_source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.json",
+    "configuration_sha256": "378b24017192e0f36ce0ad84a02ce679e59b61e739ef10fd7b9800623df77e8e",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749021",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Mini-OMol25-100M-v20260820",
+    "sha256": "ae8c2574df58b527f84b5eac4631bd2f5722d99dc62c2b826bea365b02df033c",
+    "source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Mini-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Mini-OMol25-100M-v20260820.json",
+    "configuration_sha256": "e4eb825b3a4c6293d37ff79aa3b3fa7083adbc2ea1ad8fef43ef79a62395e4ef",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749144",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Nano-OMat24-v20260805",
+    "sha256": "ded047546c2b44a50e2c850680d77279e2bf3e107c10f1c2fe39a5c344e693f6",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.pt",
+    "configuration_source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.json",
+    "configuration_sha256": "214559a9e0aa9feb68a279a3bdc7770f06949c368531888dda01c3f51e8ac639",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749066",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Nano-OMol25-100M-v20260820",
+    "sha256": "cf47f6e407f2c7e57408d72bc7c23f8940c9016fcd744e9dbf2c07783fff84c0",
+    "source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Nano-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Nano-OMol25-100M-v20260820.json",
+    "configuration_sha256": "4e7ceafdfa5c8ff7958fab7a2c32c5efbcf21e66d214c4193c63bcf6549dec2c",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749150",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Neo-OMat24-v20260805",
+    "sha256": "fd7f34ae28f921201e4a0328ddf56179892752084f8363e7796038201471c989",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.pt",
+    "configuration_source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.json",
+    "configuration_sha256": "3ca5ec05a3d3f626034e463f09ebf1673fe377aca40381062efb50825061409b",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749071",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Neo-OMol25-100M-v20260820",
+    "sha256": "cea42bb756ff4397005a4fe5b001069f016ed5440661a0e0fb281b2362419fb4",
+    "source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Neo-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Neo-OMol25-100M-v20260820.json",
+    "configuration_sha256": "3a1b0fcdaf5c74102077b097f2307eb54553e5a24ce179963950b75c3382b1aa",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749166",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Air-OMat24-v20260819",
+    "sha256": "ff596ce704c9b4bc7149fbb0a0f12df611924cccb045917e8abb95b6a6cd4ad8",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.pt",
+    "configuration_source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.json",
+    "configuration_sha256": "e916352fb7cc81bad5cc040e0205b093ab5cb3d9c7e3d5e11b642221e565583a",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749092",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Air-OMol25-100M-v20260820",
+    "sha256": "d669b3b2e9cf393f1c50ababc1a961da88b5cf1fe1a6d39cd913e326b89095eb",
+    "source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Air-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Air-OMol25-100M-v20260820.json",
+    "configuration_sha256": "f8cd716c8ccf895c22d54aba8ef8db18509fee38359cdf26a938feac1a8f42a5",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749177",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Mini-OMat24-v20260819",
+    "sha256": "aff75e4f94b59477f7c8ed2ca277a323b1a2d51bfcd0f92a04b7cb81dfe04c7a",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260819.pt",
+    "configuration_source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260819.json",
+    "configuration_sha256": "d0d0496e08a40f66c4b33c27ab1a6eac82ef95df5696bc477b40cbdc4c6e9093",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749100",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Mini-OMol25-100M-v20260820",
+    "sha256": "155b75a283159a2e1c30b649d7a61e465a279118f8f32d87ee5ad3efd1e1ba9b",
+    "source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Mini-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Mini-OMol25-100M-v20260820.json",
+    "configuration_sha256": "a4eb11d1a8e86d662bbeb833a1695bfc2413b15a28b21aad689864e5f053f104",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749216",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Nano-OMat24-v20260819",
+    "sha256": "f894ac16adfb7f5030d4fe4e2849db6c608f9c7074badfafb4a50c9b9afed00a",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260819.pt",
+    "configuration_source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260819.json",
+    "configuration_sha256": "7c067c0e0eab27e07f8e6a52e55c03cc4150cf461941c1639b99d9f2537f11b2",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749119",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Nano-OMol25-100M-v20260820",
+    "sha256": "22fcd55061ccdeeb80e17a8a7505098c28217dbe8ab86804596e74afcd8f0819",
+    "source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Nano-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Nano-OMol25-100M-v20260820.json",
+    "configuration_sha256": "c7a80dce023a90acdc8c37197dfce92d557a0e692a4f1239c377b85e115b0d5f",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749242",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Neo-OMat24-v20260819",
+    "sha256": "db433ef9d9297543708eb5daf49538b46c019027f4de1846f910680550b55899",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260819.pt",
+    "configuration_source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260819.json",
+    "configuration_sha256": "94ad0ae9b3e56d87ddae53a22e771dabec52625d790abbce1d901b8b72c01635",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1749123",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Neo-OMol25-100M-v20260820",
+    "sha256": "fc42df87b4c81649755e33c64d7e95bc0584a353e01c8f313742b3f73aab412c",
+    "source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Neo-OMol25-100M-v20260820.pt",
+    "configuration_source": "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Neo-OMol25-100M-v20260820.json",
+    "configuration_sha256": "fd27f64737e67f213acd7eabe9da7fa80fd21ce6542bdc4d7c7c72e45b237900",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1",
+    "validation_record": "august-results-20261029.json",
+    "validation_job_id": "1748943",
+    "validation_scope": "Native single-GPU fine-tuning, freeze, ASE energy/forces/stress and export cleanup; tiny functional test, not accuracy validation or a TEMPER JobManager round trip."
+  }
+]

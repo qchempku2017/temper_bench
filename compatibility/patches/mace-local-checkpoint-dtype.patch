@@ -1,0 +1,10 @@
+--- a/mace/cli/run_train.py
++++ b/mace/cli/run_train.py
+@@ -184,6 +184,7 @@
+             logging.info(
+                 f"Using foundation model {args.foundation_model} as initial checkpoint."
+             )
++        model_foundation = model_foundation.to(dtype=torch.get_default_dtype())
+         args.r_max = model_foundation.r_max.item()
+         foundation_model_avg_num_neighbors = model_foundation.interactions[
+             0

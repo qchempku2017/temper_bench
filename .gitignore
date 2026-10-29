@@ -15,3 +15,6 @@ __pycache__/
 
 # Default local experiment/job store (retain and back up outside Git)
 /bundles/
+
+# Owned, resumable deployment validation inputs and job history.
+/.compat-work/
