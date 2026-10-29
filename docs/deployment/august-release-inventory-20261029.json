@@ -1,0 +1,339 @@
+{
+    "checked_date":  "2026-10-29",
+    "selection":  "August version in filename; Nano, Mini, Neo or Air; matching checkpoint and JSON",
+    "selected_checkpoint_count":  16,
+    "collections":  [
+                        {
+                            "id":  417,
+                            "name":  "TMP-DPA4-OMol-ONLY-FOR-TEST",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=417\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "dpa4_omol_air_tmp.pt",
+                                                    "url":  "https://store.aissquare.com/models/ef311bf1-b99e-4bf6-9830-15b69e74982b/dpa4_omol_air_tmp.pt",
+                                                    "uploaded_utc":  "2026-06-17T15:29:36.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "dpa4_omol_neo_tmp.pt",
+                                                    "url":  "https://store.aissquare.com/models/ef311bf1-b99e-4bf6-9830-15b69e74982b/dpa4_omol_neo_tmp.pt",
+                                                    "uploaded_utc":  "2026-06-17T15:29:36.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  423,
+                            "name":  "DPA4-OMat24",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=423\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4-Air-OMat24-v20260704.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260704.pt",
+                                                    "uploaded_utc":  "2026-07-04T05:42:21.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Air-OMat24-v20260805.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.pt",
+                                                    "uploaded_utc":  "2026-08-20T08:41:36.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Air-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:56:35.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Max-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Max-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:08:01.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Mini-OMat24-v20260704.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260704.pt",
+                                                    "uploaded_utc":  "2026-07-04T05:42:19.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Mini-OMat24-v20260805.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.pt",
+                                                    "uploaded_utc":  "2026-08-20T08:28:01.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Mini-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:55:53.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Nano-OMat24-v20260704.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260704.pt",
+                                                    "uploaded_utc":  "2026-07-04T05:42:19.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Nano-OMat24-v20260805.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.pt",
+                                                    "uploaded_utc":  "2026-08-20T08:28:47.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Nano-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:56:01.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Neo-OMat24-v20260704.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260704.pt",
+                                                    "uploaded_utc":  "2026-07-04T05:42:19.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Neo-OMat24-v20260805.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.pt",
+                                                    "uploaded_utc":  "2026-08-20T08:28:03.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Neo-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:56:05.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Plus-OMat24-v20260704.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Plus-OMat24-v20260704.pt",
+                                                    "uploaded_utc":  "2026-07-04T05:42:36.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Plus-OMat24-v20260805.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Plus-OMat24-v20260805.pt",
+                                                    "uploaded_utc":  "2026-08-20T08:30:30.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Plus-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Plus-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:55:58.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Pro-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Pro-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T06:57:02.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  424,
+                            "name":  "DPA4-MatPES-v20260628",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=424\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4-Air-MatPES-v20260628.pt",
+                                                    "url":  "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Air-MatPES-v20260628.pt",
+                                                    "uploaded_utc":  "2026-06-28T04:18:52.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Mini-MatPES-v20260628.pt",
+                                                    "url":  "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Mini-MatPES-v20260628.pt",
+                                                    "uploaded_utc":  "2026-06-28T04:18:51.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4-Neo-MatPES-v20260628.pt",
+                                                    "url":  "https://store.aissquare.com/models/2eec7d44-d2ef-4abc-ac4f-d9ba49749097/DPA4-Neo-MatPES-v20260628.pt",
+                                                    "uploaded_utc":  "2026-06-28T04:18:51.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  428,
+                            "name":  "DPA4-Beta",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=428\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4-beta.pt",
+                                                    "url":  "https://store.aissquare.com/models/8e96d46a-5956-4313-8390-5b7ce34d055a/DPA4-beta.pt",
+                                                    "uploaded_utc":  "2026-07-14T09:32:13.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  433,
+                            "name":  "DPA4C-OMat24",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=433\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4C-Air-OMat24-v20260819.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.pt",
+                                                    "uploaded_utc":  "2026-08-19T08:29:47.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Air-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:14:17.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Mini-OMat24-v20260819.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260819.pt",
+                                                    "uploaded_utc":  "2026-08-19T08:29:47.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Mini-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Mini-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:14:16.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Nano-OMat24-v20260819.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260819.pt",
+                                                    "uploaded_utc":  "2026-08-19T08:29:46.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Nano-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:14:17.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Neo-OMat24-v20260819.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260819.pt",
+                                                    "uploaded_utc":  "2026-08-19T08:29:47.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Neo-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Neo-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:14:17.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Plus-OMat24-v20260819.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Plus-OMat24-v20260819.pt",
+                                                    "uploaded_utc":  "2026-08-19T08:29:51.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Plus-OMat24-v20260911.pt",
+                                                    "url":  "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Plus-OMat24-v20260911.pt",
+                                                    "uploaded_utc":  "2026-10-12T07:14:20.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  434,
+                            "name":  "DPA4-OMol25_100M",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=434\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4-Air-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Air-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:03:26.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Mini-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Mini-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:03:14.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Nano-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Nano-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:04:10.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Neo-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Neo-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:05:07.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4-Plus-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/e4ca6af0-a68c-428c-a10d-0655f16cbff3/DPA4-Plus-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:03:26.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  435,
+                            "name":  "DPA4C-OMol25_100M",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=435\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4C-Air-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Air-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:05:51.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Mini-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Mini-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:05:51.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Nano-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Nano-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:05:50.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Neo-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Neo-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:05:51.0000000+00:00",
+                                                    "selected":  true
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Plus-OMol25-100M-v20260820.pt",
+                                                    "url":  "https://store.aissquare.com/models/df4cac71-a1cd-4879-97bf-85c70d166247/DPA4C-Plus-OMol25-100M-v20260820.pt",
+                                                    "uploaded_utc":  "2026-08-20T09:09:30.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        },
+                        {
+                            "id":  438,
+                            "name":  "DPA4C-OpenLAM",
+                            "metadata_url":  "https://backend.aissquare.com/dpa/detail/models?id=438\u0026type=models",
+                            "checkpoints":  [
+                                                {
+                                                    "name":  "DPA4C-Nano-OpenLAM-v20260902.pt",
+                                                    "url":  "https://store.aissquare.com/models/c51a462a-b00c-453c-b7f3-ec50a91e91af/DPA4C-Nano-OpenLAM-v20260902.pt",
+                                                    "uploaded_utc":  "2026-09-02T06:30:38.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Neo-OpenLAM-v20260902.pt",
+                                                    "url":  "https://store.aissquare.com/models/c51a462a-b00c-453c-b7f3-ec50a91e91af/DPA4C-Neo-OpenLAM-v20260902.pt",
+                                                    "uploaded_utc":  "2026-09-02T06:30:38.0000000+00:00",
+                                                    "selected":  false
+                                                },
+                                                {
+                                                    "name":  "DPA4C-Plus-OpenLAM-v20260902.pt",
+                                                    "url":  "https://store.aissquare.com/models/c51a462a-b00c-453c-b7f3-ec50a91e91af/DPA4C-Plus-OpenLAM-v20260902.pt",
+                                                    "uploaded_utc":  "2026-09-02T06:30:39.0000000+00:00",
+                                                    "selected":  false
+                                                }
+                                            ]
+                        }
+                    ]
+}

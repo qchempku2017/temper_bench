@@ -1,0 +1,352 @@
+{
+    "date":  "2026-10-29",
+    "base_revision":  "828769a3400b054120c2448bfc3ea7017034669e",
+    "installed_temper_wheel_sha256":  "a62756210e1342d7087f88967285070e89c0e94c55bd7d5c29302c0d241bda0f",
+    "installed_temper_source_manifest":  "review-source-manifest.json",
+    "validator_sha256":  "45527798e01ac1f14ee5c6e303d727ee6e35cadca989d76d586de7cd592b4c28",
+    "cpu_regression_tests":  "63 passed: checkpoint catalog, installation-manifest selection, validator inputs/cleanup and resume-mode checks. Backend calls mocked in helper tests; 8 ASE/NumPy deprecation warnings.",
+    "array_job_id":  "1748943",
+    "max_concurrent_tasks":  2,
+    "gpu_per_task":  1,
+    "scheduler_partition_update":  "scontrol update JobId=1748943 Partition=gpu_4090,gpu_5090",
+    "matrix":  [
+                   {
+                       "array_task_id":  "1748943_0",
+                       "checkpoint":  "DPA4-Air-OMat24-v20260805.pt",
+                       "checkpoint_sha256":  "7ac5fb696fc057229ceebc33f31f7a96b2f3616ac5b63a512acd1848f2d41a09",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Air-OMat24-v20260805/result.json",
+                       "scheduler_job_id":  "1749020",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749020",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:22:56",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_1",
+                       "checkpoint":  "DPA4-Mini-OMat24-v20260805.pt",
+                       "checkpoint_sha256":  "13edeea63448c0f8a0b38e08fd8ba196fb1e2fad5f12486b1cd23320829da268",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Mini-OMat24-v20260805/result.json",
+                       "scheduler_job_id":  "1749021",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749021",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:21:51",
+                                         "node":  "wqd10nbk05g1",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_2",
+                       "checkpoint":  "DPA4-Nano-OMat24-v20260805.pt",
+                       "checkpoint_sha256":  "ded047546c2b44a50e2c850680d77279e2bf3e107c10f1c2fe39a5c344e693f6",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Nano-OMat24-v20260805/result.json",
+                       "scheduler_job_id":  "1749066",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749066",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:18:02",
+                                         "node":  "wqd10nbj04g3",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_3",
+                       "checkpoint":  "DPA4-Neo-OMat24-v20260805.pt",
+                       "checkpoint_sha256":  "fd7f34ae28f921201e4a0328ddf56179892752084f8363e7796038201471c989",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Neo-OMat24-v20260805/result.json",
+                       "scheduler_job_id":  "1749071",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749071",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:08:28",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_4",
+                       "checkpoint":  "DPA4C-Air-OMat24-v20260819.pt",
+                       "checkpoint_sha256":  "ff596ce704c9b4bc7149fbb0a0f12df611924cccb045917e8abb95b6a6cd4ad8",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Air-OMat24-v20260819/result.json",
+                       "scheduler_job_id":  "1749092",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749092",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:03:43",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_5",
+                       "checkpoint":  "DPA4C-Mini-OMat24-v20260819.pt",
+                       "checkpoint_sha256":  "aff75e4f94b59477f7c8ed2ca277a323b1a2d51bfcd0f92a04b7cb81dfe04c7a",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Mini-OMat24-v20260819/result.json",
+                       "scheduler_job_id":  "1749100",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749100",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:03:29",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_6",
+                       "checkpoint":  "DPA4C-Nano-OMat24-v20260819.pt",
+                       "checkpoint_sha256":  "f894ac16adfb7f5030d4fe4e2849db6c608f9c7074badfafb4a50c9b9afed00a",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Nano-OMat24-v20260819/result.json",
+                       "scheduler_job_id":  "1749119",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749119",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:03:24",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_7",
+                       "checkpoint":  "DPA4C-Neo-OMat24-v20260819.pt",
+                       "checkpoint_sha256":  "db433ef9d9297543708eb5daf49538b46c019027f4de1846f910680550b55899",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Neo-OMat24-v20260819/result.json",
+                       "scheduler_job_id":  "1749123",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749123",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:13:18",
+                                         "node":  "wqd10nbj03g1",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_8",
+                       "checkpoint":  "DPA4-Air-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "7967e59eb0e9454f595a2116bec5daf6672b420c08c9d4d88a665ee363b9a1b6",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Air-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749128",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749128",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:09:37",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_9",
+                       "checkpoint":  "DPA4-Mini-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "ae8c2574df58b527f84b5eac4631bd2f5722d99dc62c2b826bea365b02df033c",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Mini-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749144",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749144",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:07:49",
+                                         "node":  "wqd10nbm09g5",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_10",
+                       "checkpoint":  "DPA4-Nano-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "cf47f6e407f2c7e57408d72bc7c23f8940c9016fcd744e9dbf2c07783fff84c0",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Nano-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749150",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749150",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:08:42",
+                                         "node":  "wqd10nbj03g1",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_11",
+                       "checkpoint":  "DPA4-Neo-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "cea42bb756ff4397005a4fe5b001069f016ed5440661a0e0fb281b2362419fb4",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4-Neo-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749166",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749166",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:18:57",
+                                         "node":  "wqd10naf05g3",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=40000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 4090"
+                   },
+                   {
+                       "array_task_id":  "1748943_12",
+                       "checkpoint":  "DPA4C-Air-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "d669b3b2e9cf393f1c50ababc1a961da88b5cf1fe1a6d39cd913e326b89095eb",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Air-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749177",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749177",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:10:20",
+                                         "node":  "wqd10naf05g3",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=40000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 4090"
+                   },
+                   {
+                       "array_task_id":  "1748943_13",
+                       "checkpoint":  "DPA4C-Mini-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "155b75a283159a2e1c30b649d7a61e465a279118f8f32d87ee5ad3efd1e1ba9b",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Mini-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749216",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749216",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:16:08",
+                                         "node":  "wqd10naf02g2",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 5090"
+                   },
+                   {
+                       "array_task_id":  "1748943_14",
+                       "checkpoint":  "DPA4C-Nano-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "22fcd55061ccdeeb80e17a8a7505098c28217dbe8ab86804596e74afcd8f0819",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Nano-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1749242",
+                       "scheduler":  {
+                                         "raw_job_id":  "1749242",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:02:09",
+                                         "node":  "wqd10naf05g3",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=40000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 4090"
+                   },
+                   {
+                       "array_task_id":  "1748943_15",
+                       "checkpoint":  "DPA4C-Neo-OMol25-100M-v20260820.pt",
+                       "checkpoint_sha256":  "fc42df87b4c81649755e33c64d7e95bc0584a353e01c8f313742b3f73aab412c",
+                       "status":  "passed",
+                       "result_path":  "/data/run01/scxm254/temper-august-20261029/results/DPA4C-Neo-OMol25-100M-v20260820/result.json",
+                       "scheduler_job_id":  "1748943",
+                       "scheduler":  {
+                                         "raw_job_id":  "1748943",
+                                         "state":  "COMPLETED",
+                                         "exit_code":  "0:0",
+                                         "elapsed":  "00:02:12",
+                                         "node":  "wqd10naf05g3",
+                                         "allocated_resources":  "billing=4,cpu=4,gres/gpu=1,mem=40000M,node=1"
+                                     },
+                       "gpu":  "NVIDIA GeForce RTX 4090"
+                   }
+               ],
+    "scripts":  {
+                    "run-matrix.sh":  {
+                                          "sha256":  "43ddefd9bdd8b71041c489762b747e42a32ceac54bf20aa1032770f82372b611",
+                                          "source":  "#!/bin/bash\n#SBATCH --nodes=1\n#SBATCH --ntasks=1\n#SBATCH --cpus-per-task=4\n#SBATCH --gres=gpu:1\n#SBATCH --partition=gpu_5090\n#SBATCH --time=01:00:00\n#SBATCH --job-name=temper-august-320\n#SBATCH --array=0-15%2\n#SBATCH --output=/data/run01/scxm254/temper-august-20261029/slurm-%A_%a.out\n#SBATCH --error=/data/run01/scxm254/temper-august-20261029/slurm-%A_%a.err\nset -euo pipefail\nroot=/data/run01/scxm254/temper-august-20261029\nprefix=/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0\nsource \"$prefix/etc/profile.d/conda.sh\"\nconda activate \"$prefix\"\nunset PYTHONPATH\nexport OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MAX_JOBS=4\nexport DP_INTRA_OP_PARALLELISM_THREADS=4 DP_INTER_OP_PARALLELISM_THREADS=4\nexport PYTHONDONTWRITEBYTECODE=1\ntest -r /data/apps/cuda/12.8/lib64/stubs/libcuda.so\nexport LIBRARY_PATH=\"${LIBRARY_PATH:+$LIBRARY_PATH:}/data/apps/cuda/12.8/lib64/stubs\"\ncd \"$root\"\nexec \"$prefix/bin/python\" \"$root/run-matrix.py\"\n"
+                                      },
+                    "run-matrix.py":  {
+                                          "sha256":  "9c18842cda7199a4bacb0499951fbf0dff1d6a86f6542ea2a1c1c29b676acd5b",
+                                          "source":  "\"\"\"Run one selected checkpoint in a single-GPU Slurm array task.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport subprocess\nimport sys\n\nroot = Path(__file__).resolve().parent\nrecords = json.loads((root / \"download-hashes.json\").read_text())\ncheckpoints = [r for r in records if r[\"fileName\"].endswith(\".pt\")]\nitem = checkpoints[int(os.environ[\"SLURM_ARRAY_TASK_ID\"])]\nname = item[\"fileName\"]\nconfig_name = name[:-3] + \".json\"\nfor record in records:\n    if record[\"fileName\"] in (name, config_name):\n        path = root / \"models\" / record[\"fileName\"]\n        assert hashlib.sha256(path.read_bytes()).hexdigest() == record[\"sha256\"]\nfamily = \"dpa4c\" if name.startswith(\"DPA4C-\") else \"dpa4\"\ncommand = [sys.executable, str(root / \"validate_deepmd_release.py\"), family,\n           str(root / \"models\" / name), str(root / \"models\" / config_name),\n           str(root / \"results\" / name[:-3]), \"--timeout\", \"2400\"]\nif \"OMol\" in name:\n    command.append(\"--molecular\")\nprint(json.dumps({\"checkpoint\": name, \"command\": command}), flush=True)\nraise SystemExit(subprocess.run(command).returncode)\n"
+                                      },
+                    "submit.sh":  {
+                                      "sha256":  "8dd3b262b089045da15f9e8d5eb9181f940b1a5a8babc15dfc92b78796ce1d38",
+                                      "source":  "#!/bin/bash\nset -euo pipefail\nroot=/data/run01/scxm254/temper-august-20261029\ncd \"$root\"\nexec 9\u003esubmission.lock\nflock -n 9\nif test -e submission.started; then\n    echo \u0027Submission already attempted; reconcile the receipt and scheduler.\u0027 \u003e\u00262\n    exit 2\nfi\nsbatch --test-only run-matrix.sh \u003epreflight.stdout 2\u003epreflight.stderr\ndate -u +%FT%TZ \u003esubmission.started\nset +e\nsbatch --parsable run-matrix.sh \u003esubmission.stdout 2\u003esubmission.stderr\nstatus=$?\nprintf \u0027%s\\n\u0027 \"$status\" \u003esubmission.exit.tmp\nmv submission.exit.tmp submission.exit\ncat submission.stdout\ncat submission.stderr \u003e\u00262\nexit \"$status\"\n"
+                                  },
+                    "remove-old-deepmd.sh":  {
+                                                 "sha256":  "c5a71be9253faeec6357fff8ed6e61893d10d442b730e38a264b4fb820e722bb",
+                                                 "source":  "#!/bin/bash\n# The user requested removal of obsolete remote DeepMD environments.\nset -euo pipefail\ntask=/data/run01/scxm254/temper-august-20261029\nold=/data/run01/scxm254/deepmd-kit\nkeep=/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0\nregistry=/data/run01/scxm254/.conda/environments.txt\nexec 9\u003e\"$task/environment-removal.lock\"\nflock -n 9\ntest \"$(realpath -e -- \"$old\")\" = /data/run01/scxm254/deepmd-kit\ntest \"$(realpath -e -- \"$keep\")\" = \"$keep\"\ntest -x \"$keep/bin/python\"\ntest -f \"$old/conda-meta/history\"\nfind \"$keep\" -type l -lname \"$old/*\" -print \u003e \"$task/old-prefix-links.txt\"\ntest ! -s \"$task/old-prefix-links.txt\"\nps -u scxm254 -o pid,args= \u003e \"$task/processes-before-removal.txt\"\nif grep -F -- \"$old/\" \"$task/processes-before-removal.txt\"; then\n    echo \u0027An active process references the old environment; refusing removal.\u0027 \u003e\u00262\n    exit 1\nfi\nmkdir -p \"$task/removed-deepmd-provenance\"\ncp \"$old/conda-meta/history\" \"$task/removed-deepmd-provenance/conda-history.txt\"\nfind \"$old\" -path \u0027*/deepmd_kit-*.dist-info/METADATA\u0027 -exec \\\n    cp {} \"$task/removed-deepmd-provenance/deepmd-METADATA.txt\" \\;\ncp \"$registry\" \"$task/removed-deepmd-provenance/environments-before.txt\"\ndate -u +%FT%TZ \u003e \"$task/removal-started.txt\"\nrm -rf -- \"$old\"\ntest ! -e \"$old\"\ntemporary=$(mktemp \"${registry}.XXXXXX\")\nwhile IFS= read -r line; do\n    case \"$line\" in\n        /data/run01/scxm254/deepmd-kit|/dev/shm/scxm254_deepmd320/conda_env|/tmp/temper-offline-install.0jccYOdZ/environment)\n            ;;\n        *) printf \u0027%s\\n\u0027 \"$line\" \u003e\u003e \"$temporary\" ;;\n    esac\ndone \u003c \"$registry\"\nif ! grep -Fxq \"$keep\" \"$temporary\"; then\n    printf \u0027%s\\n\u0027 \"$keep\" \u003e\u003e \"$temporary\"\nfi\nchmod --reference=\"$registry\" \"$temporary\"\nmv -- \"$temporary\" \"$registry\"\ndate -u +%FT%TZ \u003e \"$task/removal-completed.txt\"\nprintf \u0027Removed obsolete DeepMD prefix; kept %s\\n\u0027 \"$keep\"\n"
+                                             },
+                    "validate_deepmd_release.py":  {
+                                                       "sha256":  "45527798e01ac1f14ee5c6e303d727ee6e35cadca989d76d586de7cd592b4c28",
+                                                       "source":  "\"\"\"Test a checkpoint/JSON pair with native DeepMD, independently of\nTEMPER.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nfrom copy import deepcopy\nimport hashlib\nfrom importlib.metadata import distributions, version\nimport json\nimport os\nfrom pathlib import Path\nimport platform\nimport shutil\nimport subprocess\nimport sys\nimport tempfile\nimport time\n\n\ndef _sha256(path: Path) -\u003e str:\n    with path.open(\"rb\") as stream:\n        return hashlib.file_digest(stream, \"sha256\").hexdigest()\n\n\ndef main() -\u003e None:\n    \"\"\"Validate native DeepMD training, export, and ASE inference.\n\n    Command-line arguments select dpa4 or dpa4c, the checkpoint, the\n    matching JSON, and a new output directory. All paths are resolved\n    from the current directory. Remote execution requires Slurm or PBS;\n    --local-wsl permits an explicitly requested local WSL2 test. Exactly\n    one GPU must be visible.\n\n    --molecular uses four slightly displaced neutral singlet H2 molecules\n    in a 20 angstrom periodic cell and supplies charge_spin=[0, 1] to\n    training and ASE inference. The large cell separates periodic images.\n    Otherwise the test uses periodic Cu cells. EMT labels exercise data\n    plumbing only; neither toy dataset measures scientific accuracy.\n\n    Use --resume-export after an export failure to reuse completed training\n    with the same checkpoint and configuration. Previous result metadata is\n    retained, logs are appended, and the calculation is not trained again.\n\n    Results and package versions are saved in result.json, including\n    failed stages. Successful runs remove generated data, caches and\n    model exports; failures retain their working directory for\n    diagnosis. Inputs are never modified. Energies use eV, forces\n    eV/angstrom, and ASE stress eV/angstrom^3.\n\n    Raises\n    ------\n    ValueError\n        If execution is outside an allowed GPU environment, the output\n        exists, or the supplied configuration uses a preset or lacks an\n        element map.\n    subprocess.CalledProcessError\n        If native fine-tuning or freeze fails; logs remain in the output\n        folder.\n    subprocess.TimeoutExpired\n        If training or freeze exceeds the requested per-command timeout.\n    RuntimeError\n        If GPU visibility, exported output, or finite prediction checks\n        fail.\n    OSError\n        If input, output or executable files cannot be accessed.\n    \"\"\"\n    parser = argparse.ArgumentParser(description=__doc__)\n    parser.add_argument(\"family\", choices=(\"dpa4\", \"dpa4c\"))\n    parser.add_argument(\"checkpoint\", type=Path)\n    parser.add_argument(\"configuration\", type=Path)\n    parser.add_argument(\"output\", type=Path)\n    parser.add_argument(\"--local-wsl\", action=\"store_true\")\n    parser.add_argument(\"--resume-export\", action=\"store_true\")\n    parser.add_argument(\"--molecular\", action=\"store_true\")\n    parser.add_argument(\"--timeout\", type=int, default=1200)\n    args = parser.parse_args()\n    job_id = os.environ.get(\"SLURM_JOB_ID\") or os.environ.get(\"PBS_JOBID\")\n    local_wsl = args.local_wsl and \"microsoft\" in platform.release().lower()\n    if not job_id and not local_wsl:\n        raise ValueError(\n            \"Use a scheduler GPU allocation or explicit --local-wsl.\"\n        )\n    checkpoint = args.checkpoint.resolve()\n    configuration = args.configuration.resolve()\n    output = args.output.resolve()\n    previous = None\n    if args.resume_export:\n        previous = json.loads((output / \"result.json\").read_text())\n        if (\n            previous.get(\"train\") != \"passed\"\n            or previous[\"checkpoint_sha256\"] != _sha256(checkpoint)\n            or previous[\"configuration_sha256\"] != _sha256(configuration)\n        ):\n            raise ValueError(\n                \"Resume requires the same inputs and completed training.\"\n            )\n    elif output.exists():\n        raise ValueError(\n            \"Choose a new output directory to preserve prior evidence.\"\n        )\n    source = json.loads(configuration.read_text(encoding=\"utf-8\"))\n    if \"preset\" in source[\"model\"] or not source[\"model\"].get(\"type_map\"):\n        raise ValueError(\"Use an explicit model JSON with its full type_map.\")\n    output.mkdir(parents=True, exist_ok=args.resume_export)\n    work = output / \"work\"\n    work.mkdir(exist_ok=args.resume_export)\n    cache = Path(tempfile.mkdtemp(prefix=\"temper-deepmd-\"))\n    environment = dict(os.environ)\n    for name, child in {\n        \"TRITON_CACHE_DIR\": \"triton\",\n        \"TORCHINDUCTOR_CACHE_DIR\": \"inductor\",\n        \"TORCH_EXTENSIONS_DIR\": \"extensions\",\n        \"CUDA_CACHE_PATH\": \"cuda\",\n        \"XDG_CACHE_HOME\": \"xdg\",\n    }.items():\n        environment.setdefault(name, str(cache / child))\n        os.environ.setdefault(name, environment[name])\n    environment[\"DEVICE\"] = \"cuda\"\n    os.environ[\"DEVICE\"] = \"cuda\"\n    for name in (\"OMP_NUM_THREADS\", \"MKL_NUM_THREADS\"):\n        environment.setdefault(name, \"4\")\n    result: dict[str, object] = {\n        \"family\": args.family,\n        \"job_id\": job_id,\n        \"local_wsl\": local_wsl,\n        \"checkpoint\": checkpoint.name,\n        \"checkpoint_sha256\": _sha256(checkpoint),\n        \"configuration\": configuration.name,\n        \"configuration_sha256\": _sha256(configuration),\n        \"deepmd\": version(\"deepmd-kit\"),\n        \"python\": sys.version,\n        \"prefix\": sys.prefix,\n        \"stage\": \"initialization\",\n        \"status\": \"failed\",\n        \"packages\": {d.metadata[\"Name\"]: d.version for d in distributions()},\n        \"retained_cache\": str(cache),\n        \"molecular\": args.molecular,\n        \"validator_sha256\": _sha256(Path(__file__)),\n    }\n    start = time.monotonic()\n    if previous is not None:\n        result[\"train\"] = \"passed\"\n        result[\"previous_attempt\"] = previous\n    try:\n        import numpy as np\n        import torch\n        from ase import Atoms\n        from ase.build import bulk\n        from ase.calculators.emt import EMT\n        from deepmd.calculator import DP\n\n        if not torch.cuda.is_available() or torch.cuda.device_count() != 1:\n            raise RuntimeError(\"Exactly one CUDA GPU must be visible.\")\n        result[\"gpu\"] = torch.cuda.get_device_name()\n        result[\"torch\"] = torch.__version__\n        result[\"torch_cuda\"] = torch.version.cuda\n        frames = []\n        for index in range(4):\n            if args.molecular:\n                atoms = Atoms(\n                    \"H2\", positions=[[10, 10, 10], [10.75, 10, 10]],\n                    cell=[20, 20, 20], pbc=True,\n                )\n                atoms.info[\"charge_spin\"] = np.array([0, 1])\n            else:\n                atoms = bulk(\n                    \"Cu\", \"fcc\", a=3.60 + index * 0.015, cubic=True\n                )\n            atoms.positions[0, 0] += 0.01 * (index + 1)\n            atoms.calc = EMT()\n            frames.append(atoms)\n        for name, selected in ((\"train\", frames[:2]), (\"valid\", frames[2:3])):\n            directory = work / name\n            arrays = directory / \"set.000\"\n            arrays.mkdir(parents=True, exist_ok=args.resume_export)\n            element = \"H\" if args.molecular else \"Cu\"\n            (directory / \"type_map.raw\").write_text(element + \"\\n\")\n            (directory / \"type.raw\").write_text(\"0\\n\" * len(selected[0]))\n            if args.molecular:\n                np.save(\n                    arrays / \"charge_spin.npy\",\n                    np.asarray([a.info[\"charge_spin\"] for a in selected]),\n                )\n            for label, values in {\n                \"coord\": [a.positions.reshape(-1) for a in selected],\n                \"box\": [a.cell.array.reshape(-1) for a in selected],\n                \"energy\": [a.get_potential_energy() for a in selected],\n                \"force\": [a.get_forces().reshape(-1) for a in selected],\n                \"virial\": [\n                    (-a.get_stress(voigt=False) * a.get_volume()).reshape(-1)\n                    for a in selected\n                ],\n            }.items():\n                np.save(arrays / (label + \".npy\"), np.asarray(values))\n        config = deepcopy(source)\n        config[\"training\"] = {\n            \"numb_epoch\": 1,\n            \"save_freq\": 1,\n            \"disp_freq\": 1,\n            \"seed\": 42,\n            \"training_data\": {\"systems\": [\"train\"], \"batch_size\": 1},\n            \"validation_data\": {\n                \"systems\": [\"valid\"],\n                \"batch_size\": 1,\n                \"numb_btch\": 1,\n            },\n            \"save_ckpt\": \"model.ckpt\",\n            \"save_dir\": \"checkpoints\",\n        }\n        config[\"learning_rate\"] = {\n            \"type\": \"exp\",\n            \"start_lr\": 1e-4,\n            \"stop_lr\": 1e-6,\n        }\n        if not args.resume_export:\n            (work / \"input.json\").write_text(json.dumps(config, indent=2))\n        executable = str(Path(sys.executable).with_name(\"dp\"))\n        backend = \"--pt\" if args.family == \"dpa4\" else \"--pt-expt\"\n        commands = [\n            (\n                \"train\",\n                [\n                    executable,\n                    backend,\n                    \"train\",\n                    \"input.json\",\n                    \"--finetune\",\n                    str(checkpoint),\n                    \"--use-pretrain-script\",\n                    \"-o\",\n                    \"adapted.json\",\n                ],\n            ),\n            (\n                \"freeze\",\n                [\n                    executable,\n                    backend,\n                    \"freeze\",\n                    \"-c\",\n                    \"model.ckpt.pt\",\n                    \"-o\",\n                    \"evaluation\",\n                ]\n                + (\n                    [\"--lower-kind\", \"graph\"] if args.family == \"dpa4c\" else []\n                ),\n            ),\n        ]\n        for stage, command in commands:\n            if stage == \"train\" and args.resume_export:\n                continue\n            result[\"stage\"] = stage\n            result[stage + \"_command\"] = command\n            with (output / (stage + \".log\")).open(\"a\") as log:\n                subprocess.run(\n                    command,\n                    cwd=work,\n                    env=environment,\n                    stdout=log,\n                    stderr=subprocess.STDOUT,\n                    timeout=args.timeout,\n                    check=True,\n                )\n            result[stage] = \"passed\"\n        adapted = json.loads((work / \"adapted.json\").read_text())\n        if adapted[\"model\"][\"type_map\"] != source[\"model\"][\"type_map\"]:\n            raise RuntimeError(\n                \"Fine-tuning changed the requested element order.\"\n            )\n        result[\"stage\"] = \"ASE inference\"\n        export = work / \"evaluation.pt2\"\n        frames[3].calc = DP(model=str(export))\n        energy = frames[3].get_potential_energy()\n        forces = frames[3].get_forces()\n        stress = frames[3].get_stress(voigt=False)\n        if not all(np.isfinite(v).all() for v in (energy, forces, stress)):\n            raise RuntimeError(\"Nonfinite ASE predictions.\")\n        if forces.shape != (len(frames[3]), 3) or stress.shape != (3, 3):\n            raise RuntimeError(\"Unexpected force or stress shape.\")\n        result[\"energy_eV\"] = float(energy)\n        result[\"force_shape\"] = list(forces.shape)\n        result[\"stress_shape\"] = list(stress.shape)\n        export.unlink()\n        result[\"export_cleanup\"] = (\n            \"passed\" if not export.exists() else \"failed\"\n        )\n        shutil.copyfile(work / \"input.json\", output / \"input.json\")\n        shutil.copyfile(work / \"adapted.json\", output / \"adapted.json\")\n        shutil.rmtree(work)\n        shutil.rmtree(cache)\n        result.pop(\"retained_cache\")\n        result[\"status\"] = \"passed\"\n    except Exception as error:\n        result[\"error\"] = type(error).__name__ + \": \" + str(error)\n        raise\n    finally:\n        result[\"elapsed_seconds\"] = time.monotonic() - start\n        (output / \"result.json\").write_text(json.dumps(result, indent=2))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+                                                   }
+                },
+    "environment_cleanup":  {
+                                "status":  "completed",
+                                "completed_utc":  "2026-10-29T07:00:11Z",
+                                "removed_prefix":  "/data/run01/scxm254/deepmd-kit",
+                                "removed_deepmd_version":  "3.2.1.dev41+g4e1479d8a",
+                                "kept_prefix":  "/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0",
+                                "formal_python_after_removal":  "Python 3.12.14",
+                                "stale_registrations_removed":  [
+                                                                    "/dev/shm/scxm254_deepmd320/conda_env",
+                                                                    "/tmp/temper-offline-install.0jccYOdZ/environment"
+                                                                ],
+                                "other_backend_removal":  "explicitly prohibited by user; MACE, MatterSim, SevenNet, NEP, NEP overlay and Miniconda base preserved unchanged",
+                                "provenance":  {
+                                                   "conda_history_sha256":  "8cac68a45040270b644a4d6a71e0e4cf1cea6bb0add2f0758aa05fecc548b059",
+                                                   "deepmd_metadata_sha256":  "47539f215cabdc66b65e17eceb7a75a76e2fac7e02222c530b74001ba34bf4f4",
+                                                   "prior_registry_sha256":  "dfbee380f55243939a08a13fe2e2a429c663041a6ddf839ff6409de3422f087b",
+                                                   "archive":  "removed-deepmd-provenance-20261029.tar.gz",
+                                                   "archive_sha256":  "a5be0bfb22d90da85a28bf44b29f849dddaece9777d6ce169f2d5c3049e27e57"
+                                               }
+                            },
+    "latest_scheduler_state":  {
+                                   "state":  "COMPLETED",
+                                   "running_tasks":  [
+
+                                                     ],
+                                   "remaining_pending_tasks":  0,
+                                   "first_start_scheduler_time":  "2026-10-29T15:13:18+08:00",
+                                   "actual_gpu_tests_completed":  16,
+                                   "high_priority_fallback":  "not needed; jobs started before the one-hour deadline",
+                                   "observed_partitions":  [
+                                                               "gpu_4090",
+                                                               "gpu_5090",
+                                                               "hp_4090",
+                                                               "hp_5090"
+                                                           ],
+                                   "ht_partitions_found":  [
+
+                                                           ]
+                               },
+    "subsequent_validator_change":  {
+                                        "sha256":  "dc14cdaf2d8e3a6e35d468a4df0d71ec8320b393037859e388dd3031126b167c",
+                                        "description":  "After array launch, added a resume-export guard rejecting a changed molecular flag. CPU regression tested; these fresh GPU runs never used resume-export. Exact GPU-tested source is preserved above."
+                                    },
+    "evidence_archive_sha256":  "87208f7b2b37e6f9568f6cd054adb1d1eea4ef85d22c9ed2a934b76ad89e8513"
+}

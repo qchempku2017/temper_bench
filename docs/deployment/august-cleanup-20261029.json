@@ -1,0 +1,20 @@
+{
+    "remote_status":  "completed",
+    "remote_completed_utc":  "2026-10-29T08:56:58Z",
+    "remote_path":  "/data/run01/scxm254/temper-august-20261029",
+    "remote_receipt":  "2026-10-29T08:56:58Z\r\nRemoved only /data/run01/scxm254/temper-august-20261029; formal DeepMD and all other backend environments retained.",
+    "cleanup_script":  "#!/bin/bash\nset -euo pipefail\nroot=/data/run01/scxm254/temper-august-20261029\ntest \"$(realpath -e -- \"$root\")\" = /data/run01/scxm254/temper-august-20261029\nactive=$(squeue -h -u scxm254 -o \u0027%A\u0027)\nif grep -Fxq 1748943 \u003c\u003c\u003c \"$active\"; then\n    echo \u0027The validation array is still active; refusing cleanup.\u0027 \u003e\u00262\n    exit 1\nfi\nsacct -j 1748943 -X --format=JobIDRaw,State,ExitCode -P -n |\n    awk -F\u0027|\u0027 \u0027NF {count++; if ($2 != \"COMPLETED\" || $3 != \"0:0\") bad=1} END {exit (bad || count != 16)}\u0027\nfor name in mace mattersim sevennet nep; do\n    test -x \"/data/run01/scxm254/miniconda3/envs/$name/bin/python\"\ndone\ntest -x /data/run01/scxm254/temper-compat-20261027/nep-venv/bin/python\ntest -x /data/run01/scxm254/temper-review-20261027/deepmd-3.2.0/bin/python\nrm -rf -- \"$root\"\ntest ! -e \"$root\"\ndate -u +%FT%TZ\nprintf \u0027Removed only %s; formal DeepMD and all other backend environments retained.\\n\u0027 \"$root\"\n",
+    "local_path":  "C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench\\.compat-work\\august-20261029",
+    "local_status":  "completed",
+    "preserved":  [
+                      "Formal DeepMD 3.2.0 offline environment",
+                      "MACE, MatterSim, SevenNet, NEP, NEP overlay and Miniconda base",
+                      "Concise result, source, package and scheduler evidence in docs/deployment",
+                      "Obsolete DeepMD removal provenance archive"
+                  ],
+    "post_test_audit":  "august-environment-after-20261029.json",
+    "package_versions_unchanged":  true,
+    "modified_backend_python_files":  0,
+    "unverified_backend_python_files":  0,
+    "local_completed_utc":  "2026-10-29T08:57:46.8489186Z"
+}
