@@ -1,0 +1,97 @@
+# Site-specific example. Install this TEMPER checkout and the compatibility
+# recipes first. MACE, MatterSim and SevenNet prefixes retain the audited
+# deployment patches; see audit-*.json. NEP uses the isolated calorine 4.1
+# environment, and DeepMD uses the official 3.2.0 offline installation.
+# These absolute paths belong to this account; replace them for another site.
+name: paratera
+backend: Slurm
+hostname: ssh.cn-zhongwei-1.paracloud.com
+username: scxm254@BSCC-N56R5
+port: 22
+key_filename: C:/Users/Fengyu Xie/.ssh/id_ecdsa
+known_hosts: C:/Users/Fengyu Xie/.ssh/known_hosts
+timeout: 110
+remote_root: /data/run01/scxm254/temper_jobs
+resources:
+  number_node: 1
+  tasks_per_node: 1
+  cpus_per_task: 4
+  gpu_per_node: 1
+  queue_name: gpu_4090
+  custom_flags:
+  - '#SBATCH --time=01:00:00'
+
+
+slurm_preflight: true
+environments:
+  mace:
+    conda_init: /data/run01/scxm254/miniconda3/etc/profile.d/conda.sh
+    conda_environment: /data/run01/scxm254/miniconda3/envs/mace
+    cache_root: /tmp
+    variables:
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+  mattersim:
+    conda_init: /data/run01/scxm254/miniconda3/etc/profile.d/conda.sh
+    conda_environment: /data/run01/scxm254/miniconda3/envs/mattersim
+    cache_root: /tmp
+    variables:
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+  nep89:
+    venv_path: /data/run01/scxm254/temper-compat-20261027/nep-venv
+    cache_root: /tmp
+    required_executables: [python, temper_bench, gpumd]
+    variables:
+      # The isolated Python environment inherits NEP packages from its original
+      # Conda prefix. GPUMD is an executable in that prefix, not a Python module.
+      # Keep the venv first so python and temper_bench use its calorine 4.1.
+      PATH: /data/run01/scxm254/temper-compat-20261027/nep-venv/bin:/data/run01/scxm254/miniconda3/envs/nep/bin:/usr/local/bin:/usr/bin:/bin
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+  sevennet:
+    conda_init: /data/run01/scxm254/miniconda3/etc/profile.d/conda.sh
+    conda_environment: /data/run01/scxm254/miniconda3/envs/sevennet
+    cache_root: /tmp
+    variables:
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+  dpa4:
+    conda_init: /data/run01/scxm254/temper-review-20261027/deepmd-3.2.0/etc/profile.d/conda.sh
+    conda_environment: /data/run01/scxm254/temper-review-20261027/deepmd-3.2.0
+    cache_root: /tmp
+    variables:
+      # Link-time driver stub for AOT export. Never put stubs on LD_LIBRARY_PATH.
+      LIBRARY_PATH: /data/apps/cuda/12.8/lib64/stubs
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+      DP_INTRA_OP_PARALLELISM_THREADS: '2'
+      DP_INTER_OP_PARALLELISM_THREADS: '2'
+  dpa4c:
+    conda_init: /data/run01/scxm254/temper-review-20261027/deepmd-3.2.0/etc/profile.d/conda.sh
+    conda_environment: /data/run01/scxm254/temper-review-20261027/deepmd-3.2.0
+    cache_root: /tmp
+    variables:
+      LIBRARY_PATH: /data/apps/cuda/12.8/lib64/stubs
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MAX_JOBS: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+      DP_INTRA_OP_PARALLELISM_THREADS: '2'
+      DP_INTER_OP_PARALLELISM_THREADS: '2'

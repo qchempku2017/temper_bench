@@ -1,0 +1,24 @@
+{
+    "base_revision":  "828769a3400b054120c2448bfc3ea7017034669e",
+    "source_archive_sha256":  "6484c6cecf2dee23028d0d2952d68eecec71bb81a7f91f56531fc57840a5c33b",
+    "observed_at":  "2026-10-27T16:34:06.6610878+08:00",
+    "gpu_acceptance":  "pending_scheduler_capacity",
+    "partition":  "gpu_4090",
+    "requested_gpus_per_job":  1,
+    "jobs":  {
+                 "mattersim":  "1742129",
+                 "sevennet":  "1742131",
+                 "dpa4":  "1742133",
+                 "dpa4c":  "1742135",
+                 "mace":  "1742138",
+                 "nep89":  "1742154"
+             },
+    "scheduler_state":  "PENDING",
+    "reason":  "Priority",
+    "high_priority_eligibility":  "hp_4090 rejected: account not eligible",
+    "native_windows_upload_submit_monitor":  "passed",
+    "result_download_hashes_and_cleanup":  "pending",
+    "real_pbs_validation":  "not_available",
+    "retained_local_root":  ".compat-work",
+    "retained_remote_root":  "/data/run01/scxm254/temper-compat-20261027"
+}

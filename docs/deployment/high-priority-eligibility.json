@@ -1,0 +1,9 @@
+{
+  "account_association": "scxm254||gpugpu,normal|",
+  "command": "sbatch --test-only --partition=hp_5090 --account=scxm254 --nodes=1 --ntasks=1 --cpus-per-task=4 --gres=gpu:1 --time=01:00:00 --wrap=/bin/true",
+  "exit_status": 1,
+  "stdout": "",
+  "stderr": "allocation failure: Invalid account or account/partition combination specified\n",
+  "gpu_allocated": false,
+  "decision": "Keep the recovery jobs in the authorized normal gpu_5090 partition."
+}

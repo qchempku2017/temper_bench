@@ -1,0 +1,49 @@
+--- a/calorine/calculators/gpunep.py
++++ b/calorine/calculators/gpunep.py
+@@ -76,7 +76,7 @@
+         See https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars.
+         Set to None in order to use all available GPUs. Note that GPUMD exit with an error
+         when running with more than one GPU if your system is not large enough.
+-        Default: 0
++        Default: None (inherit scheduler GPU visibility)
+ 
+ 
+     Example
+@@ -98,8 +98,7 @@
+     # MD simulations. Looks like a dictionary, but sometimes
+     # we want to repeat the same keyword.
+     base_single_point_parameters = [('dump_thermo', 1),
+-                                    ('dump_force', 1),
+-                                    ('dump_position', 1),
++                                    ('dump_xyz', (1, 'movie.xyz', 'force')),
+                                     ('velocity', 1e-24),
+                                     ('time_step', 1e-6),  # 1 zeptosecond
+                                     ('ensemble', 'nve'),
+@@ -111,7 +110,7 @@
+                  label: str = 'GPUNEP',
+                  atoms: Atoms = None,
+                  command: str = None,
+-                 gpu_identifier_index: Union[int, None] = 0
++                 gpu_identifier_index: Union[int, None] = None
+                  ):
+         if command is None:
+             command = calorine_getenv('GPUMD_COMMAND')
+@@ -308,13 +307,13 @@
+ 
+     def get_forces_from_file(self):
+         """
+-        Extract forces (in eV/A) from last snapshot in force.out
+-        """
+-        data = np.loadtxt(os.path.join(self._directory, 'force.out'))
+-        return data[-len(self.atoms):, :]
++        Extract forces (in eV/A) from the last GPUMD 5.7 extxyz snapshot
++        """
++        atoms = ase_read(os.path.join(self._directory, 'movie.xyz'), index=-1)
++        return atoms.get_forces()
+ 
+     def _read_forces(self):
+-        """Reads forces (the last snapshot in force.out) in eV/A"""
++        """Reads forces from the last movie.xyz snapshot in eV/A"""
+         self.results['forces'] = self.get_forces_from_file()
+ 
+     def get_charges_and_becs_from_file(self):

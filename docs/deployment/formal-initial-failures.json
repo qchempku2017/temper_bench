@@ -1,0 +1,21 @@
+{
+  "temper_wheel_sha256": "a62756210e1342d7087f88967285070e89c0e94c55bd7d5c29302c0d241bda0f",
+  "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installation",
+  "jobs": [
+    {"job_id": "1742856", "family": "dpa4", "training": "passed", "freeze": "failed", "scheduler_exit": "1:0", "recovery_job_id": "1742900", "recovery": "Reuse the completed trained checkpoint; rerun only export and ASE evaluation."},
+    {"job_id": "1742859", "family": "dpa4c", "training": "passed", "freeze": "failed", "scheduler_exit": "1:0", "recovery_job_id": "1742894", "recovery": "Public synchronize followed by resubmit with a corrected resource profile; full pipeline retry, preserving attempt history."}
+  ],
+  "error": "x86_64-conda-linux-gnu-ld: cannot find -lcuda: No such file or directory",
+  "cause": "The compiler's link search paths do not contain an unversioned libcuda.so. The offline installation has no CUDA driver development stub.",
+  "environment_correction": {
+    "variable": "LIBRARY_PATH",
+    "append_directory": "/data/apps/cuda/12.8/lib64/stubs",
+    "library": "/data/apps/cuda/12.8/lib64/stubs/libcuda.so",
+    "sha256": "055e044be132c1e3037739a194b137072fe6117aaeccd63eb86ffd53c20a15e8",
+    "runtime_loader": "Do not put stubs on LD_LIBRARY_PATH; execution uses the real NVIDIA driver."
+  },
+  "backend_source_patches": [],
+  "scientific_setting_changes": [],
+  "failure_cache_paths": ["/tmp/temper-release.Posy0dID", "/tmp/temper-cache.piC5KQHc"],
+  "failure_cache_policy": "TEMPER retains failure caches for diagnosis within the allocation's temporary namespace. Necessary compiler diagnostics were saved in shared job logs and summarized here. Subsequent jobs create fresh caches; they do not assume access to the previous job's /tmp. Scratch lifetime after allocation is controlled by the scheduler."
+}

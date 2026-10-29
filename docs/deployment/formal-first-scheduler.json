@@ -1,0 +1,6 @@
+{
+  "command": "sacct -j 1742856,1742859 --format=JobIDRaw,State,ExitCode,Elapsed,NodeList,AllocTRES -P -n",
+  "exit_status": 0,
+  "stdout": "1742856|FAILED|1:0|00:12:57|wqd10nbj04g5|billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1\n1742856.batch|FAILED|1:0|00:12:57|wqd10nbj04g5|cpu=4,gres/gpu=1,mem=63000M,node=1\n1742856.extern|COMPLETED|0:0|00:12:57|wqd10nbj04g5|billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1\n1742859|FAILED|1:0|00:10:09|wqd10naf02g3|billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1\n1742859.batch|FAILED|1:0|00:10:09|wqd10naf02g3|cpu=4,gres/gpu=1,mem=63000M,node=1\n1742859.extern|COMPLETED|0:0|00:10:09|wqd10naf02g3|billing=4,cpu=4,gres/gpu=1,mem=63000M,node=1\n",
+  "stderr": ""
+}

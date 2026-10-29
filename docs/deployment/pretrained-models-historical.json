@@ -1,0 +1,38 @@
+[
+  {
+    "family": "mace",
+    "variant": "MACE-MP-0 small",
+    "sha256": "2ddb079cee0e131eaaf6912ba581b394551ead283e95c99cfe78c605d10b5736",
+    "source": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model"
+  },
+  {
+    "family": "mattersim",
+    "variant": "MatterSim 1M",
+    "sha256": "28b0b0b0f13efefee06b47ea4c9105a26bd3e2c8396da193430da96b3b49a8be",
+    "source": "https://raw.githubusercontent.com/microsoft/mattersim/aedf510ec536cf24163edad4570eaceafdb7cb2b/pretrained_models/mattersim-v1.0.0-1M.pth"
+  },
+  {
+    "family": "nep89",
+    "variant": "NEP89",
+    "sha256": "75168ece02e840e4a32644f982b78d43cba697f5b64b4c8134ab66c7a8c28be1",
+    "source": "https://raw.githubusercontent.com/brucefan1983/GPUMD/a0e55bc87390b93d009da37c798616982573bab2/potentials/nep/nep89_20250409/nep89_20250409.txt"
+  },
+  {
+    "family": "sevennet",
+    "variant": "SevenNet-0 11Jul2024",
+    "sha256": "7052cb42b7b3be42b40b97fa0d21077a48c54b5548948fc4dcf346629f813c36",
+    "source": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_0__11Jul2024/checkpoint_sevennet_0.pth"
+  },
+  {
+    "family": "dpa4",
+    "variant": "DPA4-Nano-OMat24-v20260911",
+    "sha256": "8620543dbbf82f5efa602f2fdb3c291923712b92776133253866ab65f28c594e",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260911.pt"
+  },
+  {
+    "family": "dpa4c",
+    "variant": "DPA4C-Nano-OMat24-v20260911",
+    "sha256": "284c0f67a3fe3fc777a0a79a76cf4ca8c76a84682b6f489c9c3f60be6a7a8f34",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260911.pt"
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "family": "dpa4",
+  "checkpoint": {
+    "family": "dpa4",
+    "variant": "DPA4-Nano-OMat24-v20260911",
+    "sha256": "8620543dbbf82f5efa602f2fdb3c291923712b92776133253866ab65f28c594e",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260911.pt"
+  },
+  "packages": {
+    "deepmd-kit": "3.2.1.dev41+g4e1479d8a",
+    "torch": "2.11.0+cu128"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

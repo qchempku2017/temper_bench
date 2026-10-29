@@ -1,0 +1,10 @@
+{
+  "component": "GPUMD",
+  "version": "5.7",
+  "executable": "/data/run01/scxm254/miniconda3/envs/nep/bin/gpumd",
+  "sha256": "a699297e9a1a9373bd524f8c9f6b387ab01ea4c1f3baed4028363a1608f82bd6",
+  "cuda_architecture": "sm_89",
+  "cuda_runtime_path": "/data/apps/cuda/12.8/lib64",
+  "build_parallelism": 2,
+  "ldd_without_LD_LIBRARY_PATH": "no missing libraries"
+}

@@ -1,0 +1,14 @@
+{
+  "family": "sevennet",
+  "checkpoint": {
+    "family": "sevennet",
+    "variant": "SevenNet-0 11Jul2024",
+    "sha256": "7052cb42b7b3be42b40b97fa0d21077a48c54b5548948fc4dcf346629f813c36",
+    "source": "https://raw.githubusercontent.com/MDIL-SNU/SevenNet/209339d4eb4c1717f906c4cb715629159f00f88c/sevenn/pretrained_potentials/SevenNet_0__11Jul2024/checkpoint_sevennet_0.pth"
+  },
+  "packages": {
+    "sevenn": "0.13.0"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

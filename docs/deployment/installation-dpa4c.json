@@ -1,0 +1,15 @@
+{
+  "family": "dpa4c",
+  "checkpoint": {
+    "family": "dpa4c",
+    "variant": "DPA4C-Nano-OMat24-v20260911",
+    "sha256": "284c0f67a3fe3fc777a0a79a76cf4ca8c76a84682b6f489c9c3f60be6a7a8f34",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Nano-OMat24-v20260911.pt"
+  },
+  "packages": {
+    "deepmd-kit": "3.2.1.dev41+g4e1479d8a",
+    "torch": "2.11.0+cu128"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

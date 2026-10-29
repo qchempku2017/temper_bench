@@ -1,0 +1,217 @@
+{
+  "schema_version": 3,
+  "bundle_id": "cdbb17ab-c02f-58dc-832f-be7bc2b257dd",
+  "attempt_folder_name": "compatibility-smoke__20261027/toy/bundle__as_specified__copper__random__finetune__n4__repeat0__cdbb17ab-c02f-58dc-832f-be7bc2b257dd/attempt_001",
+  "resource": {
+    "backend": "Slurm",
+    "bohrium_access_key_env": "BOHRIUM_ACCESS_KEY",
+    "bohrium_machine_type": "",
+    "bohrium_platform": "ali",
+    "bohrium_project_id": null,
+    "environments": {},
+    "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+    "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+    "known_hosts": "C:\\Users\\Fengyu Xie\\.ssh\\known_hosts",
+    "name": "paratera",
+    "passphrase_env": null,
+    "password_env": null,
+    "port": 22,
+    "proxy_command": null,
+    "remote_root": "/data/run01/scxm254/temper_jobs",
+    "resolved_environment": {
+      "cache_root": "/tmp",
+      "conda_environment": "/data/run01/scxm254/miniconda3/envs/mace",
+      "conda_init": "/data/run01/scxm254/miniconda3/etc/profile.d/conda.sh",
+      "image": null,
+      "modules": [],
+      "required_executables": [
+        "python",
+        "temper_bench"
+      ],
+      "variables": {
+        "MAX_JOBS": "2",
+        "MKL_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "OPENBLAS_NUM_THREADS": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": "/data/run01/scxm254/temper-compat-20261027/src"
+      },
+      "venv_path": null
+    },
+    "resources": {
+      "cpus_per_task": 4,
+      "custom_flags": [
+        "#SBATCH --time=01:00:00"
+      ],
+      "gpu_per_node": 1,
+      "number_node": 1,
+      "queue_name": "gpu_4090",
+      "tasks_per_node": 1
+    },
+    "slurm_test_only": true,
+    "timeout": 110,
+    "username": "scxm254@BSCC-N56R5"
+  },
+  "relative_source_bundle_path": "../bundle.json",
+  "submission_status": "submitted",
+  "computation_status": "success",
+  "collection_status": "verified",
+  "cleanup_status": "complete",
+  "dispatcher": {
+    "preflight_result": {
+      "exit_status": 0,
+      "stderr": "sbatch: Job 1742137 to start at 2141-11-12T13:44:23 using 4 processors on nodes wqd10naf13g1 in partition gpu_4090\n",
+      "stdout": ""
+    },
+    "submission": {
+      "work_base": ".",
+      "_abs_work_base": "C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench",
+      "machine": {
+        "batch_type": "_ExplicitSlurm",
+        "context_type": "_VerifiedContext",
+        "local_root": "\\\\?\\C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench\\.compat-work\\round trip with spaces\\jobs\\compatibility-smoke__20261027\\toy\\bundle__as_specified__copper__random__finetune__n4__repeat0__cdbb17ab-c02f-58dc-832f-be7bc2b257dd\\attempt_001",
+        "remote_root": "/data/run01/scxm254/temper_jobs",
+        "remote_profile": {
+          "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+          "username": "scxm254@BSCC-N56R5",
+          "port": 22,
+          "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+          "tar_compress": true,
+          "passphrase": null,
+          "timeout": 10,
+          "totp_secret": null,
+          "look_for_keys": true,
+          "execute_command": null,
+          "proxy_command": null
+        },
+        "retry_count": 0,
+        "clean_asynchronously": false
+      },
+      "resources": {
+        "number_node": 1,
+        "cpu_per_node": 4,
+        "gpu_per_node": 1,
+        "queue_name": "gpu_4090",
+        "group_size": 1,
+        "custom_flags": [
+          "#SBATCH --time=01:00:00"
+        ],
+        "strategy": {
+          "if_cuda_multi_devices": false,
+          "ratio_unfinished": 0.0
+        },
+        "para_deg": 1,
+        "module_purge": false,
+        "module_unload_list": [],
+        "module_list": [],
+        "source_list": [],
+        "envs": {},
+        "prepend_script": [],
+        "append_script": [],
+        "wait_time": 0,
+        "kwargs": {}
+      },
+      "forward_common_files": [],
+      "backward_common_files": [],
+      "belonging_jobs": [
+        {
+          "4dfbffe6abe154a945af9c39a6102c41e32347e2": {
+            "job_task_list": [
+              {
+                "command": "bash temper_job.sh",
+                "task_work_path": ".",
+                "forward_files": [
+                  "bundle.json",
+                  "run.sh",
+                  "temper_job.sh",
+                  "pretrained_models/mace.model",
+                  "training_inputs/train.extxyz",
+                  "training_inputs/validation.extxyz",
+                  "testing_inputs/test_000.extxyz"
+                ],
+                "backward_files": [
+                  "run.sh",
+                  "scheduler.stderr.log",
+                  "scheduler.stdout.log",
+                  "stderr.log",
+                  "stdout.log",
+                  "temper_job.sh",
+                  "testing_inputs/test_config.json",
+                  "testing_outputs/summary.json",
+                  "testing_outputs/test_000.json",
+                  "testing_outputs/test_000.npz",
+                  "training_inputs/mace.yaml",
+                  "training_inputs/run.sh",
+                  "training_outputs/finetuned_mace.model",
+                  "training_outputs/training.log"
+                ],
+                "outlog": "stdout.log",
+                "errlog": "stderr.log"
+              }
+            ],
+            "resources": {
+              "number_node": 1,
+              "cpu_per_node": 4,
+              "gpu_per_node": 1,
+              "queue_name": "gpu_4090",
+              "group_size": 1,
+              "custom_flags": [
+                "#SBATCH --time=01:00:00"
+              ],
+              "strategy": {
+                "if_cuda_multi_devices": false,
+                "ratio_unfinished": 0.0
+              },
+              "para_deg": 1,
+              "module_purge": false,
+              "module_unload_list": [],
+              "module_list": [],
+              "source_list": [],
+              "envs": {},
+              "prepend_script": [],
+              "append_script": [],
+              "wait_time": 0,
+              "kwargs": {}
+            },
+            "job_state": 2,
+            "job_id": "1742138",
+            "fail_count": 0
+          }
+        }
+      ]
+    },
+    "submit_result": {
+      "exit_status": 0,
+      "stderr": "",
+      "stdout": "1742138\n"
+    },
+    "token": "0af4ec0089fe4ceab37e1f0678e6e6bd"
+  },
+  "downloaded_file_hashes": {
+    "run.sh": "dbdba8ac776641145c295e7046b399e518cbc9ac31c9a412704774ca8bd26a3c",
+    "scheduler.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scheduler.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "e882a784b9517d9d6e17e81e0664ebea910155dcb338b024bd1aa57cebeb9092",
+    "stdout.log": "5ae8c66078731d50f5db69ef99c08be5b07433d6549433b8a1aa3d296b5e0e60",
+    "temper_job.sh": "c032c56715434a272d829f35c58d04c12538c7cb8ccd3515632a65b6d5c1c3f7",
+    "testing_inputs/test_config.json": "909111ff3851da87642b297197f60c70855520411cd5ee9a6948a5b9dd41c653",
+    "testing_outputs/summary.json": "dfbef3fabe2a2919a8f2a34b4d0ccd772926107513259ae34f20631e7eeba323",
+    "testing_outputs/test_000.json": "89f6af90eaeb82c0007c895af07102e232988157314490a5a280446e6bddc8c6",
+    "testing_outputs/test_000.npz": "981bd510dc81af553275e4d2cd4b05c52093cfae3d5d7a479e67241e33207e6d",
+    "training_inputs/mace.yaml": "104d5b1a9d497635e37481517e10b74d10931cc01c7383a969cbedf9908c56dd",
+    "training_inputs/run.sh": "afc5a904ef79dab95c4c81155d46dfc55fce281d563fd33d7c9e5829392cc86f",
+    "training_outputs/finetuned_mace.model": "a6b5a51f9785070d591a02682aeb77652aa363e04918b6df7f617766e4e2c2fd",
+    "training_outputs/training.log": "017396529e3d1448b69693f45309e765b975a3605c97bc041f88b395366a0c49"
+  },
+  "cancel_requested": false,
+  "created_at": "2026-10-27T07:53:27.208372+00:00",
+  "updated_at": "2026-10-27T11:45:43.760867+00:00",
+  "checked_at": "2026-10-27T11:45:22.857341+00:00",
+  "error": null,
+  "observation": {
+    "scheduler": "Slurm",
+    "states": [
+      "RUNNING"
+    ]
+  }
+}

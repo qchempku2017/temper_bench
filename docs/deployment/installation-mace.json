@@ -1,0 +1,17 @@
+{
+  "family": "mace",
+  "checkpoint": {
+    "family": "mace",
+    "variant": "MACE-MP-0 small",
+    "sha256": "2ddb079cee0e131eaaf6912ba581b394551ead283e95c99cfe78c605d10b5736",
+    "source": "https://github.com/ACEsuit/mace-foundations/releases/download/mace_mp_0/2023-12-10-mace-128-L0_energy_epoch-249.model"
+  },
+  "packages": {
+    "mace-torch": "0.3.16",
+    "e3nn": "0.4.4"
+  },
+  "verified_patch_files": {
+    "mace/cli/run_train.py": "3e68b5b9dc6a24121549d1af563d28d29149890ba3eaf1d3437fa2ca86fb1558"
+  },
+  "gpu_functional_test": "not performed"
+}

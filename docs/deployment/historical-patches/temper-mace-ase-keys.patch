@@ -1,0 +1,28 @@
+diff --git a/src/temper/mlff/pipeline/training_adapters/mace.py b/src/temper/mlff/pipeline/training_adapters/mace.py
+index 34ec276..168872f 100644
+--- a/src/temper/mlff/pipeline/training_adapters/mace.py
++++ b/src/temper/mlff/pipeline/training_adapters/mace.py
+@@ -26,6 +26,9 @@ class MACEAdapter(BaseMLFFAdapter):
+     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
+         """Return native YAML with bundle paths and dataset-dependent stress."""
+         config = dict(self.spec.training_parameters or {})
++        config.setdefault("energy_key", "energy")
++        config.setdefault("forces_key", "forces")
++        config.setdefault("stress_key", "stress")
+         # MACE otherwise reloads the latest *best* checkpoint before export.
+         # Save every evaluated epoch and disable early termination/averaging.
+         config.update(save_all_checkpoints=True, eval_interval=1,
+diff --git a/src/temper/mlff/spec_builders/mace.py b/src/temper/mlff/spec_builders/mace.py
+index 427743d..b40c45e 100644
+--- a/src/temper/mlff/spec_builders/mace.py
++++ b/src/temper/mlff/spec_builders/mace.py
+@@ -13,6 +13,9 @@ class MACESpecBuilder(BaseSpecBuilder):
+     epoch_key = "max_num_epochs"
+     patience_key = "patience"
+     training_defaults = {
++        "energy_key": "energy",
++        "forces_key": "forces",
++        "stress_key": "stress",
+         "multiheads_finetuning": False,
+         "energy_weight": 10.0,
+         "forces_weight": 10.0,

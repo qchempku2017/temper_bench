@@ -1,0 +1,220 @@
+{
+  "schema_version": 3,
+  "bundle_id": "3d0db60d-99f2-5bfc-94c9-dc09d642fed2",
+  "attempt_folder_name": "compatibility-smoke__20261027/toy/bundle__as_specified__copper__random__finetune__n4__repeat0__3d0db60d-99f2-5bfc-94c9-dc09d642fed2/attempt_002",
+  "resource": {
+    "backend": "Slurm",
+    "bohrium_access_key_env": "BOHRIUM_ACCESS_KEY",
+    "bohrium_machine_type": "",
+    "bohrium_platform": "ali",
+    "bohrium_project_id": null,
+    "environments": {},
+    "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+    "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+    "known_hosts": "C:\\Users\\Fengyu Xie\\.ssh\\known_hosts",
+    "name": "paratera-deepmd-formal",
+    "passphrase_env": null,
+    "password_env": null,
+    "port": 22,
+    "proxy_command": null,
+    "remote_root": "/data/run01/scxm254/temper_jobs",
+    "resolved_environment": {
+      "cache_root": "/tmp",
+      "check_dependencies": true,
+      "conda_environment": "/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0",
+      "conda_init": "/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0/etc/profile.d/conda.sh",
+      "image": null,
+      "modules": [],
+      "required_executables": [
+        "python",
+        "dp",
+        "temper_bench"
+      ],
+      "variables": {
+        "DP_INTER_OP_PARALLELISM_THREADS": "4",
+        "DP_INTRA_OP_PARALLELISM_THREADS": "4",
+        "LIBRARY_PATH": "/data/apps/cuda/12.8/lib64/stubs",
+        "MAX_JOBS": "4",
+        "MKL_NUM_THREADS": "4",
+        "OMP_NUM_THREADS": "4",
+        "OPENBLAS_NUM_THREADS": "4",
+        "PYTHONPATH": ""
+      },
+      "venv_path": null
+    },
+    "resources": {
+      "cpus_per_task": 4,
+      "custom_flags": [
+        "#SBATCH --time=01:00:00"
+      ],
+      "gpu_per_node": 1,
+      "number_node": 1,
+      "queue_name": "gpu_5090",
+      "tasks_per_node": 1
+    },
+    "slurm_preflight": true,
+    "timeout": 110,
+    "username": "scxm254@BSCC-N56R5"
+  },
+  "relative_source_bundle_path": "../bundle.json",
+  "submission_status": "submitted",
+  "computation_status": "success",
+  "collection_status": "verified",
+  "cleanup_status": "complete",
+  "dispatcher": {
+    "preflight_result": {
+      "exit_status": 0,
+      "stderr": "sbatch: Job 1742893 to start at 2092-07-24T16:20:10 using 4 processors on nodes wqd10naf02g3 in partition gpu_5090\n",
+      "stdout": ""
+    },
+    "submission": {
+      "work_base": ".",
+      "_abs_work_base": "C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench",
+      "machine": {
+        "batch_type": "_ExplicitSlurm",
+        "context_type": "_VerifiedContext",
+        "local_root": "\\\\?\\C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench\\.compat-work\\formal release round trip\\jobs\\compatibility-smoke__20261027\\toy\\bundle__as_specified__copper__random__finetune__n4__repeat0__3d0db60d-99f2-5bfc-94c9-dc09d642fed2\\attempt_002",
+        "remote_root": "/data/run01/scxm254/temper_jobs",
+        "remote_profile": {
+          "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+          "username": "scxm254@BSCC-N56R5",
+          "port": 22,
+          "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+          "tar_compress": true,
+          "passphrase": null,
+          "timeout": 10,
+          "totp_secret": null,
+          "look_for_keys": true,
+          "execute_command": null,
+          "proxy_command": null
+        },
+        "retry_count": 0,
+        "clean_asynchronously": false
+      },
+      "resources": {
+        "number_node": 1,
+        "cpu_per_node": 4,
+        "gpu_per_node": 1,
+        "queue_name": "gpu_5090",
+        "group_size": 1,
+        "custom_flags": [
+          "#SBATCH --time=01:00:00"
+        ],
+        "strategy": {
+          "if_cuda_multi_devices": false,
+          "ratio_unfinished": 0.0
+        },
+        "para_deg": 1,
+        "module_purge": false,
+        "module_unload_list": [],
+        "module_list": [],
+        "source_list": [],
+        "envs": {},
+        "prepend_script": [],
+        "append_script": [],
+        "wait_time": 0,
+        "kwargs": {}
+      },
+      "forward_common_files": [],
+      "backward_common_files": [],
+      "belonging_jobs": [
+        {
+          "9834e86cdc0e22c7373d3e5cab6eea0e3063ec6b": {
+            "job_task_list": [
+              {
+                "command": "bash temper_job.sh",
+                "task_work_path": ".",
+                "forward_files": [
+                  "bundle.json",
+                  "run.sh",
+                  "temper_job.sh",
+                  "pretrained_models/dpa4c.pt",
+                  "training_inputs/train.extxyz",
+                  "training_inputs/validation.extxyz",
+                  "testing_inputs/test_000.extxyz"
+                ],
+                "backward_files": [
+                  "run.sh",
+                  "scheduler.stderr.log",
+                  "scheduler.stdout.log",
+                  "stderr.log",
+                  "stdout.log",
+                  "temper_job.sh",
+                  "testing_inputs/test_config.json",
+                  "testing_outputs/summary.json",
+                  "testing_outputs/test_000.json",
+                  "testing_outputs/test_000.npz",
+                  "training_inputs/input.json",
+                  "training_inputs/run.sh",
+                  "training_outputs/lcurve.out",
+                  "training_outputs/model.ckpt.pt",
+                  "training_outputs/train_adapted.json",
+                  "training_outputs/training.log"
+                ],
+                "outlog": "stdout.log",
+                "errlog": "stderr.log"
+              }
+            ],
+            "resources": {
+              "number_node": 1,
+              "cpu_per_node": 4,
+              "gpu_per_node": 1,
+              "queue_name": "gpu_5090",
+              "group_size": 1,
+              "custom_flags": [
+                "#SBATCH --time=01:00:00"
+              ],
+              "strategy": {
+                "if_cuda_multi_devices": false,
+                "ratio_unfinished": 0.0
+              },
+              "para_deg": 1,
+              "module_purge": false,
+              "module_unload_list": [],
+              "module_list": [],
+              "source_list": [],
+              "envs": {},
+              "prepend_script": [],
+              "append_script": [],
+              "wait_time": 0,
+              "kwargs": {}
+            },
+            "job_state": 2,
+            "job_id": "1742894",
+            "fail_count": 0
+          }
+        }
+      ]
+    },
+    "submit_result": {
+      "exit_status": 0,
+      "stderr": "",
+      "stdout": "1742894\n"
+    },
+    "token": "87d8ee8da15544d0a985069c84de50bb"
+  },
+  "downloaded_file_hashes": {
+    "run.sh": "dbdba8ac776641145c295e7046b399e518cbc9ac31c9a412704774ca8bd26a3c",
+    "scheduler.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scheduler.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "604a044608db43614bbcbaf3ff7e24bf493ea13913015ddaee5468e24902ce9e",
+    "stdout.log": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+    "temper_job.sh": "391fd0ec2ed821ddc5017954824ad48af9aa5352bd9d257a875284ecc2fac29b",
+    "testing_inputs/test_config.json": "463e94047384de17751a3087c9cd5087602426ea53d6b847f0810d83faf585e1",
+    "testing_outputs/summary.json": "6efeb84b90b0b373699fa16a71366cc0e36a95de2cfa1e7a2ea89f8069aabbcb",
+    "testing_outputs/test_000.json": "3feedf87862f03c8ecc431c1a9817da28c22d3fcf70bbcb4aa191a0d2ccffc6b",
+    "testing_outputs/test_000.npz": "ae3d74f201dc1d28d9868bedd8287c335aa041be1d86edff54e143af24fd9226",
+    "training_inputs/input.json": "e769c83fe926ffdfd4c0bf3258e13c625beb2e768ed141fda45dae6f9d2015bc",
+    "training_inputs/run.sh": "511b2132f0fddc65aa0bc1ecee0b6eb8a12bcb3a559f790d9e9ab83a23a30d70",
+    "training_outputs/lcurve.out": "82c626c8a84dc22c886393b94fc92cde0a64f1bd05834039ddc0e9c667c1d492",
+    "training_outputs/model.ckpt.pt": "7f65a5d3a1807fb309c9027400b3668cc0538db489a55c8185ba4ee9a9fbdd83",
+    "training_outputs/train_adapted.json": "67bb68d61254b7d7f29e21ddcbc4fb050048574481885bfbd9214309f47a1135",
+    "training_outputs/training.log": "b9e8ed3010da1ccc748e401e8d318a0ecde0f55e069f59c464ccb648344a3d44"
+  },
+  "cancel_requested": false,
+  "created_at": "2026-10-27T14:07:29.074679+00:00",
+  "updated_at": "2026-10-27T14:36:26.610754+00:00",
+  "checked_at": "2026-10-27T14:33:13.845872+00:00",
+  "error": null,
+  "observation": {}
+}

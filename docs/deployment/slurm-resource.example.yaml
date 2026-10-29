@@ -1,0 +1,28 @@
+# Replace endpoint, authentication paths, shared storage and environment prefixes.
+name: single-gpu-cluster
+backend: Slurm
+hostname: cluster.example.org
+username: scientist
+key_filename: ~/.ssh/id_ecdsa
+known_hosts: ~/.ssh/known_hosts
+remote_root: /shared/scientist/temper_jobs
+slurm_preflight: true
+resources:
+  number_node: 1
+  tasks_per_node: 1
+  cpus_per_task: 4
+  gpu_per_node: 1
+  queue_name: gpu
+  custom_flags:
+    - '#SBATCH --time=01:00:00'
+# No memory request: site defaults apply. Add a site-valid flag if needed.
+environments:
+  mace:
+    conda_init: /shared/scientist/miniconda3/etc/profile.d/conda.sh
+    conda_environment: /shared/scientist/miniconda3/envs/mace
+    cache_root: /tmp
+    required_executables: [python, mace_run_train]
+    check_dependencies: true
+    variables:
+      OMP_NUM_THREADS: '4'
+      MAX_JOBS: '2'

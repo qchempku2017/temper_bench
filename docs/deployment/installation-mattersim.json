@@ -1,0 +1,17 @@
+{
+  "family": "mattersim",
+  "checkpoint": {
+    "family": "mattersim",
+    "variant": "MatterSim 1M",
+    "sha256": "28b0b0b0f13efefee06b47ea4c9105a26bd3e2c8396da193430da96b3b49a8be",
+    "source": "https://raw.githubusercontent.com/microsoft/mattersim/aedf510ec536cf24163edad4570eaceafdb7cb2b/pretrained_models/mattersim-v1.0.0-1M.pth"
+  },
+  "packages": {
+    "mattersim": "1.2.5"
+  },
+  "verified_patch_files": {
+    "mattersim/forcefield/potential.py": "3ac98700b435358d4b8c3ed6251b1fff660d3e4ee36b8c1cc78d5645539ea281",
+    "mattersim/datasets/utils/converter.py": "cf89acf53614d266bf1693bc07d505cd206f58a241894e6b5adaf6a89b15240a"
+  },
+  "gpu_functional_test": "not performed"
+}

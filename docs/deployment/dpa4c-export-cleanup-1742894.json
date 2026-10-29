@@ -1,0 +1,9 @@
+{
+  "job_id": "1742894",
+  "remote_attempt": "/data/run01/scxm254/temper_jobs/temper_87d8ee8da15544d0a985069c84de50bb",
+  "command": "test -s /data/run01/scxm254/temper_jobs/temper_87d8ee8da15544d0a985069c84de50bb/training_outputs/model.ckpt.pt && test ! -e /data/run01/scxm254/temper_jobs/temper_87d8ee8da15544d0a985069c84de50bb/training_outputs/evaluation.pt2",
+  "exit_status": 0,
+  "stdout": "",
+  "stderr": "",
+  "export_cleanup": "passed"
+}

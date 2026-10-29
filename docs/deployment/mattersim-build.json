@@ -1,0 +1,10 @@
+{
+  "name": "mattersim",
+  "version": "1.2.5",
+  "url": "https://files.pythonhosted.org/packages/6b/8f/f69685c2f7574e7942bc02cb592be0fc46d03d55339467aff2214af19365/mattersim-1.2.5.tar.gz",
+  "sha256": "2691b8376690b80947f93dc3f683985b2ec44aa9a0b16fda376678ef15aed8b9",
+  "patched_version": "1.2.5+temper.1",
+  "patch_sha256": "e47a9636a4d93571f069c3ed143ed04f2fbeea70085946cf37f79c65185fbf50",
+  "wheel_sha256": "df4159d82df4ca245432401bcc56b4b503cda734bfac02ee02e2c46f91595535",
+  "wheel": "mattersim-1.2.5+temper.1-cp312-cp312-linux_x86_64.whl"
+}

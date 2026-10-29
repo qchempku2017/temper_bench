@@ -1,0 +1,15 @@
+{
+  "family": "nep89",
+  "checkpoint": {
+    "family": "nep89",
+    "variant": "NEP89",
+    "sha256": "75168ece02e840e4a32644f982b78d43cba697f5b64b4c8134ab66c7a8c28be1",
+    "source": "https://raw.githubusercontent.com/brucefan1983/GPUMD/a0e55bc87390b93d009da37c798616982573bab2/potentials/nep/nep89_20250409/nep89_20250409.txt"
+  },
+  "packages": {
+    "torchnep": "1.0.2",
+    "calorine": "4.1"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

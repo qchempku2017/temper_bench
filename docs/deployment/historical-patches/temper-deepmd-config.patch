@@ -1,0 +1,54 @@
+diff --git a/src/temper/mlff/pipeline/training_adapters/deepmd.py b/src/temper/mlff/pipeline/training_adapters/deepmd.py
+index f695513..ef11693 100644
+--- a/src/temper/mlff/pipeline/training_adapters/deepmd.py
++++ b/src/temper/mlff/pipeline/training_adapters/deepmd.py
+@@ -15,6 +15,7 @@ from ase.data import chemical_symbols
+ 
+ class _DeepMDAdapter(BaseMLFFAdapter):
+     backend_flag: str
++    model_type = "standard"
+     freeze_options: tuple[str, ...] = ()
+     evaluation_model_filename = "evaluation.pt2"
+     training_output_filenames = {
+@@ -34,13 +35,15 @@ class _DeepMDAdapter(BaseMLFFAdapter):
+         training = deepcopy(self.spec.training_parameters)
+         assert "loss" in training and "learning_rate" in training
+         config = {
+-            "model": {"type_map": chemical_symbols[1:]},
++            "model": {"type": self.model_type, "type_map": chemical_symbols[1:]},
+             "loss": training.pop("loss"),
+             "learning_rate": training.pop("learning_rate"),
+         }
+         if not training_stress:
+             config["loss"]["start_pref_v"] = 0.0
+             config["loss"]["limit_pref_v"] = 0.0
++        if "optimizer" in training:
++            config["optimizer"] = training.pop("optimizer")
+         training["training_data"]["systems"] = [
+             self.input_path("converted_train")
+         ]
+@@ -67,6 +70,16 @@ class _DeepMDAdapter(BaseMLFFAdapter):
+         """Convert packaged train/validation data before native training starts."""
+         from temper.mlff.pipeline.data_preparation.deepmd import prepare_dataset
+ 
++        # Normalize legacy submitted configs without changing optimizer settings.
++        config_path = self.root / self.input_path("config")
++        config = json.loads(config_path.read_text())
++        config["model"].setdefault("type", self.model_type)
++        legacy_optimizer = config.get("training", {}).pop("optimizer", None)
++        if legacy_optimizer is not None:
++            if "optimizer" in config and config["optimizer"] != legacy_optimizer:
++                raise ValueError("Conflicting DeepMD optimizer settings")
++            config["optimizer"] = legacy_optimizer
++        config_path.write_text(json.dumps(config, indent=2) + "\n")
+         for name in ("train", "validation"):
+             assert self.files is not None
+             if name in self.files.training_input_files:
+@@ -161,6 +174,7 @@ class DPA4Adapter(_DeepMDAdapter):
+     """Prepare DPA-4 train-and-test bundles."""
+ 
+     backend_flag = "--pt"
++    model_type = "dpa4"
+     pretrained_model_filename = "dpa4.pt"
+ 
+ 

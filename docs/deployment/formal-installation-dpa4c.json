@@ -1,0 +1,21 @@
+{
+  "family": "dpa4c",
+  "checkpoint": {
+    "family": "dpa4c",
+    "variant": "DPA4C-Air-OMat24-v20260819",
+    "sha256": "ff596ce704c9b4bc7149fbb0a0f12df611924cccb045917e8abb95b6a6cd4ad8",
+    "source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.pt",
+    "configuration_source": "https://store.aissquare.com/models/220858e4-a519-47f5-b167-756b0f4d91f2/DPA4C-Air-OMat24-v20260819.json",
+    "configuration_sha256": "e916352fb7cc81bad5cc040e0205b093ab5cb3d9c7e3d5e11b642221e565583a",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1"
+  },
+  "configuration_sha256": "e916352fb7cc81bad5cc040e0205b093ab5cb3d9c7e3d5e11b642221e565583a",
+  "packages": {
+    "deepmd-kit": "3.2.0",
+    "torch": "2.12.0",
+    "vesin": "0.6.1",
+    "vesin-torch": "0.6.1"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

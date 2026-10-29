@@ -1,0 +1,21 @@
+{
+  "family": "dpa4",
+  "checkpoint": {
+    "family": "dpa4",
+    "variant": "DPA4-Nano-OMat24-v20260805",
+    "sha256": "ded047546c2b44a50e2c850680d77279e2bf3e107c10f1c2fe39a5c344e693f6",
+    "source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.pt",
+    "configuration_source": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Nano-OMat24-v20260805.json",
+    "configuration_sha256": "214559a9e0aa9feb68a279a3bdc7770f06949c368531888dda01c3f51e8ac639",
+    "backend": "Official DeepMD 3.2.0 CUDA 12.9 offline installer; torch 2.12.0; bundled vesin 0.6.1; vesin-torch 0.6.1"
+  },
+  "configuration_sha256": "214559a9e0aa9feb68a279a3bdc7770f06949c368531888dda01c3f51e8ac639",
+  "packages": {
+    "deepmd-kit": "3.2.0",
+    "torch": "2.12.0",
+    "vesin": "0.6.1",
+    "vesin-torch": "0.6.1"
+  },
+  "verified_patch_files": {},
+  "gpu_functional_test": "not performed"
+}

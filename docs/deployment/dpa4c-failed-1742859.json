@@ -1,0 +1,220 @@
+{
+  "schema_version": 3,
+  "bundle_id": "3d0db60d-99f2-5bfc-94c9-dc09d642fed2",
+  "attempt_folder_name": "compatibility-smoke__20261027/toy/bundle__as_specified__copper__random__finetune__n4__repeat0__3d0db60d-99f2-5bfc-94c9-dc09d642fed2/attempt_001",
+  "resource": {
+    "backend": "Slurm",
+    "bohrium_access_key_env": "BOHRIUM_ACCESS_KEY",
+    "bohrium_machine_type": "",
+    "bohrium_platform": "ali",
+    "bohrium_project_id": null,
+    "environments": {},
+    "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+    "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+    "known_hosts": "C:\\Users\\Fengyu Xie\\.ssh\\known_hosts",
+    "name": "paratera-deepmd-formal",
+    "passphrase_env": null,
+    "password_env": null,
+    "port": 22,
+    "proxy_command": null,
+    "remote_root": "/data/run01/scxm254/temper_jobs",
+    "resolved_environment": {
+      "cache_root": "/tmp",
+      "check_dependencies": true,
+      "conda_environment": "/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0",
+      "conda_init": "/data/run01/scxm254/temper-review-20261027/deepmd-3.2.0/etc/profile.d/conda.sh",
+      "image": null,
+      "modules": [],
+      "required_executables": [
+        "python",
+        "dp",
+        "temper_bench"
+      ],
+      "variables": {
+        "DP_INTER_OP_PARALLELISM_THREADS": "4",
+        "DP_INTRA_OP_PARALLELISM_THREADS": "4",
+        "MAX_JOBS": "4",
+        "MKL_NUM_THREADS": "4",
+        "OMP_NUM_THREADS": "4",
+        "OPENBLAS_NUM_THREADS": "4",
+        "PYTHONPATH": ""
+      },
+      "venv_path": null
+    },
+    "resources": {
+      "cpus_per_task": 4,
+      "custom_flags": [
+        "#SBATCH --time=01:00:00"
+      ],
+      "gpu_per_node": 1,
+      "number_node": 1,
+      "queue_name": "gpu_5090",
+      "tasks_per_node": 1
+    },
+    "slurm_preflight": true,
+    "timeout": 110,
+    "username": "scxm254@BSCC-N56R5"
+  },
+  "relative_source_bundle_path": "../bundle.json",
+  "submission_status": "submitted",
+  "computation_status": "failed",
+  "collection_status": "verified",
+  "cleanup_status": "complete",
+  "dispatcher": {
+    "preflight_result": {
+      "exit_status": 0,
+      "stderr": "sbatch: Job 1742858 to start at 2094-06-30T19:57:30 using 4 processors on nodes wqd10nbj04g5 in partition gpu_5090\n",
+      "stdout": ""
+    },
+    "submission": {
+      "_abs_work_base": "C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench",
+      "backward_common_files": [],
+      "belonging_jobs": [
+        {
+          "9834e86cdc0e22c7373d3e5cab6eea0e3063ec6b": {
+            "fail_count": 0,
+            "job_id": "1742859",
+            "job_state": 2,
+            "job_task_list": [
+              {
+                "backward_files": [
+                  "run.sh",
+                  "scheduler.stderr.log",
+                  "scheduler.stdout.log",
+                  "stderr.log",
+                  "stdout.log",
+                  "temper_job.sh",
+                  "testing_inputs/test_config.json",
+                  "testing_outputs/summary.json",
+                  "testing_outputs/test_000.json",
+                  "testing_outputs/test_000.npz",
+                  "training_inputs/input.json",
+                  "training_inputs/run.sh",
+                  "training_outputs/lcurve.out",
+                  "training_outputs/model.ckpt.pt",
+                  "training_outputs/train_adapted.json",
+                  "training_outputs/training.log"
+                ],
+                "command": "bash temper_job.sh",
+                "errlog": "stderr.log",
+                "forward_files": [
+                  "bundle.json",
+                  "run.sh",
+                  "temper_job.sh",
+                  "pretrained_models/dpa4c.pt",
+                  "training_inputs/train.extxyz",
+                  "training_inputs/validation.extxyz",
+                  "testing_inputs/test_000.extxyz"
+                ],
+                "outlog": "stdout.log",
+                "task_work_path": "."
+              }
+            ],
+            "resources": {
+              "append_script": [],
+              "cpu_per_node": 4,
+              "custom_flags": [
+                "#SBATCH --time=01:00:00"
+              ],
+              "envs": {},
+              "gpu_per_node": 1,
+              "group_size": 1,
+              "kwargs": {},
+              "module_list": [],
+              "module_purge": false,
+              "module_unload_list": [],
+              "number_node": 1,
+              "para_deg": 1,
+              "prepend_script": [],
+              "queue_name": "gpu_5090",
+              "source_list": [],
+              "strategy": {
+                "if_cuda_multi_devices": false,
+                "ratio_unfinished": 0.0
+              },
+              "wait_time": 0
+            }
+          }
+        }
+      ],
+      "forward_common_files": [],
+      "machine": {
+        "batch_type": "_ExplicitSlurm",
+        "clean_asynchronously": false,
+        "context_type": "_VerifiedContext",
+        "local_root": "\\\\?\\C:\\Users\\Fengyu Xie\\PycharmProjects\\temper_bench\\.compat-work\\formal release round trip\\jobs\\compatibility-smoke__20261027\\toy\\bundle__as_specified__copper__random__finetune__n4__repeat0__3d0db60d-99f2-5bfc-94c9-dc09d642fed2\\attempt_001",
+        "remote_profile": {
+          "execute_command": null,
+          "hostname": "ssh.cn-zhongwei-1.paracloud.com",
+          "key_filename": "C:\\Users\\Fengyu Xie\\.ssh\\id_ecdsa",
+          "look_for_keys": true,
+          "passphrase": null,
+          "port": 22,
+          "proxy_command": null,
+          "tar_compress": true,
+          "timeout": 10,
+          "totp_secret": null,
+          "username": "scxm254@BSCC-N56R5"
+        },
+        "remote_root": "/data/run01/scxm254/temper_jobs",
+        "retry_count": 0
+      },
+      "resources": {
+        "append_script": [],
+        "cpu_per_node": 4,
+        "custom_flags": [
+          "#SBATCH --time=01:00:00"
+        ],
+        "envs": {},
+        "gpu_per_node": 1,
+        "group_size": 1,
+        "kwargs": {},
+        "module_list": [],
+        "module_purge": false,
+        "module_unload_list": [],
+        "number_node": 1,
+        "para_deg": 1,
+        "prepend_script": [],
+        "queue_name": "gpu_5090",
+        "source_list": [],
+        "strategy": {
+          "if_cuda_multi_devices": false,
+          "ratio_unfinished": 0.0
+        },
+        "wait_time": 0
+      },
+      "work_base": "."
+    },
+    "submit_result": {
+      "exit_status": 0,
+      "stderr": "",
+      "stdout": "1742859\n"
+    },
+    "token": "de5df9d00f764022aa7c2ed92ac6de8e"
+  },
+  "downloaded_file_hashes": {
+    "run.sh": "dbdba8ac776641145c295e7046b399e518cbc9ac31c9a412704774ca8bd26a3c",
+    "scheduler.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scheduler.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr.log": "f912c657b5507fe307c70209e9cb3fef4a023844fd163b33b9353b8b04a0bd3c",
+    "stdout.log": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+    "temper_job.sh": "1fd68b488b26d8500933e6ec04cc04754ce10342bcd923c3807a3cfa58e41474",
+    "testing_inputs/test_config.json": "463e94047384de17751a3087c9cd5087602426ea53d6b847f0810d83faf585e1",
+    "training_inputs/input.json": "e769c83fe926ffdfd4c0bf3258e13c625beb2e768ed141fda45dae6f9d2015bc",
+    "training_inputs/run.sh": "511b2132f0fddc65aa0bc1ecee0b6eb8a12bcb3a559f790d9e9ab83a23a30d70",
+    "training_outputs/lcurve.out": "332ea912a50ef03738fa22db999be9960d4043ad94f70abc5892f960a4b414f0",
+    "training_outputs/model.ckpt.pt": "7b4d752609d8e3dfa362405d33294119fa4619d01ce3f121f64424743a930ff2",
+    "training_outputs/train_adapted.json": "67bb68d61254b7d7f29e21ddcbc4fb050048574481885bfbd9214309f47a1135",
+    "training_outputs/training.log": "d33d9597aad18a4da7f01f65f8129fe139ea63ac958b4830398f54ee01c8d319"
+  },
+  "cancel_requested": false,
+  "created_at": "2026-10-27T13:44:17.550562+00:00",
+  "updated_at": "2026-10-27T14:07:29.037684+00:00",
+  "checked_at": "2026-10-27T14:01:44.510698+00:00",
+  "error": null,
+  "observation": {
+    "exit_code": "1:0",
+    "scheduler": "Slurm",
+    "state": "FAILED"
+  }
+}

@@ -1,0 +1,19 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -12,7 +12,7 @@
+ dependencies = [
+     "ase>=3.23.0",
+     "matplotlib",
+-    "numpy<=2.3",  # Pinned for numba - used by dynasor in tests
++    "numpy==2.5.2",  # TEMPER runtime build; dynasor test suite excluded
+     "scikit-learn",
+     "pandas>=0.23",
+ ]
+--- a/calorine/__init__.py
++++ b/calorine/__init__.py
+@@ -3,4 +3,4 @@
+ Main module of the calorine package.
+ """
+ 
+-__version__ = '3.5'
++__version__ = '3.5+temper.1'

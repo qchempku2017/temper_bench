@@ -1,0 +1,10 @@
+{
+  "name": "mace-torch",
+  "version": "0.3.16",
+  "url": "https://files.pythonhosted.org/packages/c9/ab/8867aa6400aa332688151cad2c00ad9173d9ac7f3e83bc4bf4f4726c596f/mace_torch-0.3.16.tar.gz",
+  "sha256": "5fbc84d319a92ab15e3e686533547a0afd2632261132e31cb0705a4347508935",
+  "patched_version": "0.3.16+temper.1",
+  "patch_sha256": "dc6312395a8f22e0c848f9c8fe4eba4eb9378cb0ae2682a5ea5a1f63994fa9e4",
+  "wheel_sha256": "6294a0ffd87cc67dfa8b8fd2c11ae442911d75a5c309f2ffdae14b1f05b87481",
+  "wheel": "mace_torch-0.3.16+temper.1-py3-none-any.whl"
+}

@@ -1,0 +1,27 @@
+--- a/mace/tools/arg_parser.py
++++ b/mace/tools/arg_parser.py
+@@ -661,13 +661,13 @@
+         "--energy_key",
+         help="Key of reference energies in training xyz",
+         type=str,
+-        default=DefaultKeys.ENERGY.value,
++        default="energy",
+     )
+     parser.add_argument(
+         "--forces_key",
+         help="Key of reference forces in training xyz",
+         type=str,
+-        default=DefaultKeys.FORCES.value,
++        default="forces",
+     )
+     parser.add_argument(
+         "--virials_key",
+@@ -679,7 +679,7 @@
+         "--stress_key",
+         help="Key of reference stress in training xyz",
+         type=str,
+-        default=DefaultKeys.STRESS.value,
++        default="stress",
+     )
+     parser.add_argument(
+         "--dipole_key",
