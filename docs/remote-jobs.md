@@ -509,10 +509,10 @@ Inspect failures first, then retry eligible bundles together:
 
 ```console
 temper_bench job list --failed
-temper_bench job resubmit --failed --domain my_domain --dry-run
-temper_bench job resubmit --failed --domain my_domain
+temper_bench job resubmit --domain my_domain --dry-run
+temper_bench job resubmit --domain my_domain
 # Retry eligible failures using the backup resource:
-temper_bench job resubmit --failed --resource paratera --resource-file bohrium.yaml
+temper_bench job resubmit --resource paratera --resource-file bohrium.yaml
 ```
 
 Each bundle is retried at most once per command. Earlier attempts remain intact.
@@ -555,6 +555,11 @@ never written to the store. If even the draft-creation response was lost, provid
 that draft ID explicitly before recovery; do not start a second blind submission.
 
 ## Validation boundary
+
+For native Windows transfer, explicit Slurm task/CPU fields, confirmed rejection
+recovery (`job resubmit`), optional `sbatch --test-only`, and job-local
+cache configuration, see [deployment compatibility](deployment-compatibility.md).
+That guide distinguishes unit coverage from recorded GPU and JobManager tests.
 
 Offline tests exercise real dpdispatcher serialization/script interfaces with
 mocked remote connections and simulated interrupted operations. They do not
@@ -617,3 +622,21 @@ Old saved Bohrium field names and frozen `environment`
 remain readable. New profile files should use the names documented above.
 Per-attempt `job.json` remains authoritative. Storage indexing is deferred pending
 benchmarks of large histories; no unified JSONL database has been introduced.
+
+
+### Retrying a scheduler rejection
+
+`job resubmit` handles both failed calculations and confirmed rejected
+submissions. No bundle ID is required: use `--dry-run` to see all eligible
+bundles and skip reasons, and `--resource-file corrected.yaml` to apply corrected
+resources. Optional `--bundle-id`, `--resource`, and `--domain` filters narrow
+the selection. A newer attempt outside the filters still prevents replaying
+an older failure. Rejected attempts retain their submission diagnostics and
+are cleaned before retrying; they are not recorded as failed calculations.
+Unknown outcomes must be reconciled with `job recover` first. Cleanup failure
+prevents launch and is reported without stopping other selected bundles.
+
+`slurm_preflight: true` optionally checks the scheduler request with
+`sbatch --test-only`, then submits the real job if the check passes. It does not
+reserve a GPU or test the calculation. The former profile key
+`slurm_test_only` remains readable; newly saved profiles use `slurm_preflight`.
