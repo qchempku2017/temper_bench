@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter, command
-
+from temper.mlff.pipeline.training_adapters.base import (
+    BaseMLFFAdapter,
+    command,
+)
 
 _BOOLEAN_OPTIONS = {
     "include_forces",
@@ -22,17 +24,20 @@ class MatterSimAdapter(BaseMLFFAdapter):
 
     pretrained_model_filename = "mattersim.pth"
     training_output_filenames = {
-        "trained_model": "finetuned_mattersim.pth", "training_log": "training.log",
+        "trained_model": "finetuned_mattersim.pth",
+        "training_log": "training.log",
         "native_outputs": "mattersim",
     }
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
-        """Return no config files: MatterSim accepts all controls on its CLI."""
+        """Return no config files: MatterSim accepts all controls on its
+        CLI."""
         return {}
 
     @staticmethod
     def _options(parameters: dict[str, Any]) -> list[str]:
-        """Return native CLI arguments, preserving false boolean switches."""
+        """Return native CLI arguments, preserving false boolean
+        switches."""
         result: list[str] = []
         for key, value in parameters.items():
             option = f"--{key}"
@@ -43,7 +48,8 @@ class MatterSimAdapter(BaseMLFFAdapter):
         return result
 
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
-        """Return the CUDA launcher command with bundle options and data paths."""
+        """Return the CUDA launcher command with bundle options and data
+        paths."""
         parameters = dict(self.spec.training_parameters or {})
         parameters["early_stop_patience"] = int(parameters["epochs"]) + 1
         parameters["include_forces"] = True
@@ -81,24 +87,25 @@ class MatterSimAdapter(BaseMLFFAdapter):
         return (
             command("mkdir", "-p", work),
             command(*arguments),
-            command(
-                "cp", f"{work}/last_model.pth", self.trained_model_path
-            ),
+            command("cp", f"{work}/last_model.pth", self.trained_model_path),
         )
 
     def train(self) -> None:
-        """Train without weight averaging and verify the final epoch was reached.
+        """Train without weight averaging and verify the final epoch was
+        reached.
 
         Notes
         -----
-        The launcher runs the native CLI with EMA decay zero. The last_model
-        checkpoint therefore contains final-step weights. Native epoch indices
-        start at zero; validation-best checkpoints are never used for evaluation.
+        The launcher runs the native CLI with EMA decay zero. The
+        last_model checkpoint therefore contains final-step weights.
+        Native epoch indices start at zero; validation-best checkpoints
+        are never used for evaluation.
 
         Raises
         ------
         RuntimeError
-            If the exported checkpoint does not record the configured last epoch.
+            If the exported checkpoint does not record the configured
+            last epoch.
         OSError
             If the exported checkpoint cannot be read.
         subprocess.CalledProcessError
@@ -107,8 +114,13 @@ class MatterSimAdapter(BaseMLFFAdapter):
         import torch
 
         super().train()
-        checkpoint = torch.load(self.root / self.trained_model_path,
-                                map_location="cpu", weights_only=False)
+        checkpoint = torch.load(
+            self.root / self.trained_model_path,
+            map_location="cpu",
+            weights_only=False,
+        )
         epochs = int((self.spec.training_parameters or {})["epochs"])
         if checkpoint.get("last_epoch") != epochs - 1:
-            raise RuntimeError("MatterSim did not complete the configured final epoch.")
+            raise RuntimeError(
+                "MatterSim did not complete the configured final epoch."
+            )

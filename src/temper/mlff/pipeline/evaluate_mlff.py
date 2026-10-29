@@ -1,4 +1,5 @@
-"""Run ordered MLFF predictions through one locally selected ASE Calculator."""
+"""Run ordered MLFF predictions through one locally selected ASE
+Calculator."""
 
 from __future__ import annotations
 
@@ -16,7 +17,6 @@ from typing import Any
 
 import numpy as np
 from ase.io import iread
-
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,9 @@ def _write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
     os.replace(temporary, path)
 
 
-def _installed_versions(requirements: list[dict[str, str]]) -> dict[str, str | None]:
+def _installed_versions(
+    requirements: list[dict[str, str]],
+) -> dict[str, str | None]:
     versions: dict[str, str | None] = {"temper-bench": __version__}
     for requirement in requirements:
         name = requirement["name"]
@@ -56,7 +58,8 @@ def _installed_versions(requirements: list[dict[str, str]]) -> dict[str, str | N
 
 
 def _bundle_path(bundle_root: Path, value: str, *, label: str) -> Path:
-    """Resolve a portable lexical path below the submit-directory root."""
+    """Resolve a portable lexical path below the submit-directory
+    root."""
     if not isinstance(value, str) or not value or "\\" in value:
         raise ValueError(f"Invalid {label}: {value!r}.")
     posix = PurePosixPath(value)
@@ -68,7 +71,9 @@ def _bundle_path(bundle_root: Path, value: str, *, label: str) -> Path:
         or any(part in {"", ".", ".."} for part in posix.parts)
         or str(posix) != value
     ):
-        raise ValueError(f"{label.capitalize()} escapes bundle root: {value!r}.")
+        raise ValueError(
+            f"{label.capitalize()} escapes bundle root: {value!r}."
+        )
     return bundle_root.joinpath(*posix.parts)
 
 
@@ -106,7 +111,8 @@ def _evaluate_dataset(
             )
             if frame_forces.shape != (len(atoms), 3):
                 raise ValueError(
-                    f"forces shape {frame_forces.shape} does not match ({len(atoms)}, 3)"
+                    f"forces shape {frame_forces.shape} does not match"
+                    f" ({len(atoms)}, 3)"
                 )
             forces.append(frame_forces)
             if "stress" in properties:
@@ -119,11 +125,14 @@ def _evaluate_dataset(
                     dtype=np.float64,
                 )
                 if stress.shape != (3, 3):
-                    raise ValueError(f"stress shape {stress.shape} does not match (3, 3)")
+                    raise ValueError(
+                        f"stress shape {stress.shape} does not match (3, 3)"
+                    )
                 stresses.append(stress)
         except Exception as error:
             raise RuntimeError(
-                f"Evaluation failed for {dataset['id']} frame {frame_index}: {error}"
+                f"Evaluation failed for {dataset['id']} frame {frame_index}:"
+                f" {error}"
             ) from error
         offsets.append(offsets[-1] + len(atoms))
         frame_indices.append(frame_index)
@@ -140,7 +149,9 @@ def _evaluate_dataset(
         "frame_indices": np.asarray(frame_indices, dtype=np.int64),
     }
     if "stress" in properties:
-        arrays["stresses"] = np.asarray(stresses, dtype=np.float64).reshape((-1, 3, 3))
+        arrays["stresses"] = np.asarray(stresses, dtype=np.float64).reshape(
+            (-1, 3, 3)
+        )
     if any(array.dtype == object for array in arrays.values()):
         raise RuntimeError("Prediction output must not contain object arrays.")
 
@@ -157,22 +168,24 @@ def _evaluate_dataset(
     _write_npz(prediction_path, arrays)
     logger.debug("Wrote predictions to %s", prediction_path)
     wall_time = time.perf_counter() - started
-    result_metadata = MLFFTestResult.from_dict({
-        **common_metadata,
-        "dataset_id": dataset["id"],
-        "source_domain": dataset["source_domain"],
-        "source_filename": dataset["source_filename"],
-        "submit_path": dataset["path"],
-        "number_of_frames": len(energies),
-        "total_atoms": offsets[-1],
-        "requested_properties": properties,
-        "units": {
-            "energy": "eV",
-            "forces": "eV/Angstrom",
-            "stress": "eV/Angstrom^3" if "stress" in properties else None,
-        },
-        "wall_time_seconds": wall_time,
-    })
+    result_metadata = MLFFTestResult.from_dict(
+        {
+            **common_metadata,
+            "dataset_id": dataset["id"],
+            "source_domain": dataset["source_domain"],
+            "source_filename": dataset["source_filename"],
+            "submit_path": dataset["path"],
+            "number_of_frames": len(energies),
+            "total_atoms": offsets[-1],
+            "requested_properties": properties,
+            "units": {
+                "energy": "eV",
+                "forces": "eV/Angstrom",
+                "stress": "eV/Angstrom^3" if "stress" in properties else None,
+            },
+            "wall_time_seconds": wall_time,
+        }
+    )
     _write_json(metadata_path, result_metadata.as_dict())
     return {
         "dataset_id": dataset["id"],
@@ -185,16 +198,19 @@ def _evaluate_dataset(
 
 
 def run_test(config_path: str | Path, *, bundle_root: str | Path) -> None:
-    """Evaluate every configured dataset and write standardized predictions.
+    """Evaluate every configured dataset and write standardized
+    predictions.
 
     Parameters
     ----------
     config_path : str or pathlib.Path
-        Test configuration file, normally testing_inputs/test_config.json.
+        Test configuration file, normally
+        testing_inputs/test_config.json.
     bundle_root : str or pathlib.Path
-        Directory containing bundle.json. Every path recorded in the test
-        configuration is resolved from here, regardless of where the
-        configuration itself is stored or the process's working directory.
+        Directory containing bundle.json. Every path recorded in the
+        test configuration is resolved from here, regardless of where
+        the configuration itself is stored or the process's working
+        directory.
 
     Raises
     ------
@@ -208,9 +224,16 @@ def run_test(config_path: str | Path, *, bundle_root: str | Path) -> None:
     if config.get("schema_version") != 2:
         raise ValueError("Unsupported test_config schema_version.")
     bundle_root = Path(bundle_root).expanduser().resolve()
-    calculator_config = {**config, "model": str(_bundle_path(bundle_root, config["model"], label="model"))}
+    calculator_config = {
+        **config,
+        "model": str(
+            _bundle_path(bundle_root, config["model"], label="model")
+        ),
+    }
     calculator = build_calculator(calculator_config)
-    package_versions = _installed_versions(config.get("package_requirements", []))
+    package_versions = _installed_versions(
+        config.get("package_requirements", [])
+    )
     common_metadata = {
         "schema_version": 1,
         "calculator_identifier": config["calculator"]["identifier"],

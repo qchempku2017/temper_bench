@@ -10,7 +10,6 @@ import threading
 import time
 from typing import IO, Iterator, Literal, cast
 
-
 PROGRESS_MODES: tuple[str, ...] = ("auto", "plain", "off")
 DEFAULT_HEARTBEAT_INTERVAL = 60.0
 DEFAULT_REFRESH_INTERVAL = 0.25
@@ -74,7 +73,8 @@ class _ProgressSnapshot:
 
 
 class ProgressManager:
-    """Coordinate one TTY status line or rate-limited plain heartbeats."""
+    """Coordinate one TTY status line or rate-limited plain
+    heartbeats."""
 
     def __init__(
         self,
@@ -168,7 +168,9 @@ class ProgressManager:
             detail=detail,
             started_at=time.monotonic(),
         )
-        task.enabled = self._mode != "off" and logger.isEnabledFor(logging.INFO)
+        task.enabled = self._mode != "off" and logger.isEnabledFor(
+            logging.INFO
+        )
         if not task.enabled:
             return task
 
@@ -206,7 +208,9 @@ class ProgressManager:
             elif advance is not None:
                 task.completed += advance
             if task.completed < 0:
-                raise ValueError("Progress completed count must be non-negative.")
+                raise ValueError(
+                    "Progress completed count must be non-negative."
+                )
             if task.total is not None:
                 task.completed = min(task.completed, task.total)
             if detail is not None:
@@ -215,7 +219,8 @@ class ProgressManager:
                 self._condition.notify_all()
 
     def finish_task(self, task: ProgressTask) -> None:
-        """Remove a task and clear a terminal line when the stack empties."""
+        """Remove a task and clear a terminal line when the stack
+        empties."""
         if not task.enabled:
             return
         with self._condition:
@@ -281,12 +286,14 @@ class ProgressManager:
         return " | ".join(parts)
 
     def _clear_status_locked(self) -> None:
-        if not self._tty or self._stream is None or self._last_rendered_width == 0:
+        if (
+            not self._tty
+            or self._stream is None
+            or self._last_rendered_width == 0
+        ):
             return
         try:
-            self._stream.write(
-                "\r" + (" " * self._last_rendered_width) + "\r"
-            )
+            self._stream.write("\r" + (" " * self._last_rendered_width) + "\r")
             self._stream.flush()
         except (OSError, ValueError):
             self._tty = False
@@ -300,7 +307,9 @@ class ProgressManager:
                 self._clear_status_locked()
                 return
             text = self._terminal_message(snapshot)
-            terminal_width = shutil.get_terminal_size(fallback=(100, 24)).columns
+            terminal_width = shutil.get_terminal_size(
+                fallback=(100, 24)
+            ).columns
             text = text[: max(1, terminal_width - 1)]
             try:
                 padding = max(0, self._last_rendered_width - len(text))
@@ -313,7 +322,8 @@ class ProgressManager:
 
     @contextmanager
     def suspend_status(self) -> Iterator[None]:
-        """Clear and atomically restore status around permanent output."""
+        """Clear and atomically restore status around permanent
+        output."""
         with self._condition:
             self._clear_status_locked()
             try:
@@ -389,7 +399,8 @@ def progress_task(
     unit: str = "items",
     detail: str | None = None,
 ) -> Iterator[ProgressTask]:
-    """Track a task without producing a permanent record for every update."""
+    """Track a task without producing a permanent record for every
+    update."""
     task = _PROGRESS_MANAGER.start_task(
         logger,
         description,

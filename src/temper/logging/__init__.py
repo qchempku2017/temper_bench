@@ -26,7 +26,6 @@ from temper.logging.warnings import (
     TemperWarning,
 )
 
-
 __all__ = [
     "BackendFallbackWarning",
     "DEFAULT_HEARTBEAT_INTERVAL",

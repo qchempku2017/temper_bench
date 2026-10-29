@@ -1,4 +1,5 @@
 """Command-line entry point for splitting configured TemPER domains."""
+
 from __future__ import annotations
 
 import argparse
@@ -17,10 +18,9 @@ from temper.utils.defaults import (
     DEFAULT_METADATA_FILE,
     DEFAULT_GROUPED_DOMAIN_FILE,
     DEFAULT_SPLIT_GROUPS_FILE,
-    DEFAULT_TRAINING_UNITS_FILE
+    DEFAULT_TRAINING_UNITS_FILE,
 )
 from temper.logging import format_elapsed, progress_task
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +31,24 @@ def add_split_parser(subparsers: argparse._SubParsersAction) -> None:
     Parameters
     ----------
     subparsers : argparse._SubParsersAction
-        Top-level parser's subcommand collection. Registration adds argument
-        definitions without loading datasets or preprocessing code. The config
-        path defaults to DEFAULT_SPLIT_CONFIG_FILE or split_config.json;
-        relative paths are resolved from the working directory when executed.
+        Top-level parser's subcommand collection. Registration adds
+        argument definitions without loading datasets or preprocessing
+        code. The config path defaults to DEFAULT_SPLIT_CONFIG_FILE or
+        split_config.json; relative paths are resolved from the working
+        directory when executed.
     """
-    split = subparsers.add_parser("split", help="Group and split local datasets (requires [preprocess]).")
+    split = subparsers.add_parser(
+        "split", help="Group and split local datasets (requires [preprocess])."
+    )
     split.add_argument(
-        "-c", "--config-file", type=Path, default=Path(DEFAULT_SPLIT_CONFIG_FILE),
-        help="JSON or YAML SplitConfig (default: DEFAULT_SPLIT_CONFIG_FILE or split_config.json).",
+        "-c",
+        "--config-file",
+        type=Path,
+        default=Path(DEFAULT_SPLIT_CONFIG_FILE),
+        help=(
+            "JSON or YAML SplitConfig (default: DEFAULT_SPLIT_CONFIG_FILE or"
+            " split_config.json)."
+        ),
     )
 
 
@@ -58,22 +67,26 @@ def _load_split_config(config_file: Path) -> SplitConfig:
 
 
 def _reproduce_config_path(config_file: Path) -> Path:
-    """Return the non-overwriting JSON reproduction path for ``config_file``."""
+    """Return the non-overwriting JSON reproduction path for
+    ``config_file``."""
     return config_file.with_name(f"{config_file.stem}_reproduce.json")
 
 
 def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
-    """Resolve configuration, persist provenance, then group, split, and export.
+    """Resolve configuration, persist provenance, then group, split, and
+    export.
 
-    Return None on success; errors propagate to the CLI exit-status handler.
+    Return None on success; errors propagate to the CLI exit-status
+    handler.
 
     Parameters
     ----------
     config_file : Path or str, optional
-        JSON or YAML split configuration. Relative paths are resolved from the
-        working directory. Defaults to DEFAULT_SPLIT_CONFIG_FILE. The command
-        writes a reproduction configuration beside this file and exports
-        datasets to the output directory specified in the configuration.
+        JSON or YAML split configuration. Relative paths are resolved
+        from the working directory. Defaults to
+        DEFAULT_SPLIT_CONFIG_FILE. The command writes a reproduction
+        configuration beside this file and exports datasets to the
+        output directory specified in the configuration.
     """
     from temper.grouping import partition_domain_into_groups
     from temper.splitting.split import split_grouped_domain
@@ -112,13 +125,17 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
 
     for domain_index, domain in enumerate(valid_domains, start=1):
         domain_started_at = time.monotonic()
-        domain_context = f"[domain {domain_index}/{len(valid_domains)}: {domain}]"
+        domain_context = (
+            f"[domain {domain_index}/{len(valid_domains)}: {domain}]"
+        )
         logger.info("%s Starting domain.", domain_context)
         domain_output_path = output_path / domain
         domain_output_path.mkdir(parents=True, exist_ok=True)
         # Partition domain into groups.
         grouped_domains = partition_domain_into_groups(
-            domain, root_path=root_path, metadata_file_name=DEFAULT_METADATA_FILE
+            domain,
+            root_path=root_path,
+            metadata_file_name=DEFAULT_METADATA_FILE,
         )
         dumpfn(
             grouped_domains,
@@ -133,7 +150,9 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
         )
         # Split groups into train, validation and test sets.
         split_groups = []
-        for strategy_index, grouped_domain in enumerate(grouped_domains, start=1):
+        for strategy_index, grouped_domain in enumerate(
+            grouped_domains, start=1
+        ):
             logger.debug(
                 "%s Starting grouping strategy %d/%d: %r.",
                 domain_context,
@@ -141,7 +160,9 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
                 len(grouped_domains),
                 getattr(grouped_domain, "grouping_strategy", grouped_domain),
             )
-            split_groups.extend(split_grouped_domain(grouped_domain, split_config))
+            split_groups.extend(
+                split_grouped_domain(grouped_domain, split_config)
+            )
         dumpfn(
             split_groups,
             domain_output_path / DEFAULT_SPLIT_GROUPS_FILE,
@@ -177,12 +198,16 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
                         f"repeat {getattr(split_group, 'repeat_id', '?')}"
                     )
                 )
-                training_units_local, resolver = write_all_sets_in_split_group_to_extxyz(
-                    split_group, root_path, output_path,
-                    write_validation=split_config.write_validation,
-                    write_extra_tests=split_config.write_extra_tests,
-                    all_split_groups=split_groups,
-                    resolver=resolver,
+                training_units_local, resolver = (
+                    write_all_sets_in_split_group_to_extxyz(
+                        split_group,
+                        root_path,
+                        output_path,
+                        write_validation=split_config.write_validation,
+                        write_extra_tests=split_config.write_extra_tests,
+                        all_split_groups=split_groups,
+                        resolver=resolver,
+                    )
                 )
                 training_units.extend(training_units_local)
                 progress.advance()

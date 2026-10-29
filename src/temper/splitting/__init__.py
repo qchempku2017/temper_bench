@@ -1,4 +1,5 @@
-"""Public API for splitting grouped domain data and exporting the resulting datasets."""
+"""Public API for splitting grouped domain data and exporting the
+resulting datasets."""
 
 from temper.splitting.io import (
     FrameReferenceResolver,

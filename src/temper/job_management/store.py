@@ -1,4 +1,8 @@
-"""Local JSON job history. The per-attempt job.json is authoritative."""
+"""Local JSON job history.
+
+The per-attempt job.json is authoritative.
+"""
+
 from __future__ import annotations
 
 import json
@@ -15,15 +19,18 @@ class JobStore:
     Parameters
     ----------
     root : str, Path or None, optional
-        Root resolved by bundle_root; defaults to DEFAULT_BUNDLE_WRITE_ROOT or
-        ./bundles. Keep this directory to preserve successful-bundle history.
+        Root resolved by bundle_root; defaults to
+        DEFAULT_BUNDLE_WRITE_ROOT or ./bundles. Keep this directory to
+        preserve successful-bundle history.
 
     Attributes
     ----------
     root : Path
-        Absolute local store directory. Mutating operations require callers
-        to hold store_lock(root); JobManager does this automatically.
+        Absolute local store directory. Mutating operations require
+        callers to hold store_lock(root); JobManager does this
+        automatically.
     """
+
     def __init__(self, root: str | Path | None = None) -> None:
         self.root: Path = bundle_root(root)
 
@@ -47,72 +54,101 @@ class JobStore:
         """
         relative = Path(record.attempt_folder_name)
         result = (self.root / relative).resolve()
-        if relative.is_absolute() or result == self.root or not result.is_relative_to(self.root):
-            raise ValueError("Attempt path must remain below the job store root.")
+        if (
+            relative.is_absolute()
+            or result == self.root
+            or not result.is_relative_to(self.root)
+        ):
+            raise ValueError(
+                "Attempt path must remain below the job store root."
+            )
         return result
 
-    # TODO: Benchmark repeated full scans when the amount of job histories is large,
+    # TODO: Benchmark repeated full scans when the amount of job
+    # histories is large,
     #  before changing the job storage method.
-    #  Keep using the current per-attempt job.json until storage is redesigned.
+    #  Keep using the current per-attempt job.json until storage is
+    # redesigned.
     def records(self) -> list[JobRecord]:
         """Read all attempts without contacting remote resources.
 
         Returns
         -------
         list[JobRecord]
-            Records sorted by creation time. Corrupt records raise an error
-            instead of being skipped, so duplicate-submission checks remain safe.
+            Records sorted by creation time. Corrupt records raise an
+            error instead of being skipped, so duplicate-submission
+            checks remain safe.
 
         Raises
         ------
         ValueError
-            If a record is invalid or stored at a different path than declared.
+            If a record is invalid or stored at a different path than
+            declared.
         """
         result = []
         for path in self.root.glob("*/*/bundle__*/attempt_*/job.json"):
-            record = JobRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            record = JobRecord.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
             if self.path(record) != path.parent.resolve():
                 raise ValueError(f"Job record path mismatch: {path}")
             result.append(record)
-        return sorted(result, key=lambda item: (item.created_at, item.attempt_folder_name))
+        return sorted(
+            result,
+            key=lambda item: (item.created_at, item.attempt_folder_name),
+        )
 
     def save(self, record: JobRecord, event: str) -> None:
-        """Commit one record, repair markers, and append a small event entry.
+        """Commit one record, repair markers, and append a small event
+        entry.
 
         Parameters
         ----------
         record : JobRecord
             State to persist. Its attempt directory must already exist.
         event : str
-            Non-secret description, such as uploaded or collected. No backend
-            exception bodies or credential values should be passed here.
+            Non-secret description, such as uploaded or collected. No
+            backend exception bodies or credential values should be
+            passed here.
 
         Raises
         ------
         OSError
-            If persistence fails. A later synchronization repairs markers from
-            job.json if interruption occurred between writing these files.
+            If persistence fails. A later synchronization repairs
+            markers from job.json if interruption occurred between
+            writing these files.
         """
         record.updated_at = utc_now()
         root = self.path(record)
         atomic_json(root / "job.json", record.model_dump(mode="json"))
         self.repair_markers(record)
         with (root / "events.jsonl").open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps({"time": record.updated_at, "event": event}) + "\n")
+            stream.write(
+                json.dumps({"time": record.updated_at, "event": event}) + "\n"
+            )
             stream.flush()
             os.fsync(stream.fileno())
 
     def repair_markers(self, record: JobRecord) -> None:
-        """Make convenient status marker files agree with the job record.
+        """Make convenient status marker files agree with the job
+        record.
 
         Parameters
         ----------
         record : JobRecord
-            Confirmed computation and collection status. Success requires
-            verified results; failed and cancelled can precede collection.
+            Confirmed computation and collection status. Success
+            requires verified results; failed and cancelled can precede
+            collection.
         """
-        expected = record.computation_status if record.computation_status in {"failed", "cancelled"} else None
-        if record.computation_status == "success" and record.collection_status == "verified":
+        expected = (
+            record.computation_status
+            if record.computation_status in {"failed", "cancelled"}
+            else None
+        )
+        if (
+            record.computation_status == "success"
+            and record.collection_status == "verified"
+        ):
             expected = "success"
         for name in ("success", "failed", "cancelled"):
             marker = self.path(record) / name

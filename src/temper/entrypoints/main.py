@@ -1,4 +1,5 @@
 """Main CLI of TEMPER."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,9 +13,10 @@ from temper.logging import (
     shutdown_progress,
 )
 
-
-# Keep module execution (``python -m temper.entrypoints.main``) inside the
-# package logger hierarchy instead of using the special ``__main__`` name.
+# Keep module execution (``python -m temper.entrypoints.main``) inside
+# the
+# package logger hierarchy instead of using the special ``__main__``
+# name.
 logger = logging.getLogger("temper.entrypoints.main")
 
 
@@ -27,8 +29,10 @@ def main_parser() -> argparse.ArgumentParser:
         TEMPER bench main CLI options and arguments parser.
     """
     parser = argparse.ArgumentParser(
-        description="Temper bench: benchmarking tool for evaluating the performance of"
-        " fine-tuning on machine-learned force fields.",
+        description=(
+            "Temper bench: benchmarking tool for evaluating the performance of"
+            " fine-tuning on machine-learned force fields."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -39,7 +43,10 @@ def main_parser() -> argparse.ArgumentParser:
         action="store_const",
         const="DEBUG",
         dest="log_level",
-        help="Show developer diagnostics and tracebacks (equivalent to --log-level DEBUG).",
+        help=(
+            "Show developer diagnostics and tracebacks (equivalent to"
+            " --log-level DEBUG)."
+        ),
     )
     quiet_action = level_options.add_argument(
         "-q",
@@ -47,7 +54,10 @@ def main_parser() -> argparse.ArgumentParser:
         action="store_const",
         const="WARNING",
         dest="log_level",
-        help="Show warnings and errors only (equivalent to --log-level WARNING).",
+        help=(
+            "Show warnings and errors only (equivalent to --log-level"
+            " WARNING)."
+        ),
     )
     explicit_level_action = level_options.add_argument(
         "--log-level",
@@ -71,7 +81,9 @@ def main_parser() -> argparse.ArgumentParser:
         ),
     )
 
-    subparsers = parser.add_subparsers(title="Valid subcommands", dest="command")
+    subparsers = parser.add_subparsers(
+        title="Valid subcommands", dest="command"
+    )
 
     from temper.entrypoints.job import add_job_parser
     from temper.entrypoints.create_bundles import add_create_bundles_parser
@@ -92,13 +104,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     Parameters
     ----------
     argv : Sequence[str] or None, optional
-        Arguments without the executable name. None uses the process arguments.
+        Arguments without the executable name. None uses the process
+        arguments.
 
     Raises
     ------
     SystemExit
-        Zero after success, one after an operation error, 130 after Ctrl+C,
-        or the argument parser's error code for invalid command syntax.
+        Zero after success, one after an operation error, 130 after
+        Ctrl+C, or the argument parser's error code for invalid command
+        syntax.
     """
     parser = main_parser()
     args = parser.parse_args(argv)
@@ -107,17 +121,22 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         if args.command == "split":
             from temper.entrypoints.split import split_cli
+
             split_cli(args.config_file)
             sysexit = 0
         elif args.command == "run_pipeline":
             from temper.entrypoints.run_pipeline import run_pipeline_cli
+
             run_pipeline_cli(args.bundle, prepare_only=args.prepare_only)
             sysexit = 0
         elif args.command == "create_bundles":
             from temper.entrypoints.create_bundles import create_bundles_cli
+
             create_bundles_cli(
-                args.split_results, [(family, variant) for family, variant in args.model],
-                domains=args.domains, max_train_n_atoms=args.max_train_n_atoms,
+                args.split_results,
+                [(family, variant) for family, variant in args.model],
+                domains=args.domains,
+                max_train_n_atoms=args.max_train_n_atoms,
                 pretrained_model_dir=args.pretrained_model_dir,
                 bundle_write_root=args.bundle_write_root,
                 model_override_config=args.model_override_config,
@@ -125,6 +144,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             sysexit = 0
         elif args.command == "job":
             from temper.entrypoints.job import job_cli
+
             sysexit = job_cli(args)
         else:
             parser.print_help()

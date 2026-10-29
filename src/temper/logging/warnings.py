@@ -8,15 +8,18 @@ class TemperWarning(UserWarning):
 
 
 class DataQualityWarning(TemperWarning):
-    """Warn that input data may be incomplete or unsuitable for some uses."""
+    """Warn that input data may be incomplete or unsuitable for some
+    uses."""
 
 
 class BackendFallbackWarning(TemperWarning):
-    """Warn that a requested automatic backend route used a slower fallback."""
+    """Warn that a requested automatic backend route used a slower
+    fallback."""
 
 
 class PerformanceWarning(TemperWarning):
-    """Warn that a configuration may perform poorly or produce sparse output."""
+    """Warn that a configuration may perform poorly or produce sparse
+    output."""
 
 
 __all__ = [

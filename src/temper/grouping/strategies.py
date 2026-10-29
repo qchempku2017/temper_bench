@@ -1,39 +1,40 @@
-"""Implements filename-based strategies that partition domain dataset files into groups. Strategies can group files directly, by regex or naming properties, or by NEB position."""
+"""Implements filename-based strategies that partition domain dataset
+files into groups.
+
+Strategies can group files directly, by regex or naming properties, or
+by NEB position.
+"""
+
 from typing import Callable, Dict, Pattern, Optional, List
 import re
 from pathlib import Path
 from collections import defaultdict
 
-
 # property: (attempt_regex, group_name_format)
 DEFAULT_REGEX_AND_GROUP_NAMES = {
     "temperature": (
         r".*_(?:t|T|Temp|temp|temperature|Temperature)_(\d*\.?\d+)[kK]*_.*",
-        "temperature_{0}"
+        "temperature_{0}",
     ),
     "pressure": (
         r".*_(?:p|P|pressure|Pressure)_(\d*\.?\d+)[gG][pP][aA]*_.*",
-        "pressure_{0}"
+        "pressure_{0}",
     ),
-    # One-dimensional composition in binary systems. More component compositions in numerical format
-    # can not be treated by default. Use a custom regex and group_name_format, or use "composition_string"
+    # One-dimensional composition in binary systems. More component
+    # compositions in numerical format
+    # can not be treated by default. Use a custom regex and
+    # group_name_format, or use "composition_string"
     # instead.
     "composition_1d_numerical": (
         r".*_(?:x|c|C|comp|Comp|composition|Composition)_(\d*\.?\d+)_.*",
-        "composition_{0}"
+        "composition_{0}",
     ),
     "composition_string": (
         r".*_(?:c|C|comp|Comp|composition|Composition)_([a-zA-Z]+)_.*",
-        "composition_{0}"
+        "composition_{0}",
     ),
-    "u_specification": (
-        r"(?:^|_)(no_u|u)(?=_|$)",
-        "{0}"
-    ),
-    "mag_specification": (
-        r"(?:^|_)(no_mag|mag)(?=_|$)",
-        "{0}"
-    ),
+    "u_specification": (r"(?:^|_)(no_u|u)(?=_|$)", "{0}"),
+    "mag_specification": (r"(?:^|_)(no_mag|mag)(?=_|$)", "{0}"),
 }
 
 
@@ -51,8 +52,8 @@ def group_by_every_file(files: List[str]) -> Dict[str, List[str]]:
 
 
 def group_as_specified(
-        files: List[str],  # pylint: disable=unused-argument
-        groups: Dict[str, List[str]],
+    files: List[str],  # pylint: disable=unused-argument
+    groups: Dict[str, List[str]],
 ) -> Dict[str, List[str]]:
     """Group files as specified in a dictionary.
 
@@ -61,7 +62,8 @@ def group_as_specified(
     files : List[str]
         List of filenames.
     groups : Dict[str, List[str]]
-        Mapping from group names to filenames. The filenames must be a subset of `files`.
+        Mapping from group names to filenames. The filenames must be a
+        subset of `files`.
 
     Returns
     -------
@@ -73,7 +75,8 @@ def group_as_specified(
     ValueError
         If a file in `groups` is not in `files`.
     """
-    # Safety: check whether all file names appearing in groups are also in files.
+    # Safety: check whether all file names appearing in groups are also
+    # in files.
     # Good practice to ensure consistency.
     files_set = set(files)
     for group_name, group_files in groups.items():
@@ -86,7 +89,7 @@ def group_as_specified(
 
 
 def group_all(
-        files: List[str],
+    files: List[str],
 ) -> Dict[str, List[str]]:
     """Group all files into the same group.
 
@@ -109,12 +112,12 @@ def group_by_regex(
     group_name: Optional[str] = None,
     strict: bool = True,
 ) -> Dict[str, List[str]]:
-    """
-    Group filenames according to regex-matched groups and generate
+    """Group filenames according to regex-matched groups and generate
     human-readable group names.
 
-    The file extension is ignored before applying the regex. The captured
-    regex groups are used to construct a string identifier for each group.
+    The file extension is ignored before applying the regex. The
+    captured regex groups are used to construct a string identifier for
+    each group.
 
     Parameters
     ----------
@@ -145,18 +148,14 @@ def group_by_regex(
            Join all captured groups with "_".
 
            Example:
-               ("300", "no_u_no_mag")
-               ->
-               "300_no_u_no_mag"
+               ("300", "no_u_no_mag") -> "300_no_u_no_mag"
 
         2. Positional formatting:
 
                "t_{0}_{1}"
 
            Example:
-               ("300", "no_u_no_mag")
-               ->
-               "t_300_no_u_no_mag"
+               ("300", "no_u_no_mag") -> "t_300_no_u_no_mag"
 
     strict : bool, default=True
         If True, raise an error if any file does not match the regex.
@@ -239,9 +238,9 @@ def group_by_regex(
 
 
 def group_by_property(
-        files: List[str],
-        grouping_property: str,
-        strict: bool = True,
+    files: List[str],
+    grouping_property: str,
+    strict: bool = True,
 ) -> Dict[str, List[str]]:
     """Group files by a single property using regex match of filenames.
 
@@ -250,8 +249,8 @@ def group_by_property(
     files : List[str]
         List of filenames.
     grouping_property : str
-        Property to group by. Corresponding regexes and group name formats can be found in
-        `DEFAULT_REGEX_AND_GROUP_NAMES`.
+        Property to group by. Corresponding regexes and group name
+        formats can be found in `DEFAULT_REGEX_AND_GROUP_NAMES`.
     strict : bool, default=True
         If True, raise an error if any file does not match the regex.
 
@@ -267,9 +266,12 @@ def group_by_property(
     """
     if not grouping_property in DEFAULT_REGEX_AND_GROUP_NAMES:
         raise ValueError(
-            f"Property {grouping_property} not found in DEFAULT_REGEX_AND_GROUP_NAMES."
+            f"Property {grouping_property} not found in"
+            " DEFAULT_REGEX_AND_GROUP_NAMES."
         )
-    attempt_regex, group_name = DEFAULT_REGEX_AND_GROUP_NAMES[grouping_property]
+    attempt_regex, group_name = DEFAULT_REGEX_AND_GROUP_NAMES[
+        grouping_property
+    ]
     try:
         groups = group_by_regex(
             files,
@@ -279,37 +281,40 @@ def group_by_property(
         )
     except ValueError as exc:
         raise ValueError(
-            f"Could not group files by property `{grouping_property}` using default regex: "
-            f"{attempt_regex}. Original error:\n{exc}\n\n"
-            "Please use `group_by_regex` and customize a valid regex in the `attempt_regex` argument."
+            f"Could not group files by property `{grouping_property}` using"
+            f" default regex: {attempt_regex}. Original"
+            f" error:\n{exc}\n\nPlease use `group_by_regex` and customize a"
+            " valid regex in the `attempt_regex` argument."
         ) from exc
     else:
         return groups
 
 
 def group_by_neb_generalization(
-        files: List[str],
-        strict: bool = True,
+    files: List[str],
+    strict: bool = True,
 ) -> Dict[str, List[str]]:
-    """Group NEB files according to their location along reaction coordinates.
+    """Group NEB files according to their location along reaction
+    coordinates.
 
     Files are classified into two groups:
 
     - ``endpoints_and_midpoint``:
-        Initial and final structures of each NEB path, along with the image
-         located at the center of each NEB path, judged by index of the image.
+        Initial and final structures of each NEB path, along with the
+        image
+         located at the center of each NEB path, judged by index of the
+         image.
 
     - ``intermediate``:
         Other images between endpoints and midpoint.
 
     The NEB image index is extracted from filename patterns:
 
-        <reaction>_fp_00.extxyz
-        <reaction>_loc_03.extxyz
-        <reaction>_location_05.extxyz
-        <reaction>_neb_06.extxyz
+        <reaction>_fp_00.extxyz <reaction>_loc_03.extxyz
+        <reaction>_location_05.extxyz <reaction>_neb_06.extxyz
 
-    The location prefix matching is case-insensitive. Supported prefixes:
+    The location prefix matching is case-insensitive. Supported
+    prefixes:
 
         fp, loc, location, neb
 
@@ -317,8 +322,8 @@ def group_by_neb_generalization(
     treated as endpoints. The midpoint is determined from the average of
     the two endpoint indices.
 
-    This will test generalization to the entire NEB path when training only
-    on a portion of critical frames along the path.
+    This will test generalization to the entire NEB path when training
+    only on a portion of critical frames along the path.
 
     Parameters
     ----------
@@ -328,15 +333,13 @@ def group_by_neb_generalization(
         Example:
 
             [
-                "110_N2_N-N_fp_00.extxyz",
-                "110_N2_N-N_fp_01.extxyz",
-                "110_N2_N-N_fp_03.extxyz",
-                "110_N2_N-N_fp_05.extxyz",
+                "110_N2_N-N_fp_00.extxyz", "110_N2_N-N_fp_01.extxyz",
+                "110_N2_N-N_fp_03.extxyz", "110_N2_N-N_fp_05.extxyz",
             ]
 
     strict : bool, default=True
-        If True, raise an error if any file does not contain a valid
-        NEB location index.
+        If True, raise an error if any file does not contain a valid NEB
+        location index.
 
     Returns
     -------
@@ -362,7 +365,8 @@ def group_by_neb_generalization(
     Raises
     ------
     ValueError
-        If strict=True and some files do not contain valid NEB locations.
+        If strict=True and some files do not contain valid NEB
+        locations.
 
     Notes
     -----
@@ -371,13 +375,15 @@ def group_by_neb_generalization(
     Therefore, different NEB lengths are supported:
 
         fp_00 ... fp_05
-            midpoint -> fp_02/fp_03 region, the one with smaller index taken, i.e., fp_02.
+            midpoint -> fp_02/fp_03 region, the one with smaller index
+            taken, i.e., fp_02.
 
         fp_00 ... fp_06
             midpoint -> fp_03
 
         fp_00 ... fp_07
-            midpoint -> fp_03/fp_04 region, the one with smaller index taken, i.e., fp_03.
+            midpoint -> fp_03/fp_04 region, the one with smaller index
+            taken, i.e., fp_03.
     """
 
     location_pattern = re.compile(
@@ -420,18 +426,11 @@ def group_by_neb_generalization(
         midpoint = (min_idx + max_idx) / 2
 
         # Select closest image to midpoint.
-        midpoint_idx = min(
-            indices,
-            key=lambda idx: abs(idx - midpoint)
-        )
+        midpoint_idx = min(indices, key=lambda idx: abs(idx - midpoint))
 
         for idx, filename in frames:
 
-            if (
-                    idx == min_idx
-                    or idx == max_idx
-                    or idx == midpoint_idx
-            ):
+            if idx == min_idx or idx == max_idx or idx == midpoint_idx:
                 groups["endpoints_and_midpoint"].append(filename)
 
             else:
@@ -440,8 +439,8 @@ def group_by_neb_generalization(
     return dict(groups)
 
 
-
-# All the grouping strategy functions should only take in a list of files (and necessary kwargs)
+# All the grouping strategy functions should only take in a list of
+# files (and necessary kwargs)
 # and return a dict mapping group names to lists of files.
 GROUPING_STRATEGIES: Dict[str, Callable] = {
     "by_every_file": group_by_every_file,
@@ -451,4 +450,3 @@ GROUPING_STRATEGIES: Dict[str, Callable] = {
     "by_property": group_by_property,
     "by_neb_generalization": group_by_neb_generalization,
 }
-

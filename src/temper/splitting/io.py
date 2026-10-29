@@ -1,4 +1,6 @@
-"""Resolves persisted frame references to source extxyz data, reconstructs split datasets, and exports them deterministically."""
+"""Resolves persisted frame references to source extxyz data,
+reconstructs split datasets, and exports them deterministically."""
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +22,6 @@ from temper.utils.defaults import (
 )
 from temper.logging import format_elapsed, progress_task
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,17 +30,18 @@ _ROLES: Tuple[str, ...] = ("train", "validation", "test")
 
 #: Characters kept verbatim when sanitizing identity components for filenames.
 _SAFE_FILENAME_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyz"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "0123456789._-"
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 )
 
-def _sanitize_component(value: str) -> str:
-    """Deterministically sanitize a string into a safe filename component.
 
-    Every character that is not ASCII alphanumeric, ``.``, ``_``, or ``-`` is
-    replaced with ``_``. Surrounding whitespace is stripped. An empty or
-    fully-unsafe input yields ``"unnamed"`` so a component never vanishes.
+def _sanitize_component(value: str) -> str:
+    """Deterministically sanitize a string into a safe filename
+    component.
+
+    Every character that is not ASCII alphanumeric, ``.``, ``_``, or
+    ``-`` is replaced with ``_``. Surrounding whitespace is stripped. An
+    empty or fully-unsafe input yields ``"unnamed"`` so a component
+    never vanishes.
 
     Parameters
     ----------
@@ -52,25 +54,26 @@ def _sanitize_component(value: str) -> str:
         A deterministic, filesystem-safe component.
     """
     sanitized = "".join(
-        ch if ch in _SAFE_FILENAME_CHARS else "_"
-        for ch in value.strip()
+        ch if ch in _SAFE_FILENAME_CHARS else "_" for ch in value.strip()
     )
     return sanitized if sanitized else "unnamed"
 
 
 class FrameReferenceResolver:
-    """Resolve frame references to source extxyz files and cache their frames as List of ase.Atoms.
+    """Resolve frame references to source extxyz files and cache their
+    frames as List of ase.Atoms.
 
     Binds a single source root_path directory and provides two services:
 
-    - Escape-guarded path resolution: each :class:`FrameReference` resolves to
-      ``root_path / domain / filename`` and is verified to stay within the
-      configured root_path and domain directory. This is defense in depth on top of
-      the schema-level path validation already applied to
-      :attr:`FrameReference.filename`.
+    - Escape-guarded path resolution: each :class:`FrameReference`
+    resolves to
+      ``root_path / domain / filename`` and is verified to stay within
+      the configured root_path and domain directory. This is defense in
+      depth on top of the schema-level path validation already applied
+      to :attr:`FrameReference.filename`.
     - Per-file caching: each source extxyz file is read at most once per
-      resolver lifetime, so repeated references into the same file reuse the
-      same in-memory frame list.
+      resolver lifetime, so repeated references into the same file reuse
+      the same in-memory frame list.
     """
 
     def __init__(self, root_path: Path | str) -> None:
@@ -79,11 +82,11 @@ class FrameReferenceResolver:
         Parameters
         ----------
         root_path : Path | str
-            Source root_path directory that contains one subdirectory per domain.
-            Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
-            We recommend expanding user and resolving the path before passing its
-            value in.
-            Always expanded and resolved by this constructor.
+            Source root_path directory that contains one subdirectory
+            per domain. Defaults to ``DEFAULT_DATA_DIR``. See
+            src.temper.utils.defaults. We recommend expanding user and
+            resolving the path before passing its value in. Always
+            expanded and resolved by this constructor.
 
         Raises
         ------
@@ -93,7 +96,8 @@ class FrameReferenceResolver:
         self._root_path: Path = Path(root_path).expanduser().resolve()
         if not self._root_path.is_dir():
             raise NotADirectoryError(
-                f"Source root_path must be an existing directory, got: {self._root_path}"
+                "Source root_path must be an existing directory, got:"
+                f" {self._root_path}"
             )
         #: Cache of raw frame lists keyed by resolved source file path.
         self._cache: Dict[Path, List[Atoms]] = {}
@@ -106,11 +110,11 @@ class FrameReferenceResolver:
     def resolve_source_path(self, reference: FrameReference) -> Path:
         """Resolve a frame reference to its absolute source extxyz path.
 
-        The domain must be a single, safe path component (no separators, no
-        traversal, not absolute); the filename has already been validated as a
-        relative, non-traversing ``.extxyz`` path by
-        :class:`FrameReference`. The candidate path is resolved and verified to
-        remain inside the configured domain directory.
+        The domain must be a single, safe path component (no separators,
+        no traversal, not absolute); the filename has already been
+        validated as a relative, non-traversing ``.extxyz`` path by
+        :class:`FrameReference`. The candidate path is resolved and
+        verified to remain inside the configured domain directory.
 
         Parameters
         ----------
@@ -126,7 +130,8 @@ class FrameReferenceResolver:
         ------
         ValueError
             If the domain is not a single safe path component, or if the
-            resolved path escapes the configured root_path/domain boundary.
+            resolved path escapes the configured root_path/domain
+            boundary.
         """
         domain = reference.domain
         if (
@@ -153,12 +158,13 @@ class FrameReferenceResolver:
         return candidate
 
     def load_raw_frames(self, path: Path) -> List[Atoms]:
-        """Return the cached raw frames of a source file, reading it at most once.
+        """Return the cached raw frames of a source file, reading it at
+        most once.
 
-        The file is read with ``ase.io.read(path, index=":")`` on first access
-        and the resulting frame list is cached for the lifetime of the
-        resolver. The resolved path must stay within the configured source
-        root_path.
+        The file is read with ``ase.io.read(path, index=":")`` on first
+        access and the resulting frame list is cached for the lifetime
+        of the resolver. The resolved path must stay within the
+        configured source root_path.
 
         Parameters
         ----------
@@ -174,15 +180,16 @@ class FrameReferenceResolver:
         Raises
         ------
         ValueError
-            If ``path`` resolves outside the configured source root_path.
+            If ``path`` resolves outside the configured source
+            root_path.
         FileNotFoundError
             If the source file does not exist.
         """
         resolved = Path(path).resolve()
         if not resolved.is_relative_to(self._root_path):
             raise ValueError(
-                f"Source path {resolved} escapes the configured source root_path "
-                f"{self._root_path}."
+                f"Source path {resolved} escapes the configured source"
+                f" root_path {self._root_path}."
             )
         if resolved not in self._cache:
             if not resolved.is_file():
@@ -215,9 +222,9 @@ class FrameReferenceResolver:
                     _ = frame.get_forces()
             except Exception as e:
                 raise ValueError(
-                    f"Source file {resolved} contains a frame with missing "
-                    "energy or forces labels and thus cannot be used to train or test"
-                    " MLFF."
+                    f"Source file {resolved} contains a frame with missing"
+                    " energy or forces labels and thus cannot be used to"
+                    " train or test MLFF."
                 ) from e
 
         return self._cache[resolved]
@@ -227,32 +234,36 @@ def _load_frames_with_resolver(
     references: List[FrameReference],
     resolver: FrameReferenceResolver,
 ) -> List[Atoms]:
-    """Reconstruct frames for ordered references using a shared resolver.
+    """Reconstruct frames for ordered references using a shared
+    resolver.
 
-    Each reference is resolved and bounds-checked against its source file,
-    preserving reference order. Using a single resolver keeps the per-file read
-    cache shared across all references of a reconstruction operation; returned
-    objects may alias when references point to the same cached source frame.
+    Each reference is resolved and bounds-checked against its source
+    file, preserving reference order. Using a single resolver keeps the
+    per-file read cache shared across all references of a reconstruction
+    operation; returned objects may alias when references point to the
+    same cached source frame.
 
     Parameters
     ----------
     references : List[FrameReference]
         Ordered frame references to reconstruct.
     resolver : FrameReferenceResolver
-        The resolver providing safe path resolution and per-file caching.
+        The resolver providing safe path resolution and per-file
+        caching.
 
     Returns
     -------
     list[Atoms]
-        Labeled frames in reference order; repeated references may alias cached
-        source objects.
+        Labeled frames in reference order; repeated references may alias
+        cached source objects.
 
     Raises
     ------
     FileNotFoundError
         If a referenced source file does not exist.
     IndexError
-        If a reference's ``frame_index`` is out of range for its source file.
+        If a reference's ``frame_index`` is out of range for its source
+        file.
     ValueError
         If a referenced frame has no energy or forces labels.
     """
@@ -291,11 +302,12 @@ def load_frames_from_references(
 ) -> Tuple[List[Atoms], FrameReferenceResolver]:
     """Reconstruct independent labeled frames for ordered references.
 
-    Each reference is resolved to its source extxyz file under ``root_path`` (see
-    the module's source-root_path convention), bounds-checked against the file,
-    and returned in reference order. All references share one resolver, so each
-    source file is read at most once during the operation; returned objects may
-    alias cached source frames and must be treated as read-only.
+    Each reference is resolved to its source extxyz file under
+    ``root_path`` (see the module's source-root_path convention),
+    bounds-checked against the file, and returned in reference order.
+    All references share one resolver, so each source file is read at
+    most once during the operation; returned objects may alias cached
+    source frames and must be treated as read-only.
 
     Parameters
     ----------
@@ -307,13 +319,14 @@ def load_frames_from_references(
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``.
+        ``root_path`` attribute does not match the provided
+        ``root_path``.
 
     Returns
     -------
     Tuple[list[Atoms], FrameReferenceResolver]
-        Independent labeled frames in reference order, and the resolver used to
-        reconstruct them.
+        Independent labeled frames in reference order, and the resolver
+        used to reconstruct them.
 
     Raises
     ------
@@ -322,13 +335,16 @@ def load_frames_from_references(
     FileNotFoundError
         If a referenced source file does not exist.
     IndexError
-        If a reference's ``frame_index`` is out of range for its source file.
+        If a reference's ``frame_index`` is out of range for its source
+        file.
     ValueError
-        If a referenced frame has no energy or forces labels, or if a resolved
-        path would escape the configured root_path/domain.
+        If a referenced frame has no energy or forces labels, or if a
+        resolved path would escape the configured root_path/domain.
     """
-    # Note: enforce identical convention of root_path with resolver.root_path.
-    # This ensures that the resolver's cache can be reused given the same
+    # Note: enforce identical convention of root_path with
+    # resolver.root_path.
+    # This ensures that the resolver's cache can be reused given the
+    # same
     # root_path but with different conventions.
     root_path = Path(root_path).expanduser().resolve()
     if resolver is None or resolver.root_path != root_path:
@@ -346,22 +362,22 @@ def load_frames_test(
     Parameters
     ----------
     schema : SplitGroup
-        The persisted split result whose
-        :attr:`~SplitGroup.test_set` is reconstructed.
+        The persisted split result whose :attr:`~SplitGroup.test_set` is
+        reconstructed.
     root_path : Path | str
         Source root_path directory beneath which each reference's
         ``domain / filename`` is located.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``
-        after expanduser and resolve.
+        ``root_path`` attribute does not match the provided
+        ``root_path`` after expanduser and resolve.
 
     Returns
     -------
     Tuple[list[Atoms], FrameReferenceResolver]
-        Independent labeled test frames in schema order, and the resolver used to
-        reconstruct them.
+        Independent labeled test frames in schema order, and the
+        resolver used to reconstruct them.
 
     Raises
     ------
@@ -377,7 +393,10 @@ def load_frames_test(
     root_path = Path(root_path).expanduser().resolve()
     if resolver is None or resolver.root_path != root_path:
         resolver = FrameReferenceResolver(root_path)
-    return _load_frames_with_resolver(list(schema.test_set), resolver), resolver
+    return (
+        _load_frames_with_resolver(list(schema.test_set), resolver),
+        resolver,
+    )
 
 
 def load_frames_train_validation(
@@ -389,11 +408,12 @@ def load_frames_train_validation(
     """Reconstruct the training and validation sets at a requested size.
 
     The training set is the prefix of the trajectory's
-    :attr:`TrainValSplitTrajectory.selected_frames` of length ``requested_size``;
-    validation is the remaining selected suffix followed by
-    ``additional_trainval_frames``. The requested size is mapped to a checkpoint
-    index before the trajectory accessors are called. Both sets share one
-    resolver, so each source file is read at most once during the operation.
+    :attr:`TrainValSplitTrajectory.selected_frames` of length
+    ``requested_size``; validation is the remaining selected suffix
+    followed by ``additional_trainval_frames``. The requested size is
+    mapped to a checkpoint index before the trajectory accessors are
+    called. Both sets share one resolver, so each source file is read at
+    most once during the operation.
 
     Parameters
     ----------
@@ -403,26 +423,27 @@ def load_frames_train_validation(
         Index among the trajectory's requested training sizes.
     root_path : Path | str
         Source root_path directory beneath which each reference's
-        ``domain / filename`` resolves.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
+        ``domain / filename`` resolves. Defaults to
+        ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``
-        after expanduser and resolve.
+        ``root_path`` attribute does not match the provided
+        ``root_path`` after expanduser and resolve.
 
     Returns
     -------
     tuple[list[Atoms], list[Atoms], FrameReferenceResolver]
-        ``(train, validation)`` labeled frames; frames may alias the resolver's
-        cached source objects and must be treated as read-only; followed by
-        the resolver used to reconstruct them.
+        ``(train, validation)`` labeled frames; frames may alias the
+        resolver's cached source objects and must be treated as
+        read-only; followed by the resolver used to reconstruct them.
 
     Raises
     ------
     ValueError
         If ``method`` is unsupported, not represented by the schema, or
-        ambiguous, or if ``requested_size`` is not a requested training size.
+        ambiguous, or if ``requested_size`` is not a requested training
+        size.
     NotADirectoryError
         If ``root_path`` is not an existing directory.
     FileNotFoundError
@@ -440,9 +461,11 @@ def load_frames_train_validation(
     validation = _load_frames_with_resolver(validation_references, resolver)
     return train, validation, resolver
 
+
 ######
 # Utilities to export files.
 ######
+
 
 def build_export_filename(
     domain: str,
@@ -453,7 +476,8 @@ def build_export_filename(
     structure_count: int,
     repeat_id: int,
 ) -> str:
-    """Build the deterministic, safe filename for an exported extxyz file.
+    """Build the deterministic, safe filename for an exported extxyz
+    file.
 
     The filename has the form::
 
@@ -461,10 +485,10 @@ def build_export_filename(
 
     Each identity component is sanitized deterministically (see
     :func:`_sanitize_component`); ``role`` is one of ``"train"``,
-    ``"validation"``, or ``"test"``; and ``count`` is the number of structures
-    the file contains. For the ``"train"`` role the structure count equals the
-    training size. When ``grouping_strategy`` is None or empty it is replaced
-    by ``"unknown"``.
+    ``"validation"``, or ``"test"``; and ``count`` is the number of
+    structures the file contains. For the ``"train"`` role the structure
+    count equals the training size. When ``grouping_strategy`` is None
+    or empty it is replaced by ``"unknown"``.
 
     Parameters
     ----------
@@ -473,7 +497,8 @@ def build_export_filename(
     group_name : str
         Group name.
     grouping_strategy : str | None
-        Grouping strategy name, or None/empty if not represented by the schema.
+        Grouping strategy name, or None/empty if not represented by the
+        schema.
     method : str
         Splitting method name.
     role : str
@@ -486,7 +511,8 @@ def build_export_filename(
     Returns
     -------
     str
-        The deterministic export filename including the ``.extxyz`` suffix.
+        The deterministic export filename including the ``.extxyz``
+        suffix.
 
     Raises
     ------
@@ -495,9 +521,7 @@ def build_export_filename(
         ``structure_count`` is negative.
     """
     if role not in _ROLES:
-        raise ValueError(
-            f"role must be one of {list(_ROLES)}, got {role!r}."
-        )
+        raise ValueError(f"role must be one of {list(_ROLES)}, got {role!r}.")
     if structure_count < 0:
         raise ValueError(
             f"structure_count must be nonnegative, got {structure_count}."
@@ -511,7 +535,7 @@ def build_export_filename(
             _sanitize_component(method),
             role,
             f"n{structure_count}",
-            f"repeat{repeat_id}"
+            f"repeat{repeat_id}",
         ]
     )
     return f"{stem}.extxyz"
@@ -521,12 +545,14 @@ def _write_atoms_list_to_extxyz(
     dest_path: Path | str,
     atoms_list: List[Atoms],
 ) -> None:
-    """Atomically write ``atoms_list`` to ``dest_path`` as a single extxyz file.
+    """Atomically write ``atoms_list`` to ``dest_path`` as a single
+    extxyz file.
 
-    Frames are written to a temporary sibling file and then published with
-    :func:`os.replace`, so an interrupted write does not leave a partial target.
-    Existing targets are intentionally replaced; export callers should treat
-    the output directory as a generated-artifact directory.
+    Frames are written to a temporary sibling file and then published
+    with :func:`os.replace`, so an interrupted write does not leave a
+    partial target. Existing targets are intentionally replaced; export
+    callers should treat the output directory as a generated-artifact
+    directory.
     """
     dest_path = Path(dest_path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -575,8 +601,9 @@ def write_atoms_list_to_extxyz(
 ) -> Path:
     """Write a labeled frame list to one deterministic extxyz file.
 
-    Builds the deterministic filename (see :func:`build_export_filename`) and
-    atomically replaces the generated artifact in ``output_dir``.
+    Builds the deterministic filename (see
+    :func:`build_export_filename`) and atomically replaces the generated
+    artifact in ``output_dir``.
 
     Parameters
     ----------
@@ -591,12 +618,13 @@ def write_atoms_list_to_extxyz(
     method : str
         Splitting method name (filename identity).
     role : str
-        Dataset role (filename identity), ``'train'``, ``'validation'`` or ``'test'``.
+        Dataset role (filename identity), ``'train'``, ``'validation'``
+        or ``'test'``.
     repeat_id: int
         Index among repeated splits for the same group.
     output_dir : Path | str
-        Output directory; created if missing. Existing generated artifacts are
-        replaced atomically.
+        Output directory; created if missing. Existing generated
+        artifacts are replaced atomically.
 
     Returns
     -------
@@ -620,7 +648,7 @@ def write_atoms_list_to_extxyz(
         method=method,
         role=role,
         structure_count=len(atoms_list),
-        repeat_id=repeat_id
+        repeat_id=repeat_id,
     )
     target = Path(output_dir) / filename
     _write_atoms_list_to_extxyz(target, atoms_list)
@@ -644,10 +672,10 @@ def write_all_sets_in_split_group_to_extxyz(
 ) -> tuple[list[TrainingUnit], FrameReferenceResolver]:
     """Export benchmark datasets and build their persisted data units.
 
-    Extra testing sets from other groups will also be written if required.
-    Fine-tuning units reference the exported training checkpoints. One
-    zero-shot unit is appended by default and references only the already
-    exported shared test datasets.
+    Extra testing sets from other groups will also be written if
+    required. Fine-tuning units reference the exported training
+    checkpoints. One zero-shot unit is appended by default and
+    references only the already exported shared test datasets.
 
     Parameters
     ----------
@@ -655,42 +683,46 @@ def write_all_sets_in_split_group_to_extxyz(
         The split group to export.
     root_path : Path | str
         Source root_path directory beneath which each reference's
-        ``domain / filename`` resolves.
-        Defaults to ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
+        ``domain / filename`` resolves. Defaults to
+        ``DEFAULT_DATA_DIR``. See src.temper.utils.defaults.
     output_path : Path | str
-        Output directory; created if missing. Existing generated artifacts are
-        replaced atomically. Defaults to ``DEFAULT_SPLIT_RESULTS_DIR``.
-        See src.temper.utils.defaults.
-        Files will be written into each domain subfolder under ``output_path``.
+        Output directory; created if missing. Existing generated
+        artifacts are replaced atomically. Defaults to
+        ``DEFAULT_SPLIT_RESULTS_DIR``. See src.temper.utils.defaults.
+        Files will be written into each domain subfolder under
+        ``output_path``.
     write_validation : bool, optional
         Whether to export non-empty validation sets at every checkpoint.
-        Defaults to ``False``. Returned units have val_set=None when validation
-        export is disabled or the corresponding validation set is empty.
+        Defaults to ``False``. Returned units have val_set=None when
+        validation export is disabled or the corresponding validation
+        set is empty.
     write_extra_tests : bool, optional
-        Whether to export extra testing sets from other groups. Defaults to
-        ``True``. Extra tests are written beside other test files in the domain
-        directory below output_path and reused across units.
+        Whether to export extra testing sets from other groups. Defaults
+        to ``True``. Extra tests are written beside other test files in
+        the domain directory below output_path and reused across units.
     all_split_groups : list[SplitGroup], optional
-        All split groups in the same domain. Required if ``write_extra_tests``
-        is ``True``. Used to retrieve data of extra tests from.
+        All split groups in the same domain. Required if
+        ``write_extra_tests`` is ``True``. Used to retrieve data of
+        extra tests from.
     resolver: FrameReferenceResolver | None
         Optional resolver to use instead of the default. Allows for
         shared cache reuse. Will not reuse if not provided or its
-        ``root_path`` attribute does not match the provided ``root_path``
-        after expanduser and resolve.
+        ``root_path`` attribute does not match the provided
+        ``root_path`` after expanduser and resolve.
     create_zeroshot_unit : bool, optional
-        Whether to append a zero-shot ``TrainingUnit``. This controls only
-        schema construction and never writes an additional dataset file.
-        Defaults to ``True``.
+        Whether to append a zero-shot ``TrainingUnit``. This controls
+        only schema construction and never writes an additional dataset
+        file. Defaults to ``True``.
 
     Returns
     -------
     tuple[list[TrainingUnit], FrameReferenceResolver]
-        The fine-tuning units in checkpoint order, followed by the optional
-        zero-shot unit, and the resolver used to load the frames. The
-        resolver's internal cache may be reused to avoid repeated loading.
-        Every returned unit contains SHA-256 hashes of its actual dataset bytes;
-        shared files are hashed once within this export operation.
+        The fine-tuning units in checkpoint order, followed by the
+        optional zero-shot unit, and the resolver used to load the
+        frames. The resolver's internal cache may be reused to avoid
+        repeated loading. Every returned unit contains SHA-256 hashes of
+        its actual dataset bytes; shared files are hashed once within
+        this export operation.
 
     Raises
     ------
@@ -717,23 +749,27 @@ def write_all_sets_in_split_group_to_extxyz(
     val_atom_counts: list[int] = []
 
     # Phase 1: write training sets and optionally validation sets.
-    for i in range(len(split_group.train_val_split_trajectory.requested_train_sizes)):
+    for i in range(
+        len(split_group.train_val_split_trajectory.requested_train_sizes)
+    ):
         atoms_train, atoms_val, resolver = load_frames_train_validation(
             split_group, i, root_path=root_path, resolver=resolver
         )
         train_n_frames, train_n_atoms = _count_frames_and_atoms(atoms_train)
         train_frame_counts.append(train_n_frames)
         train_atom_counts.append(train_n_atoms)
-        train_files.append(write_atoms_list_to_extxyz(
-            atoms_list=atoms_train,
-            domain=split_group.domain,
-            group_name=split_group.group_name,
-            grouping_strategy=split_group.grouping_strategy,
-            method=split_group.train_val_split_trajectory.method,
-            role="train",
-            repeat_id=split_group.repeat_id,
-            output_dir=output_path / split_group.domain,
-        ).name)
+        train_files.append(
+            write_atoms_list_to_extxyz(
+                atoms_list=atoms_train,
+                domain=split_group.domain,
+                group_name=split_group.group_name,
+                grouping_strategy=split_group.grouping_strategy,
+                method=split_group.train_val_split_trajectory.method,
+                role="train",
+                repeat_id=split_group.repeat_id,
+                output_dir=output_path / split_group.domain,
+            ).name
+        )
         val_file = None
         val_n_frames = 0
         val_n_atoms = 0
@@ -757,25 +793,30 @@ def write_all_sets_in_split_group_to_extxyz(
         split_group, root_path, resolver=resolver
     )
     test_n_frames, test_n_atoms = _count_frames_and_atoms(atoms_test)
-    test_files.append(write_atoms_list_to_extxyz(
-        atoms_list=atoms_test,
-        domain=split_group.domain,
-        group_name=split_group.group_name,
-        grouping_strategy=split_group.grouping_strategy,
-        method=split_group.train_val_split_trajectory.method,
-        role="test",
-        repeat_id=split_group.repeat_id,
-        output_dir=output_path / split_group.domain,
-    ).name)
-    # Write extra tests. Since extra test files are already written, we only need to
+    test_files.append(
+        write_atoms_list_to_extxyz(
+            atoms_list=atoms_test,
+            domain=split_group.domain,
+            group_name=split_group.group_name,
+            grouping_strategy=split_group.grouping_strategy,
+            method=split_group.train_val_split_trajectory.method,
+            role="test",
+            repeat_id=split_group.repeat_id,
+            output_dir=output_path / split_group.domain,
+        ).name
+    )
+    # Write extra tests. Since extra test files are already written, we
+    # only need to
     # write the paths to them into TrainingUnit objects.
     if write_extra_tests:
-        # Find groups by matching domain, grouping strategy, group name and repeat_id.
+        # Find groups by matching domain, grouping strategy, group name
+        # and repeat_id.
         all_split_groups = [] if all_split_groups is None else all_split_groups
         for other_group in all_split_groups:
             if (
                 other_group.domain == split_group.domain
-                and other_group.grouping_strategy == split_group.grouping_strategy
+                and other_group.grouping_strategy
+                == split_group.grouping_strategy
                 and other_group.group_name in split_group.extra_tested_groups
                 and other_group.repeat_id == split_group.repeat_id
             ):
@@ -788,29 +829,38 @@ def write_all_sets_in_split_group_to_extxyz(
                     structure_count=len(other_group.test_set),
                     repeat_id=other_group.repeat_id,
                 )
-                filepath = (output_path / other_group.domain / filename).resolve()
+                filepath = (
+                    output_path / other_group.domain / filename
+                ).resolve()
                 atoms_test, resolver = load_frames_test(
                     other_group, root_path, resolver=resolver
                 )
-                extra_test_n_frames, extra_test_n_atoms = _count_frames_and_atoms(
-                    atoms_test
+                extra_test_n_frames, extra_test_n_atoms = (
+                    _count_frames_and_atoms(atoms_test)
                 )
                 test_n_frames += extra_test_n_frames
                 test_n_atoms += extra_test_n_atoms
-                if not filepath.exists():  # Other group's file not yet written.
-                    test_files.append(write_atoms_list_to_extxyz(
-                        atoms_list=atoms_test,
-                        domain=other_group.domain,
-                        group_name=other_group.group_name,
-                        grouping_strategy=other_group.grouping_strategy,
-                        method=other_group.train_val_split_trajectory.method,
-                        role="test",
-                        repeat_id=other_group.repeat_id,
-                        output_dir=output_path / other_group.domain,
-                    ).name)
+                if (
+                    not filepath.exists()
+                ):  # Other group's file not yet written.
+                    test_files.append(
+                        write_atoms_list_to_extxyz(
+                            atoms_list=atoms_test,
+                            domain=other_group.domain,
+                            group_name=other_group.group_name,
+                            grouping_strategy=other_group.grouping_strategy,
+                            method=(
+                                other_group.train_val_split_trajectory.method
+                            ),
+                            role="test",
+                            repeat_id=other_group.repeat_id,
+                            output_dir=output_path / other_group.domain,
+                        ).name
+                    )
                 else:  # Already written, just record file name.
                     test_files.append(filename)
-    # Phase 3: build fine-tuning units in checkpoint order. All units share
+    # Phase 3: build fine-tuning units in checkpoint order. All units
+    # share
     # the same immutable test-set references and aggregate counts.
     shared_test_sets = tuple(test_files)
     training_units: list[TrainingUnit] = [
@@ -835,7 +885,8 @@ def write_all_sets_in_split_group_to_extxyz(
         for i in range(len(train_files))
     ]
 
-    # Phase 4: append a schema-only zero-shot unit. No dataset is written here.
+    # Phase 4: append a schema-only zero-shot unit. No dataset is
+    # written here.
     if create_zeroshot_unit:
         training_units.append(
             TrainingUnit(
@@ -858,11 +909,13 @@ def write_all_sets_in_split_group_to_extxyz(
             )
         )
 
-    # Share digests within this export only; later loads read the bytes again.
+    # Share digests within this export only; later loads read the bytes
+    # again.
     hash_cache: dict[Path, str] = {}
-    training_units = [unit.with_dataset_hashes(hash_cache) for unit in training_units]
+    training_units = [
+        unit.with_dataset_hashes(hash_cache) for unit in training_units
+    ]
     return training_units, resolver
-
 
 
 __all__ = [

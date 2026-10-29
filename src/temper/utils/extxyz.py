@@ -1,4 +1,5 @@
-"""Inspect extxyz headers and species without constructing ASE structures."""
+"""Inspect extxyz headers and species without constructing ASE
+structures."""
 
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -19,13 +20,15 @@ class ExtxyzMetadata:
     number_of_atoms : int
         Number of atom rows in the frame.
     info : dict[str, Any]
-        Parsed header values, excluding the Properties column declaration.
+        Parsed header values, excluding the Properties column
+        declaration.
     properties : set[str]
         Per-atom property names, using ASE names for standard columns.
-        Frame properties such as energy, stress and virial remain in info.
-        Values and physical units are not validated.
+        Frame properties such as energy, stress and virial remain in
+        info. Values and physical units are not validated.
     symbols : tuple[str, ...]
-        Chemical symbols in atom order, or an empty tuple when not requested.
+        Chemical symbols in atom order, or an empty tuple when not
+        requested.
     """
 
     number_of_atoms: int
@@ -35,12 +38,17 @@ class ExtxyzMetadata:
 
     @property
     def fully_periodic(self) -> bool:
-        """Return periodicity using the extxyz lattice-dependent default."""
-        return bool(all(atleast_1d(self.info.get("pbc", "Lattice" in self.info))))
+        """Return periodicity using the extxyz lattice-dependent
+        default."""
+        return bool(
+            all(atleast_1d(self.info.get("pbc", "Lattice" in self.info)))
+        )
 
 
 def iter_extxyz_metadata(
-    path: str | Path, *, read_symbols: bool = False,
+    path: str | Path,
+    *,
+    read_symbols: bool = False,
 ) -> Iterator[ExtxyzMetadata]:
     """Stream frame metadata while skipping numerical atom columns.
 
@@ -49,8 +57,8 @@ def iter_extxyz_metadata(
     path : str or Path
         Source extxyz file.
     read_symbols : bool, optional
-        Read only the species or atomic-number column from each atom row.
-        Otherwise atom rows are skipped without splitting them.
+        Read only the species or atomic-number column from each atom
+        row. Otherwise atom rows are skipped without splitting them.
 
     Yields
     ------
@@ -68,11 +76,16 @@ def iter_extxyz_metadata(
                 continue
             count = int(line)
             info = key_val_str_to_dict(stream.readline())
-            declaration = info.pop("Properties", "species:S:1:pos:R:3").split(":")
+            declaration = info.pop("Properties", "species:S:1:pos:R:3").split(
+                ":"
+            )
             columns = {}
             offset = 0
             for name, _, width in zip(
-                declaration[::3], declaration[1::3], declaration[2::3], strict=True,
+                declaration[::3],
+                declaration[1::3],
+                declaration[2::3],
+                strict=True,
             ):
                 columns[name] = offset
                 offset += int(width)
@@ -86,10 +99,14 @@ def iter_extxyz_metadata(
                     if "species" in columns:
                         symbols.append(values[columns["species"]])
                     elif "Z" in columns:
-                        symbols.append(chemical_symbols[int(values[columns["Z"]])])
+                        symbols.append(
+                            chemical_symbols[int(values[columns["Z"]])]
+                        )
                     else:
                         raise ValueError(f"No species or Z column in {path}.")
-            properties = {REV_PROPERTY_NAME_MAP.get(name, name) for name in columns}
+            properties = {
+                REV_PROPERTY_NAME_MAP.get(name, name) for name in columns
+            }
             yield ExtxyzMetadata(count, info, properties, tuple(symbols))
 
 
@@ -107,12 +124,14 @@ def check_extxyz_properties(frame: ExtxyzMetadata, *, source: str) -> bool:
     -------
     bool
         Whether stress is declared. Virial remains available in info,
-        but is not treated as stress because ASE does not convert it on read.
+        but is not treated as stress because ASE does not convert it on
+        read.
 
     Raises
     ------
     ValueError
-        If the header lacks energy or the Properties declaration lacks forces.
+        If the header lacks energy or the Properties declaration lacks
+        forces.
     """
     for label, names in (("energy", frame.info), ("forces", frame.properties)):
         if label not in names:

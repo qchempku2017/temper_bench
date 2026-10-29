@@ -1,4 +1,5 @@
 """Tests for the top-level CLI parser and split orchestration."""
+
 from __future__ import annotations
 
 import logging
@@ -18,22 +19,31 @@ def test_main_parser_owns_global_logging_and_progress_options() -> None:
     assert default_args.log_level == "INFO"
     assert default_args.progress == "auto"
 
-    args = main_parser().parse_args([
-        "--verbose",
-        "--progress",
-        "plain",
-        "split",
-        "--config-file",
-        "custom.yaml",
-    ])
+    args = main_parser().parse_args(
+        [
+            "--verbose",
+            "--progress",
+            "plain",
+            "split",
+            "--config-file",
+            "custom.yaml",
+        ]
+    )
     assert args.config_file == Path("custom.yaml")
     assert args.log_level == "DEBUG"
     assert args.progress == "plain"
-    assert main_parser().parse_args([
-        "--log-level",
-        "error",
-        "split",
-    ]).log_level == "ERROR"
+    assert (
+        main_parser()
+        .parse_args(
+            [
+                "--log-level",
+                "error",
+                "split",
+            ]
+        )
+        .log_level
+        == "ERROR"
+    )
     with pytest.raises(SystemExit):
         main_parser().parse_args(["split", "--root-path", "data"])
     with pytest.raises(SystemExit):
@@ -64,14 +74,16 @@ def test_main_configures_logging_before_subcommand_dispatch(
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        entrypoint.main([
-            "--verbose",
-            "--progress",
-            "plain",
-            "split",
-            "--config-file",
-            "custom.yaml",
-        ])
+        entrypoint.main(
+            [
+                "--verbose",
+                "--progress",
+                "plain",
+                "split",
+                "--config-file",
+                "custom.yaml",
+            ]
+        )
 
     assert exc_info.value.code == 0
     assert calls == [
@@ -206,9 +218,13 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
         else:
             artifact_dumps.append((obj, path))
 
-    monkeypatch.setattr("temper.grouping.partition_domain_into_groups", partition)
+    monkeypatch.setattr(
+        "temper.grouping.partition_domain_into_groups", partition
+    )
     monkeypatch.setattr("temper.splitting.split.split_grouped_domain", split)
-    monkeypatch.setattr("temper.splitting.io.write_all_sets_in_split_group_to_extxyz", export)
+    monkeypatch.setattr(
+        "temper.splitting.io.write_all_sets_in_split_group_to_extxyz", export
+    )
     monkeypatch.setattr(entrypoint, "dumpfn", record_dump)
 
     with caplog.at_level(logging.DEBUG, logger="temper.entrypoints.split"):
@@ -220,7 +236,10 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
     ]
     assert len(split_configs) == 2
     assert split_configs[0].output_path == output_root
-    assert split_configs[0].trainval_test_split_seeds == requested_trainval_test_seeds
+    assert (
+        split_configs[0].trainval_test_split_seeds
+        == requested_trainval_test_seeds
+    )
     assert split_configs[0].train_val_split_seeds == requested_train_val_seeds
     assert export_calls[0][:3] == ("split-group-1", data_root, output_root)
     assert export_calls[0][3]["write_validation"] is True
@@ -240,7 +259,9 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
 
     reproduced = loadfn(reproduce_path)
     assert reproduced.domains == ["ignored", "selected"]
-    assert reproduced.trainval_test_split_seeds == requested_trainval_test_seeds
+    assert (
+        reproduced.trainval_test_split_seeds == requested_trainval_test_seeds
+    )
     assert reproduced.train_val_split_seeds == requested_train_val_seeds
     assert all(reproduced == config for config in split_configs)
     assert config_file.exists()
@@ -274,10 +295,14 @@ def test_reproduction_config_reloads_and_replays_identical_real_split(
         def resolve_device(self) -> str:
             return "cpu"
 
-        def compute_descriptors(self, frames: list) -> QuestsDescriptorsStorage:
+        def compute_descriptors(
+            self, frames: list
+        ) -> QuestsDescriptorsStorage:
             frame_count = len(frames)
             return QuestsDescriptorsStorage(
-                values=np.arange(frame_count * 2, dtype=float).reshape(frame_count, 2),
+                values=np.arange(frame_count * 2, dtype=float).reshape(
+                    frame_count, 2
+                ),
                 frame_offsets=tuple(range(frame_count + 1)),
                 quests_adapter_config=self.config,
             )
@@ -286,7 +311,9 @@ def test_reproduction_config_reloads_and_replays_identical_real_split(
             return float(descriptors.sum())
 
     monkeypatch.setattr(split_module, "QuestsAdapter", DeterministicAdapter)
-    monkeypatch.setattr(selectors_module, "QuestsAdapter", DeterministicAdapter)
+    monkeypatch.setattr(
+        selectors_module, "QuestsAdapter", DeterministicAdapter
+    )
 
     output_root = tmp_path / "split-results"
     config_file = tmp_path / "split_config.json"
@@ -330,14 +357,20 @@ def test_reproduction_config_reloads_and_replays_identical_real_split(
     assert entrypoint.split_cli(reproduce_path) is None
 
     assert loadfn(domain_output / "split_groups.json") == first_split_groups
-    assert loadfn(domain_output / "training_units.json") == first_training_units
+    assert (
+        loadfn(domain_output / "training_units.json") == first_training_units
+    )
     assert {
         path.name: path.read_bytes()
         for path in sorted(domain_output.glob("*.extxyz"))
     } == first_exports
 
-    replayed_reproduce_path = tmp_path / "split_config_reproduce_reproduce.json"
-    replayed_reproduction = entrypoint._load_split_config(replayed_reproduce_path)
+    replayed_reproduce_path = (
+        tmp_path / "split_config_reproduce_reproduce.json"
+    )
+    replayed_reproduction = entrypoint._load_split_config(
+        replayed_reproduce_path
+    )
     assert isinstance(replayed_reproduction, SplitConfig)
     assert replayed_reproduction == reproduced
 
@@ -365,7 +398,10 @@ def test_yaml_split_configs_are_supported_and_preserve_seeds(
 
 
 def test_reproduction_name_never_matches_input_name() -> None:
-    from temper.entrypoints.split import _load_split_config, _reproduce_config_path
+    from temper.entrypoints.split import (
+        _load_split_config,
+        _reproduce_config_path,
+    )
 
     assert _reproduce_config_path(Path("split_config.json")) == Path(
         "split_config_reproduce.json"

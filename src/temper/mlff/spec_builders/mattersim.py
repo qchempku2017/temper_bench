@@ -1,14 +1,17 @@
 """MatterSim fine-tuning defaults."""
+
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_spec import MLFFImplementation
 
 
 @BaseSpecBuilder.register(name="mattersim")
 class MatterSimSpecBuilder(BaseSpecBuilder):
-    """Build a MatterSim specification from a local checkpoint directory.
+    """Build a MatterSim specification from a local checkpoint
+    directory.
 
-    Batch size defaults to one while upstream issue #163 remains unresolved
-    in the pinned 1.2.5 release; callers can override it for patched builds.
+    Batch size defaults to one while upstream issue #163 remains
+    unresolved in the pinned 1.2.5 release; callers can override it for
+    patched builds.
     """
 
     mlff_type = "mattersim"

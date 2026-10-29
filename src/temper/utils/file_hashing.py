@@ -1,4 +1,6 @@
-"""Read and verify scientific inputs without retaining file contents in memory."""
+"""Read and verify scientific inputs without retaining file contents in
+memory."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,19 +9,23 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Iterator
 
-_verification_cache: ContextVar[dict[Path, str] | None] = ContextVar("dataset_hashes", default=None)
+_verification_cache: ContextVar[dict[Path, str] | None] = ContextVar(
+    "dataset_hashes", default=None
+)
 
 
 @contextmanager
 def hashing_session() -> Iterator[dict[Path, str]]:
-    """Share dataset hashes only for one packaging or submission operation.
+    """Share dataset hashes only for one packaging or submission
+    operation.
 
     Yields
     ------
     dict[Path, str]
-        Per-operation digest cache. Nested operations share it; leaving the
-        outer operation discards it. File copies still hash the bytes written,
-        and a later independent JSON load reads every referenced file again.
+        Per-operation digest cache. Nested operations share it; leaving
+        the outer operation discards it. File copies still hash the
+        bytes written, and a later independent JSON load reads every
+        referenced file again.
     """
     current = _verification_cache.get()
     if current is not None:
@@ -44,8 +50,8 @@ def file_sha256(path: str | Path) -> str:
     Returns
     -------
     str
-        Lowercase SHA-256 digest. Each call reads the file again, even when its
-        modification time and size have not changed.
+        Lowercase SHA-256 digest. Each call reads the file again, even
+        when its modification time and size have not changed.
 
     Raises
     ------
@@ -71,7 +77,8 @@ def copy_verified(source: Path, destination: Path, expected: str) -> None:
     Raises
     ------
     ValueError
-        If the copied bytes differ; the incomplete destination is removed.
+        If the copied bytes differ; the incomplete destination is
+        removed.
     OSError
         If reading or writing fails. The original is never modified.
     """
@@ -85,7 +92,9 @@ def copy_verified(source: Path, destination: Path, expected: str) -> None:
                 digest.update(block)
                 outgoing.write(block)
         if digest.hexdigest() != expected:
-            raise ValueError(f"Input changed after its identity was recorded: {source}")
+            raise ValueError(
+                f"Input changed after its identity was recorded: {source}"
+            )
     except BaseException:
         if created:
             destination.unlink(missing_ok=True)

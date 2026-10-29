@@ -1,4 +1,10 @@
-"""Adapts the QUESTS backend to compute per-atom descriptors, entropy, and information gain. It validates persisted configuration and manages lazy CPU or GPU backend access."""
+"""Adapts the QUESTS backend to compute per-atom descriptors, entropy,
+and information gain.
+
+It validates persisted configuration and manages lazy CPU or GPU backend
+access.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,14 +27,14 @@ from temper.logging import (
     progress_task,
 )
 
-
 logger = logging.getLogger(__name__)
 _WARNED_BACKEND_FALLBACKS: set[str] = set()
 _BACKEND_WARNING_LOCK = threading.Lock()
 
 
 def _warn_backend_fallback_once(message: str) -> None:
-    """Emit one fallback warning for each distinct backend failure reason."""
+    """Emit one fallback warning for each distinct backend failure
+    reason."""
     with _BACKEND_WARNING_LOCK:
         if message in _WARNED_BACKEND_FALLBACKS:
             return
@@ -45,7 +51,8 @@ class QuestsUnavailableError(RuntimeError):
 
     Raised when the GPU route is explicitly requested but torch is not
     installed or no supported CUDA/ROCm device is available, or when an
-    ``"auto"`` route cannot fall back. The CPU route never raises this error.
+    ``"auto"`` route cannot fall back. The CPU route never raises this
+    error.
     """
 
 
@@ -53,32 +60,38 @@ class QuestsNumericalError(RuntimeError):
     """Raised when the QUESTS backend returns invalid numerical output.
 
     Raised when descriptor computation returns a non-finite value, when
-    ``entropy``/``delta_entropy`` return ``NaN``, or when a backend result has
-    an unexpected shape. Infinite entropy values are retained with a
-    :class:`temper.logging.DataQualityWarning` because positive infinite
-    differential entropy remains meaningful for maximum-information selection.
+    ``entropy``/``delta_entropy`` return ``NaN``, or when a backend
+    result has an unexpected shape. Infinite entropy values are retained
+    with a :class:`temper.logging.DataQualityWarning` because positive
+    infinite differential entropy remains meaningful for
+    maximum-information selection.
     """
 
 
 @dataclass(frozen=True, eq=False)
 class QuestsDescriptorsStorage:
-    """Storage of per-frame slices of concatenated per-atom QUESTS descriptors.
+    """Storage of per-frame slices of concatenated per-atom QUESTS
+    descriptors.
 
     Stores the concatenated per-atom descriptor matrix of a sequence of
-    structures together with the row offsets of each structure, so any frame
-    or any ordered subset of frames can be extracted as a contiguous
-    descriptor matrix without re-running the descriptor computation.
+    structures together with the row offsets of each structure, so any
+    frame or any ordered subset of frames can be extracted as a
+    contiguous descriptor matrix without re-running the descriptor
+    computation.
 
     Attributes:
-        values (np.ndarray): Concatenated per-atom descriptor matrix of shape
+        values (np.ndarray): Concatenated per-atom descriptor matrix of
+        shape
             ``(total_atoms, n_dims)``; frame ``i`` occupies rows
             ``frame_offsets[i]:frame_offsets[i + 1]``.
-        frame_offsets (tuple[int, ...]): ``n_frames + 1`` non-decreasing row
+        frame_offsets (tuple[int, ...]): ``n_frames + 1`` non-decreasing
+        row
             offsets; ``frame_offsets[0] == 0`` and
             ``frame_offsets[n_frames] == values.shape[0]``.
-        quests_adapter_config (QuestsAdapterConfig): Configuration of the QUESTS
-            adapter used to compute the descriptors. Used to validate that the
-            descriptors can be reused.
+        quests_adapter_config (QuestsAdapterConfig): Configuration of
+        the QUESTS
+            adapter used to compute the descriptors. Used to validate
+            that the descriptors can be reused.
     """
 
     values: np.ndarray
@@ -96,8 +109,10 @@ class QuestsDescriptorsStorage:
             raise ValueError(
                 "frame_offsets must contain at least 2 entries (one frame)."
             )
-        # Offsets delimit frames, not individual descriptor rows.  There is no
-        # fixed relation between their count and ``values.shape[0]`` because a
+        # Offsets delimit frames, not individual descriptor rows.  There
+        # is no
+        # fixed relation between their count and ``values.shape[0]``
+        # because a
         # frame may contain any positive number of atoms.
         if len(self.frame_offsets) < 2:
             raise ValueError("frame_offsets must delimit at least one frame.")
@@ -150,11 +165,13 @@ class QuestsDescriptorsStorage:
         Returns
         -------
         np.ndarray
-            Per-atom descriptor matrix of shape ``(n_atoms, n_dims)`` for the
-            frame.
+            Per-atom descriptor matrix of shape ``(n_atoms, n_dims)``
+            for the frame.
         """
         return self.values[
-            self.frame_offsets[frame_index] : self.frame_offsets[frame_index + 1]
+            self.frame_offsets[frame_index] : self.frame_offsets[
+                frame_index + 1
+            ]
         ]
 
     def get_multiple_frames(self, frame_indices: List[int]) -> np.ndarray:
@@ -163,14 +180,14 @@ class QuestsDescriptorsStorage:
         Parameters
         ----------
         frame_indices : List[int]
-            Ordered frame indices; the result concatenates their per-atom
-            descriptor rows in this order.
+            Ordered frame indices; the result concatenates their
+            per-atom descriptor rows in this order.
 
         Returns
         -------
         np.ndarray
-            Per-atom descriptor matrix of shape
-            ``(sum of atoms, n_dims)``.
+            Per-atom descriptor matrix of shape ``(sum of atoms,
+            n_dims)``.
 
         Raises
         ------
@@ -180,20 +197,24 @@ class QuestsDescriptorsStorage:
         indices = list(frame_indices)
         if not indices:
             raise ValueError("concat requires at least one frame index.")
-        return np.concatenate([self.get_one_frame(index) for index in indices], axis=0)
+        return np.concatenate(
+            [self.get_one_frame(index) for index in indices], axis=0
+        )
 
 
 class QuestsAdapter:
     """Explicit CPU/GPU adapter for the QUESTS entropy adapter.
 
-    Wraps the verified ``quests`` import surface behind typed methods that
-    resolve the configured device route, deliberately convert arrays/tensors,
-    reject NaN backend output, and warn while retaining infinite entropy
-    output. All ``quests`` imports are lazy and performed only when a concrete
-    route is used, so the CPU route never imports torch/CUDA.
+    Wraps the verified ``quests`` import surface behind typed methods
+    that resolve the configured device route, deliberately convert
+    arrays/tensors, reject NaN backend output, and warn while retaining
+    infinite entropy output. All ``quests`` imports are lazy and
+    performed only when a concrete route is used, so the CPU route never
+    imports torch/CUDA.
 
     Attributes:
-        config (QuestsAdapterConfig): The persistent configuration for the
+        config (QuestsAdapterConfig): The persistent configuration for
+        the
             descriptor, entropy, device, and reproducibility parameters.
     """
 
@@ -205,13 +226,15 @@ class QuestsAdapter:
         self._numba_threads_configured: bool = False
         self._resolved_device: Literal["cpu", "gpu"] | None = None
 
-    # -- backend import boundaries (explicit, mockable at this level) -------
+    # -- backend import boundaries (explicit, mockable at this level)
+    # -------
 
     def _import_cpu_backend(self) -> Tuple[Any, Any]:
-        """Lazily import and return ``(descriptor, entropy)`` CPU modules.
+        """Lazily import and return ``(descriptor, entropy)`` CPU
+        modules.
 
-        Importing these modules pulls in numba but never torch, keeping the
-        CPU route free of any CUDA/torch initialization.
+        Importing these modules pulls in numba but never torch, keeping
+        the CPU route free of any CUDA/torch initialization.
         """
         backend = self._cpu_backend
         if backend is None:
@@ -220,7 +243,10 @@ class QuestsAdapter:
                 import quests.entropy as entropy_module
             except ModuleNotFoundError as error:
                 if error.name in {"quests", "numba"}:
-                    raise ImportError('Local data splitting requires pip install "temper-bench[preprocess]".') from error
+                    raise ImportError(
+                        "Local data splitting requires pip install"
+                        ' "temper-bench[preprocess]".'
+                    ) from error
                 raise
 
             backend = (descriptor_module, entropy_module)
@@ -230,7 +256,8 @@ class QuestsAdapter:
     def _import_gpu_entropy(self) -> Any:
         """Lazily import and return the ``quests.gpu.entropy`` module.
 
-        This module imports torch, so it is imported only by the GPU route.
+        This module imports torch, so it is imported only by the GPU
+        route.
         """
         if self._gpu_entropy is None:
             import quests.gpu.entropy as gpu_entropy_module
@@ -238,14 +265,20 @@ class QuestsAdapter:
             self._gpu_entropy = gpu_entropy_module
         return self._gpu_entropy
 
-    # -- device resolution --------------------------------------------------
+    # -- device resolution
+    # --------------------------------------------------
 
     def _gpu_device_string(self) -> str:
         """Return the torch device string for the GPU route."""
-        return self.config.gpu_device if self.config.gpu_device is not None else "cuda"
+        return (
+            self.config.gpu_device
+            if self.config.gpu_device is not None
+            else "cuda"
+        )
 
     def _assert_gpu_available(self) -> None:
-        """Raise unless torch reports a GPU; do not launch a compatibility probe."""
+        """Raise unless torch reports a GPU; do not launch a
+        compatibility probe."""
         try:
             import torch  # noqa: PLC0415
         except ImportError as exc:
@@ -292,17 +325,19 @@ class QuestsAdapter:
         Literal["cpu", "gpu"]
             ``"cpu"`` when ``config.device == "cpu"``; ``"gpu"`` when
             ``config.device == "gpu"`` (raising
-            :class:`QuestsUnavailableError` if the GPU is unavailable); and, for
-            ``config.device == "auto"``, ``"gpu"`` when
-            ``torch.cuda.is_available()`` is true with a documented fallback to
-            ``"cpu"`` otherwise. This availability check does not verify that
-            the installed PyTorch build contains kernels compatible with the
-            GPU architecture; later kernel-launch errors propagate.
+            :class:`QuestsUnavailableError` if the GPU is unavailable);
+            and, for ``config.device == "auto"``, ``"gpu"`` when
+            ``torch.cuda.is_available()`` is true with a documented
+            fallback to ``"cpu"`` otherwise. This availability check
+            does not verify that the installed PyTorch build contains
+            kernels compatible with the GPU architecture; later
+            kernel-launch errors propagate.
 
         Raises
         ------
         QuestsUnavailableError
-            If ``config.device == "gpu"`` but torch or its GPU is unavailable.
+            If ``config.device == "gpu"`` but torch or its GPU is
+            unavailable.
         """
         cached_device = self._resolved_device
         if cached_device is not None:
@@ -314,16 +349,19 @@ class QuestsAdapter:
             self._assert_gpu_available()
             resolved = "gpu"
         else:
-            # config.device == "auto": documented CPU fallback when the GPU is
-            # unavailable. Warn once per call site through Python's standard
-            # warning filter because an unnoticed fallback can add hours.
+            # config.device == "auto": documented CPU fallback when the
+            # GPU is
+            # unavailable. Warn once per call site through Python's
+            # standard
+            # warning filter because an unnoticed fallback can add
+            # hours.
             try:
                 self._assert_gpu_available()
             except QuestsUnavailableError as exc:
                 _warn_backend_fallback_once(
-                    "QUESTS device='auto' could not use a GPU and selected the "
-                    f"CPU entropy backend instead ({exc}). This run may be "
-                    "substantially slower."
+                    "QUESTS device='auto' could not use a GPU and selected"
+                    f" the CPU entropy backend instead ({exc}). This run may"
+                    " be substantially slower."
                 )
                 resolved = "cpu"
             else:
@@ -331,7 +369,8 @@ class QuestsAdapter:
 
         self._resolved_device = resolved
         logger.debug(
-            "Resolved QUESTS entropy backend to %s (requested=%s, gpu_device=%r).",
+            "Resolved QUESTS entropy backend to %s (requested=%s,"
+            " gpu_device=%r).",
             resolved,
             self.config.device,
             self.config.gpu_device,
@@ -339,13 +378,17 @@ class QuestsAdapter:
         return resolved
 
     def _configure_numba_cpu_threads(self) -> None:
-        """Apply ``config.numba_threads`` to the numba CPU kernels once."""
+        """Apply ``config.numba_threads`` to the numba CPU kernels
+        once."""
         if self._numba_threads_configured:
             return
         try:
             import numba as nb
         except ModuleNotFoundError as error:
-            raise ImportError('Local data splitting requires pip install "temper-bench[preprocess]".') from error
+            raise ImportError(
+                "Local data splitting requires pip install"
+                ' "temper-bench[preprocess]".'
+            ) from error
 
         nb.set_num_threads(self.config.numba_threads)
         self._numba_threads_configured = True
@@ -359,26 +402,31 @@ class QuestsAdapter:
         os.environ["NUMEXPR_NUM_THREADS"] = "1"
         os.environ["BLIS_NUM_THREADS"] = "1"
 
-    # -- descriptor computation ---------------------------------------------
+    # -- descriptor computation
+    # ---------------------------------------------
 
-    def compute_descriptors(self, frames: List[Atoms]) -> QuestsDescriptorsStorage:
-        """Compute per-frame QUESTS descriptors for a sequence of structures.
+    def compute_descriptors(
+        self, frames: List[Atoms]
+    ) -> QuestsDescriptorsStorage:
+        """Compute per-frame QUESTS descriptors for a sequence of
+        structures.
 
-        The descriptors are always computed with the CPU numba descriptor
-        module (``quests.descriptor.get_descriptors``), which is how QUESTS
-        itself produces descriptors regardless of the entropy backend.
+        The descriptors are always computed with the CPU numba
+        descriptor module (``quests.descriptor.get_descriptors``), which
+        is how QUESTS itself produces descriptors regardless of the
+        entropy backend.
 
         Parameters
         ----------
         frames : List[Atoms]
-            Non-empty sequence of ASE structures; each must contain at least
-            one atom.
+            Non-empty sequence of ASE structures; each must contain at
+            least one atom.
 
         Returns
         -------
         QuestsDescriptorsStorage
-            Per-frame slices of the concatenated per-atom descriptors, aligned
-            with ``structures`` order.
+            Per-frame slices of the concatenated per-atom descriptors,
+            aligned with ``structures`` order.
 
         Raises
         ------
@@ -412,23 +460,25 @@ class QuestsAdapter:
                 range(0, len(frames), chunk_size),
                 start=1,
             ):
-                chunk_frames = frames[start:start + chunk_size]
+                chunk_frames = frames[start : start + chunk_size]
                 chunk_atoms = sum(len(atoms) for atoms in chunk_frames)
                 progress.update(
                     detail=f"descriptor chunk {chunk_index}/{n_chunks}"
                 )
                 chunk_started_at = time.monotonic()
-                chunks.append(descriptor_module.get_descriptors(
-                    chunk_frames,
-                    k=self.config.descriptor_k,
-                    cutoff=self.config.descriptor_cutoff,
-                    concat=True,
-                    dtype=self.config.descriptor_dtype,
-                ))
+                chunks.append(
+                    descriptor_module.get_descriptors(
+                        chunk_frames,
+                        k=self.config.descriptor_k,
+                        cutoff=self.config.descriptor_cutoff,
+                        concat=True,
+                        dtype=self.config.descriptor_dtype,
+                    )
+                )
                 progress.advance(len(chunk_frames))
                 logger.debug(
-                    "Computed descriptor chunk %d/%d (%d frame(s), %d atom(s)) "
-                    "in %s.",
+                    "Computed descriptor chunk %d/%d (%d frame(s), %d atom(s))"
+                    " in %s.",
                     chunk_index,
                     n_chunks,
                     len(chunk_frames),
@@ -450,20 +500,23 @@ class QuestsAdapter:
             quests_adapter_config=self.config,
         )
 
-    # -- entropy adapter --------------------------------------------------
+    # -- entropy adapter
+    # --------------------------------------------------
 
     def _to_tensor(self, array: np.ndarray) -> Any:
-        """Convert a descriptor array to a torch tensor on the GPU device.
-
-        Deliberate conversion: the array is made contiguous and cast to the
-        torch dtype matching ``config.descriptor_dtype`` on the resolved GPU
+        """Convert a descriptor array to a torch tensor on the GPU
         device.
+
+        Deliberate conversion: the array is made contiguous and cast to
+        the torch dtype matching ``config.descriptor_dtype`` on the
+        resolved GPU device.
         """
         try:
             import torch
         except ImportError as e:
             raise ImportError(
-                "QUESTS entropy computation GPU backend requires PyTorch, but not installed."
+                "QUESTS entropy computation GPU backend requires PyTorch, but"
+                " not installed."
             ) from e
 
         if self.config.descriptor_dtype == "float32":
@@ -479,7 +532,8 @@ class QuestsAdapter:
 
     @staticmethod
     def _validate_scalar_entropy_result(value: float, what: str) -> None:
-        """Reject NaN and warn without rejecting an infinite scalar result."""
+        """Reject NaN and warn without rejecting an infinite scalar
+        result."""
         if math.isnan(value):
             raise QuestsNumericalError(
                 f"QUESTS {what} returned NaN; the value cannot be ranked or "
@@ -502,7 +556,8 @@ class QuestsAdapter:
 
     @staticmethod
     def _validate_array_entropy_result(values: np.ndarray, what: str) -> None:
-        """Reject NaN and warn without rejecting infinite array entries."""
+        """Reject NaN and warn without rejecting infinite array
+        entries."""
         nan_count = int(np.count_nonzero(np.isnan(values)))
         if nan_count:
             raise QuestsNumericalError(
@@ -535,8 +590,8 @@ class QuestsAdapter:
         Parameters
         ----------
         descriptors : np.ndarray
-            Per-atom descriptor matrix of shape ``(N, d)`` with at least one
-            row.
+            Per-atom descriptor matrix of shape ``(N, d)`` with at least
+            one row.
 
         Returns
         -------
@@ -552,15 +607,15 @@ class QuestsAdapter:
         Warns
         -----
         DataQualityWarning
-            If the backend returns an infinite value. The value is retained.
+            If the backend returns an infinite value. The value is
+            retained.
         """
         matrix = np.ascontiguousarray(
             np.asarray(descriptors, dtype=self.config.descriptor_dtype)
         )
         if matrix.ndim != 2:
             raise ValueError(
-                "descriptors must be a 2D matrix, got shape "
-                f"{matrix.shape}."
+                f"descriptors must be a 2D matrix, got shape {matrix.shape}."
             )
         if matrix.shape[0] == 0:
             raise ValueError("entropy requires at least one descriptor row.")
@@ -592,11 +647,12 @@ class QuestsAdapter:
         candidate: np.ndarray,
         reference: np.ndarray,
     ) -> np.ndarray:
-        """Compute per-atom differential entropy of candidates given a reference.
+        """Compute per-atom differential entropy of candidates given a
+        reference.
 
-        Both the CPU and GPU ``quests`` backends take the test/candidate set
-        as the first argument and the reference set as the second argument;
-        this adapter preserves that order.
+        Both the CPU and GPU ``quests`` backends take the test/candidate
+        set as the first argument and the reference set as the second
+        argument; this adapter preserves that order.
 
         Parameters
         ----------
@@ -608,14 +664,15 @@ class QuestsAdapter:
         Returns
         -------
         np.ndarray
-            Float64 array of shape ``(M,)`` with the differential entropy
-            ``-log(p_y)`` of each candidate row given the reference.
+            Float64 array of shape ``(M,)`` with the differential
+            entropy ``-log(p_y)`` of each candidate row given the
+            reference.
 
         Raises
         ------
         ValueError
-            If either matrix is not 2D, is empty, or has a different feature
-            dimension than the other.
+            If either matrix is not 2D, is empty, or has a different
+            feature dimension than the other.
         QuestsNumericalError
             If the backend returns NaN values or an unexpected shape.
         Warns
@@ -687,7 +744,8 @@ def compute_information_gain_per_candidate_frame(
     selected_frame_indices: List[int],
     candidate_frame_indices: List[int],
 ) -> np.ndarray:
-    """Return the QUESTS information gain of adding each of the candidate frames.
+    """Return the QUESTS information gain of adding each of the
+    candidate frames.
 
     Parameters
     ----------
@@ -699,28 +757,38 @@ def compute_information_gain_per_candidate_frame(
         Indices of selected frames in structure pool (i.e, descriptors),
         respecting selection order.
     candidate_frame_indices : List[int]
-        Indices of candidate frames in structure pool (i.e, descriptors),
+        Indices of candidate frames in structure pool (i.e,
+        descriptors),
 
     Returns
     -------
     np.ndarray
-        Per-frame QUESTS information gains, which may be negative or infinite.
+        Per-frame QUESTS information gains, which may be negative or
+        infinite.
 
     Raises
     ------
     QuestsNumericalError
         If the backend returns NaN values.
     """
-    candidate_descriptors = descriptors.get_multiple_frames(candidate_frame_indices)
+    candidate_descriptors = descriptors.get_multiple_frames(
+        candidate_frame_indices
+    )
 
-    reference_descriptors = descriptors.get_multiple_frames(selected_frame_indices)
-    deltas_per_atom = adapter.delta_entropy(candidate_descriptors, reference_descriptors)
+    reference_descriptors = descriptors.get_multiple_frames(
+        selected_frame_indices
+    )
+    deltas_per_atom = adapter.delta_entropy(
+        candidate_descriptors, reference_descriptors
+    )
 
     deltas_per_structure = []
     atom_index = 0
     for i in candidate_frame_indices:
         n_atoms = descriptors.frame_atom_counts[i]
-        deltas_per_structure.append(np.sum(deltas_per_atom[atom_index:atom_index + n_atoms]))
+        deltas_per_structure.append(
+            np.sum(deltas_per_atom[atom_index : atom_index + n_atoms])
+        )
         atom_index += n_atoms
     return np.array(deltas_per_structure)
 
@@ -732,7 +800,8 @@ def compute_total_entropy_of_selected_frames(
 ) -> float:
     """Evaluate entropy of all selected frames in a pool.
 
-    The cumulative entropies and gains are computed after every selection step.
+    The cumulative entropies and gains are computed after every
+    selection step.
 
     Parameters
     ----------

@@ -24,12 +24,16 @@ def test_metadata_matches_ase_for_mixed_systems(tmp_path):
     write(path, frames, format="extxyz")
     reference = read(path, index=":")
     with pytest.warns(UserWarning, match="Missing optional"):
-        entry = InfoEntry.from_extxyz(path, source="test", system_type=["molecule"])
+        entry = InfoEntry.from_extxyz(
+            path, source="test", system_type=["molecule"]
+        )
     assert entry.formulas == ["H2O", "He"]
     assert entry.num_frames_per_system == [2, 1]
     assert entry.num_atoms_per_system == [3, 1]
     assert entry.has_stress
-    assert entry.has_other_properties == check_atoms_have_other_properties(reference)
+    assert entry.has_other_properties == check_atoms_have_other_properties(
+        reference
+    )
 
 
 @pytest.mark.parametrize(
@@ -39,10 +43,13 @@ def test_metadata_matches_ase_for_mixed_systems(tmp_path):
         ("forces:R:3:Z:I:1:pos:R:3", "a b c 2 x y z", ("He",)),
     ],
 )
-def test_species_scan_skips_numerical_columns(tmp_path, declaration, row, symbols):
+def test_species_scan_skips_numerical_columns(
+    tmp_path, declaration, row, symbols
+):
     path = tmp_path / "columns.extxyz"
     path.write_text(
-        f'1\nProperties={declaration} energy=-1 pbc="T T F" note="two words"\n{row}\n'
+        f'1\nProperties={declaration} energy=-1 pbc="T T F" note="two'
+        f' words"\n{row}\n'
     )
     frame = next(iter_extxyz_metadata(path, read_symbols=True))
     assert frame.symbols == symbols
@@ -55,9 +62,9 @@ def test_species_scan_skips_numerical_columns(tmp_path, declaration, row, symbol
 def test_virial_is_detected_without_claiming_ase_stress(tmp_path):
     path = tmp_path / "virial.extxyz"
     path.write_text(
-        '1\nProperties=species:S:1:pos:R:3:forces:R:3 energy=0 '
+        "1\nProperties=species:S:1:pos:R:3:forces:R:3 energy=0 "
         'Lattice="2 0 0 0 2 0 0 0 2" virial="1 0 0 0 1 0 0 0 1"\n'
-        'H 0 0 0 0 0 0\n'
+        "H 0 0 0 0 0 0\n"
     )
     frame = next(iter_extxyz_metadata(path))
     assert "virial" in frame.info
@@ -77,7 +84,10 @@ def test_every_frame_requires_energy_and_forces(tmp_path, missing):
 
 def test_mixed_stress_and_empty_datasets_are_rejected(tmp_path):
     path = tmp_path / "mixed.extxyz"
-    write(path, [make_frame("H", -1, "one"), make_frame("H", -1, "two", stress=False)])
+    write(
+        path,
+        [make_frame("H", -1, "one"), make_frame("H", -1, "two", stress=False)],
+    )
     with pytest.raises(ValueError, match="mixes frames"):
         TrainingUnit._dataset_has_stress(path)
     path.write_text("")

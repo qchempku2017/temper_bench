@@ -1,4 +1,5 @@
 """Tests for safe reference reconstruction and deterministic extxyz exports."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,46 +11,97 @@ from conftest import make_frame
 from temper.schemas.split import SplitGroup, TrainValSplitTrajectory
 from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
 from temper.schemas.frame_refrence import FrameReference
-from temper.splitting.io import FrameReferenceResolver, build_export_filename, load_frames_from_references, write_all_sets_in_split_group_to_extxyz
+from temper.splitting.io import (
+    FrameReferenceResolver,
+    build_export_filename,
+    load_frames_from_references,
+    write_all_sets_in_split_group_to_extxyz,
+)
 
 
 def _refs() -> list[FrameReference]:
-    return [FrameReference(domain="demo", filename="frames.extxyz", frame_index=index) for index in range(10)]
+    return [
+        FrameReference(
+            domain="demo", filename="frames.extxyz", frame_index=index
+        )
+        for index in range(10)
+    ]
 
 
 def _split_group() -> SplitGroup:
     refs = _refs()
     return SplitGroup(
-        domain="demo", grouping_strategy="all", group_name="main", test_set=refs[8:],
-        extra_tested_groups=[], test_ratio=0.2, trainval_test_split_seed=1, repeat_id=0,
+        domain="demo",
+        grouping_strategy="all",
+        group_name="main",
+        test_set=refs[8:],
+        extra_tested_groups=[],
+        test_ratio=0.2,
+        trainval_test_split_seed=1,
+        repeat_id=0,
         train_val_split_trajectory=TrainValSplitTrajectory(
-            method="random", seed=2, requested_train_sizes=[2, 4], selected_frames=refs[:4],
-            additional_trainval_frames=refs[4:8], entropy_profile=EntropyProfile(points=[
-                EntropyProfilePoint(training_size=1, cumulative_entropy=1.0, information_gain=1.0),
-                EntropyProfilePoint(training_size=4, cumulative_entropy=2.0, information_gain=1.0),
-            ]),
+            method="random",
+            seed=2,
+            requested_train_sizes=[2, 4],
+            selected_frames=refs[:4],
+            additional_trainval_frames=refs[4:8],
+            entropy_profile=EntropyProfile(
+                points=[
+                    EntropyProfilePoint(
+                        training_size=1,
+                        cumulative_entropy=1.0,
+                        information_gain=1.0,
+                    ),
+                    EntropyProfilePoint(
+                        training_size=4,
+                        cumulative_entropy=2.0,
+                        information_gain=1.0,
+                    ),
+                ]
+            ),
         ),
     )
 
 
 def _other_split_group() -> SplitGroup:
-    refs = [FrameReference(domain="demo", filename="other.extxyz", frame_index=index) for index in range(10)]
+    refs = [
+        FrameReference(
+            domain="demo", filename="other.extxyz", frame_index=index
+        )
+        for index in range(10)
+    ]
     return SplitGroup(
-        domain="demo", grouping_strategy="all", group_name="other", test_set=refs[8:], extra_tested_groups=[],
-        test_ratio=0.2, trainval_test_split_seed=1, repeat_id=0,
+        domain="demo",
+        grouping_strategy="all",
+        group_name="other",
+        test_set=refs[8:],
+        extra_tested_groups=[],
+        test_ratio=0.2,
+        trainval_test_split_seed=1,
+        repeat_id=0,
         train_val_split_trajectory=TrainValSplitTrajectory(
-            method="random", seed=2, requested_train_sizes=[2, 4], selected_frames=refs[:4],
+            method="random",
+            seed=2,
+            requested_train_sizes=[2, 4],
+            selected_frames=refs[:4],
             additional_trainval_frames=refs[4:8],
         ),
     )
 
 
-def test_resolver_cache_preserves_reference_order_and_rejects_escapes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_resolver_cache_preserves_reference_order_and_rejects_escapes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     source = tmp_path / "demo"
     source.mkdir()
     filename = source / "frames.extxyz"
-    write(filename, [make_frame("H", -1.0, "first"), make_frame("He", -2.0, "second")], format="extxyz")
+    write(
+        filename,
+        [make_frame("H", -1.0, "first"), make_frame("He", -2.0, "second")],
+        format="extxyz",
+    )
     import temper.splitting.io as io_module
+
     original_read = io_module.read
     calls: list[Path] = []
 
@@ -58,33 +110,56 @@ def test_resolver_cache_preserves_reference_order_and_rejects_escapes(monkeypatc
         return original_read(path, index=index)
 
     monkeypatch.setattr(io_module, "read", counted_read)
-    refs = [FrameReference(domain="demo", filename="frames.extxyz", frame_index=1), FrameReference(domain="demo", filename="frames.extxyz", frame_index=0)]
+    refs = [
+        FrameReference(domain="demo", filename="frames.extxyz", frame_index=1),
+        FrameReference(domain="demo", filename="frames.extxyz", frame_index=0),
+    ]
     frames, resolver = load_frames_from_references(refs, tmp_path)
     assert isinstance(resolver, FrameReferenceResolver)
-    again, same_resolver = load_frames_from_references(refs, tmp_path, resolver)
-    assert [frame.info["dataset_tag"] for frame in frames] == ["second", "first"]
-    assert [frame.info["dataset_tag"] for frame in again] == ["second", "first"]
+    again, same_resolver = load_frames_from_references(
+        refs, tmp_path, resolver
+    )
+    assert [frame.info["dataset_tag"] for frame in frames] == [
+        "second",
+        "first",
+    ]
+    assert [frame.info["dataset_tag"] for frame in again] == [
+        "second",
+        "first",
+    ]
     assert same_resolver is resolver
-    assert calls == [filename.resolve()]  # Same file should have been cached and not read twice.
-    unsafe = FrameReference.model_construct(domain="../outside", filename="frames.extxyz", frame_index=0)
+    assert calls == [
+        filename.resolve()
+    ]  # Same file should have been cached and not read twice.
+    unsafe = FrameReference.model_construct(
+        domain="../outside", filename="frames.extxyz", frame_index=0
+    )
     with pytest.raises(ValueError, match="single safe"):
         resolver.resolve_source_path(unsafe)
 
 
-def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path) -> None:
+def test_export_writes_exact_named_train_validation_and_test_sets(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
     symbols = ["H", "He2", "Li3", "Be4", "B5", "C6", "N7", "O8", "F9", "Ne10"]
     write(
         source / "frames.extxyz",
-        [make_frame(symbol, -float(index), str(index)) for index, symbol in enumerate(symbols)],
+        [
+            make_frame(symbol, -float(index), str(index))
+            for index, symbol in enumerate(symbols)
+        ],
         format="extxyz",
     )
     output = tmp_path / "out"
     split_group = _split_group()
     units, resolver = write_all_sets_in_split_group_to_extxyz(
-        split_group, root_path=source.parent, output_path=output,
-        write_validation=True, write_extra_tests=False,
+        split_group,
+        root_path=source.parent,
+        output_path=output,
+        write_validation=True,
+        write_extra_tests=False,
     )
     assert len(units) == 3
     assert [unit.unit_type for unit in units] == [
@@ -114,8 +189,15 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
         for unit in finetune_units
         if unit.train_set is not None
     ] == [2, 4]
-    assert [len(read(output / unit.domain / unit.val_set, index=":")) for unit in finetune_units if unit.val_set] == [6, 4]
-    assert len(read(output / units[0].domain / units[0].test_sets[0], index=":")) == 2
+    assert [
+        len(read(output / unit.domain / unit.val_set, index=":"))
+        for unit in finetune_units
+        if unit.val_set
+    ] == [6, 4]
+    assert (
+        len(read(output / units[0].domain / units[0].test_sets[0], index=":"))
+        == 2
+    )
     assert all(
         "__n" in filename and filename.endswith(".extxyz")
         for unit in units
@@ -127,7 +209,10 @@ def test_export_writes_exact_named_train_validation_and_test_sets(tmp_path: Path
         if unit.train_set is not None
     )
     assert resolver.root_path == source.parent.resolve()
-    assert build_export_filename("d /", "g", None, "random", "train", 2, 3) == "d____unknown_grouping__g__random__train__n2__repeat3.extxyz"
+    assert (
+        build_export_filename("d /", "g", None, "random", "train", 2, 3)
+        == "d____unknown_grouping__g__random__train__n2__repeat3.extxyz"
+    )
     with pytest.raises(ValueError, match="role"):
         build_export_filename("d", "g", "s", "m", "other", 1, 0)
 
@@ -139,24 +224,43 @@ def test_export_includes_cross_tests_only_when_requested(
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
     for filename, symbols in (("frames.extxyz", "H"), ("other.extxyz", "He2")):
-        write(source / filename, [make_frame(symbols, -float(index), f"{filename}-{index}") for index in range(10)], format="extxyz")
+        write(
+            source / filename,
+            [
+                make_frame(symbols, -float(index), f"{filename}-{index}")
+                for index in range(10)
+            ],
+            format="extxyz",
+        )
     main = _split_group().model_copy(update={"extra_tested_groups": ["other"]})
     other = _other_split_group()
 
     without_extra, _ = write_all_sets_in_split_group_to_extxyz(
-        main, root_path=source.parent, output_path=tmp_path / "without-extra", write_extra_tests=False,
+        main,
+        root_path=source.parent,
+        output_path=tmp_path / "without-extra",
+        write_extra_tests=False,
     )
     assert all(len(unit.test_sets) == 1 for unit in without_extra)
     assert all(unit.val_set is None for unit in without_extra)
-    assert all(unit.val_n_frames == 0 and unit.val_n_atoms == 0 for unit in without_extra)
-    assert all(unit.test_n_frames == 2 and unit.test_n_atoms == 2 for unit in without_extra)
+    assert all(
+        unit.val_n_frames == 0 and unit.val_n_atoms == 0
+        for unit in without_extra
+    )
+    assert all(
+        unit.test_n_frames == 2 and unit.test_n_atoms == 2
+        for unit in without_extra
+    )
 
     with_extra_output = tmp_path / "with-extra"
     write_all_sets_in_split_group_to_extxyz(
-        other, root_path=source.parent, output_path=with_extra_output,
+        other,
+        root_path=source.parent,
+        output_path=with_extra_output,
         write_extra_tests=False,
     )
     import temper.splitting.io as io_module
+
     original_write = io_module.write_atoms_list_to_extxyz
     original_read = io_module.read
     written_groups: list[str] = []
@@ -173,19 +277,33 @@ def test_export_includes_cross_tests_only_when_requested(
     monkeypatch.setattr(io_module, "write_atoms_list_to_extxyz", tracked_write)
     monkeypatch.setattr(io_module, "read", tracked_read)
     with_extra, _ = write_all_sets_in_split_group_to_extxyz(
-        main, root_path=source.parent, output_path=with_extra_output, write_extra_tests=True,
+        main,
+        root_path=source.parent,
+        output_path=with_extra_output,
+        write_extra_tests=True,
         all_split_groups=[main, other],
     )
     assert all(len(unit.test_sets) == 2 for unit in with_extra)
-    assert all(unit.test_n_frames == 4 and unit.test_n_atoms == 6 for unit in with_extra)
+    assert all(
+        unit.test_n_frames == 4 and unit.test_n_atoms == 6
+        for unit in with_extra
+    )
     assert any("__other__" in filename for filename in with_extra[0].test_sets)
     assert with_extra[-1].unit_type == "zeroshot"
     assert with_extra[-1].test_sets == with_extra[0].test_sets
     assert with_extra[-1].test_n_frames == with_extra[0].test_n_frames
     assert with_extra[-1].test_n_atoms == with_extra[0].test_n_atoms
-    assert "other" not in written_groups  # Reuse the test file already written for the other group.
-    assert all(not path.is_relative_to(with_extra_output.resolve()) for path in read_paths)
-    assert all((tmp_path / "with-extra" / "demo" / filename).is_file() for filename in with_extra[0].test_sets)
+    assert (
+        "other" not in written_groups
+    )  # Reuse the test file already written for the other group.
+    assert all(
+        not path.is_relative_to(with_extra_output.resolve())
+        for path in read_paths
+    )
+    assert all(
+        (tmp_path / "with-extra" / "demo" / filename).is_file()
+        for filename in with_extra[0].test_sets
+    )
 
 
 def test_zeroshot_toggle_changes_only_returned_schema_objects(
@@ -240,11 +358,17 @@ def test_zeroshot_toggle_changes_only_returned_schema_objects(
     assert [unit.training_unit_id for unit in without_zeroshot] == [
         unit.training_unit_id for unit in with_zeroshot[:-1]
     ]
-    assert tuple(written_roles) == with_zeroshot_writes == (
-        "train",
-        "train",
-        "test",
+    assert (
+        tuple(written_roles)
+        == with_zeroshot_writes
+        == (
+            "train",
+            "train",
+            "test",
+        )
     )
-    assert sorted(path.name for path in with_zeroshot_output.rglob("*.extxyz")) == sorted(
+    assert sorted(
+        path.name for path in with_zeroshot_output.rglob("*.extxyz")
+    ) == sorted(
         path.name for path in without_zeroshot_output.rglob("*.extxyz")
     )

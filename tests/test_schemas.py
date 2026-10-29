@@ -1,4 +1,5 @@
 """Focused tests for persisted schemas and metadata discovery."""
+
 from __future__ import annotations
 
 import json
@@ -40,7 +41,12 @@ def required_info(filename: str = "sample.extxyz") -> dict:
 
 
 def references() -> list[FrameReference]:
-    return [FrameReference(domain="domain", filename="sample.extxyz", frame_index=i) for i in range(4)]
+    return [
+        FrameReference(
+            domain="domain", filename="sample.extxyz", frame_index=i
+        )
+        for i in range(4)
+    ]
 
 
 class NestedIdentitySource(MSONableModel):
@@ -75,16 +81,37 @@ def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
     info = InfoEntry(**required_info(), description="deterministic")
     refs = references()
     trajectory = TrainValSplitTrajectory(
-        method="random", seed=7, requested_train_sizes=[1, 2],
-        selected_frames=refs[:2], additional_trainval_frames=[refs[2]],
-        entropy_profile=EntropyProfile(points=[EntropyProfilePoint(training_size=1, cumulative_entropy=-1.0, information_gain=-0.2)]),
+        method="random",
+        seed=7,
+        requested_train_sizes=[1, 2],
+        selected_frames=refs[:2],
+        additional_trainval_frames=[refs[2]],
+        entropy_profile=EntropyProfile(
+            points=[
+                EntropyProfilePoint(
+                    training_size=1,
+                    cumulative_entropy=-1.0,
+                    information_gain=-0.2,
+                )
+            ]
+        ),
     )
     split = SplitGroup(
-        domain="domain", grouping_strategy="all", group_name="all", test_set=[refs[3]],
-        extra_tested_groups=[], test_ratio=0.25, trainval_test_split_seed=9,
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        test_set=[refs[3]],
+        extra_tested_groups=[],
+        test_ratio=0.25,
+        trainval_test_split_seed=9,
         train_val_split_trajectory=trajectory,
     )
-    grouped = GroupedDomain(domain="domain", info_entries=[info], grouping_strategy="all", groups={"all": ["sample.extxyz"]})
+    grouped = GroupedDomain(
+        domain="domain",
+        info_entries=[info],
+        grouping_strategy="all",
+        groups={"all": ["sample.extxyz"]},
+    )
 
     for model in (info, refs[0], trajectory, split, grouped):
         path = tmp_path / f"{type(model).__name__}.json"
@@ -97,24 +124,43 @@ def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
 
 def test_atom_property_helpers_validate_and_report_common_properties() -> None:
     valid = Atoms("H")
-    valid.calc = SinglePointCalculator(valid, energy=0.0, forces=[[0, 0, 0]], stress=[0] * 6, dipole=[1, 0, 0])
+    valid.calc = SinglePointCalculator(
+        valid, energy=0.0, forces=[[0, 0, 0]], stress=[0] * 6, dipole=[1, 0, 0]
+    )
     valid.info["label"] = "common"
     second = valid.copy()
-    second.calc = SinglePointCalculator(second, energy=1.0, forces=[[0, 0, 0]], stress=[0] * 6, dipole=[0, 0, 0])
+    second.calc = SinglePointCalculator(
+        second,
+        energy=1.0,
+        forces=[[0, 0, 0]],
+        stress=[0] * 6,
+        dipole=[0, 0, 0],
+    )
     second.info["label"] = "common"
     second.info["only_second"] = True
 
     assert check_atoms_has_stress([valid, second]) is True
-    assert check_atoms_have_other_properties([valid, second]) == ["dipole", "label"]
-    assert check_atoms_have_other_properties([second]) == ["dipole", "label", "only_second"]
+    assert check_atoms_have_other_properties([valid, second]) == [
+        "dipole",
+        "label",
+    ]
+    assert check_atoms_have_other_properties([second]) == [
+        "dipole",
+        "label",
+        "only_second",
+    ]
 
     missing_stress = Atoms("H")
-    missing_stress.calc = SinglePointCalculator(missing_stress, energy=0.0, forces=[[0, 0, 0]])
+    missing_stress.calc = SinglePointCalculator(
+        missing_stress, energy=0.0, forces=[[0, 0, 0]]
+    )
     with pytest.warns(UserWarning, match="Stress information is missing"):
         assert check_atoms_has_stress(missing_stress) is False
 
     missing_energy = Atoms("H")
-    missing_energy.calc = SinglePointCalculator(missing_energy, forces=[[0, 0, 0]])
+    missing_energy.calc = SinglePointCalculator(
+        missing_energy, forces=[[0, 0, 0]]
+    )
     with pytest.raises(ValueError, match="missing energy"):
         check_atoms_has_stress(missing_energy)
 
@@ -124,17 +170,27 @@ def test_relative_extxyz_paths_are_accepted(path: str) -> None:
     assert validate_relative_extxyz_path(path) == path
 
 
-@pytest.mark.parametrize("path", ["../file.extxyz", "/file.extxyz", "file.xyz"])
-def test_relative_extxyz_paths_reject_unsafe_or_wrong_suffix(path: str) -> None:
+@pytest.mark.parametrize(
+    "path", ["../file.extxyz", "/file.extxyz", "file.xyz"]
+)
+def test_relative_extxyz_paths_reject_unsafe_or_wrong_suffix(
+    path: str,
+) -> None:
     with pytest.raises(ValueError):
         validate_relative_extxyz_path(path)
     with pytest.raises(TypeError):
         validate_relative_extxyz_path(3)  # type: ignore[arg-type]
 
 
-def test_info_entry_discovers_extxyz_metadata_and_rejects_overrides(extxyz_domain: Path) -> None:
+def test_info_entry_discovers_extxyz_metadata_and_rejects_overrides(
+    extxyz_domain: Path,
+) -> None:
     with pytest.warns(UserWarning, match="Missing optional fields"):
-        entry = InfoEntry.from_extxyz(extxyz_domain / "alpha_t_300_run.extxyz", source="unit-test", system_type=["molecule"])
+        entry = InfoEntry.from_extxyz(
+            extxyz_domain / "alpha_t_300_run.extxyz",
+            source="unit-test",
+            system_type=["molecule"],
+        )
 
     assert entry.name == "alpha_t_300_run"
     assert entry.domain == "demo_domain"
@@ -145,7 +201,13 @@ def test_info_entry_discovers_extxyz_metadata_and_rejects_overrides(extxyz_domai
     assert entry.has_stress is True
     assert entry.has_other_properties == ["dataset_tag"]
 
-    with pytest.raises(ValueError, match=r"Cannot override automatically detected metadata fields: \['num_systems'\]"):
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Cannot override automatically detected metadata fields:"
+            r" \['num_systems'\]"
+        ),
+    ):
         InfoEntry.from_extxyz(
             extxyz_domain / "alpha_t_300_run.extxyz",
             source="unit-test",
@@ -154,18 +216,27 @@ def test_info_entry_discovers_extxyz_metadata_and_rejects_overrides(extxyz_domai
         )
 
 
-def test_info_loading_orders_files_and_checks_metadata_count(extxyz_domain: Path, metadata_payload: dict) -> None:
-    (extxyz_domain / "metadata.json").write_text(json.dumps(metadata_payload), encoding="utf-8")
+def test_info_loading_orders_files_and_checks_metadata_count(
+    extxyz_domain: Path, metadata_payload: dict
+) -> None:
+    (extxyz_domain / "metadata.json").write_text(
+        json.dumps(metadata_payload), encoding="utf-8"
+    )
     with pytest.warns(UserWarning, match="Missing optional fields"):
         entries = load_info_entries_from_datadir(extxyz_domain)
-    assert [entry.filename for entry in entries] == ["alpha_t_300_run.extxyz", "beta_t_600_run.extxyz"]
+    assert [entry.filename for entry in entries] == [
+        "alpha_t_300_run.extxyz",
+        "beta_t_600_run.extxyz",
+    ]
 
-    (extxyz_domain / "metadata.json").write_text(json.dumps({"info": metadata_payload["info"][:1]}), encoding="utf-8")
+    (extxyz_domain / "metadata.json").write_text(
+        json.dumps({"info": metadata_payload["info"][:1]}), encoding="utf-8"
+    )
     with pytest.raises(ValueError, match="Number of data files"):
         load_info_entries_from_datadir(extxyz_domain)
 
 
-def test_info_entry_requires_reproducibility_fields_and_warns_for_optional() -> None:
+def test_info_entry_requires_provenance_and_warns_for_optional() -> None:
     incomplete = required_info()
     incomplete["source"] = ""
     with pytest.raises(ValidationError, match="Missing required fields"):
@@ -174,48 +245,123 @@ def test_info_entry_requires_reproducibility_fields_and_warns_for_optional() -> 
         assert InfoEntry(**required_info()).name == "sample"
 
 
-def test_grouped_domain_generates_frame_references_and_validates_group_filenames() -> None:
-    first = InfoEntry(**required_info("first.extxyz"), num_frames_per_system=[2, 1])
+def test_grouped_domain_frame_references_and_filenames() -> None:
+    first = InfoEntry(
+        **required_info("first.extxyz"), num_frames_per_system=[2, 1]
+    )
     second_data = required_info("second.extxyz")
     second_data["name"] = "second"
     second = InfoEntry(**second_data, num_frames_per_system=[1])
     with pytest.warns(UserWarning, match="Missing optional fields"):
-        grouped = GroupedDomain(domain="domain", info_entries=[first, second], grouping_strategy="as_specified", groups={"mixed": ["first.extxyz", "second.extxyz"]})
-    assert [ref.identity for ref in grouped.load_frame_references_in_groups()["mixed"]] == [
-        ("domain", "first.extxyz", 0), ("domain", "first.extxyz", 1), ("domain", "first.extxyz", 2), ("domain", "second.extxyz", 0),
+        grouped = GroupedDomain(
+            domain="domain",
+            info_entries=[first, second],
+            grouping_strategy="as_specified",
+            groups={"mixed": ["first.extxyz", "second.extxyz"]},
+        )
+    assert [
+        ref.identity
+        for ref in grouped.load_frame_references_in_groups()["mixed"]
+    ] == [
+        ("domain", "first.extxyz", 0),
+        ("domain", "first.extxyz", 1),
+        ("domain", "first.extxyz", 2),
+        ("domain", "second.extxyz", 0),
     ]
     with pytest.raises(ValidationError, match="invalid file extension"):
-        GroupedDomain(domain="domain", info_entries=[], grouping_strategy="all", groups={"bad": ["not-extxyz.xyz"]})
+        GroupedDomain(
+            domain="domain",
+            info_entries=[],
+            grouping_strategy="all",
+            groups={"bad": ["not-extxyz.xyz"]},
+        )
     with pytest.raises(ValidationError, match="not present in info_entries"):
-        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"missing": ["second.extxyz"]})
+        GroupedDomain(
+            domain="domain",
+            info_entries=[first],
+            grouping_strategy="all",
+            groups={"missing": ["second.extxyz"]},
+        )
     with pytest.raises(ValidationError, match="occurs more than once"):
-        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"one": ["first.extxyz"], "two": ["first.extxyz"]})
+        GroupedDomain(
+            domain="domain",
+            info_entries=[first],
+            grouping_strategy="all",
+            groups={"one": ["first.extxyz"], "two": ["first.extxyz"]},
+        )
     with pytest.raises(ValidationError, match="occurs more than once"):
-        GroupedDomain(domain="domain", info_entries=[first], grouping_strategy="all", groups={"one": ["first.extxyz", "first.extxyz"]})
+        GroupedDomain(
+            domain="domain",
+            info_entries=[first],
+            grouping_strategy="all",
+            groups={"one": ["first.extxyz", "first.extxyz"]},
+        )
 
 
 def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions(
     tmp_path: Path,
 ) -> None:
     refs = references()
-    trajectory = TrainValSplitTrajectory(method="random", seed=4, requested_train_sizes=[1, 2], selected_frames=refs[:3], additional_trainval_frames=[])
+    trajectory = TrainValSplitTrajectory(
+        method="random",
+        seed=4,
+        requested_train_sizes=[1, 2],
+        selected_frames=refs[:3],
+        additional_trainval_frames=[],
+    )
     assert trajectory.get_train_set(1) == refs[:2]
     assert trajectory.get_val_set(1) == refs[2:3]
-    valid = SplitGroup(domain="domain", grouping_strategy="all", group_name="all", test_set=[refs[3]], extra_tested_groups=[], test_ratio=0.25, trainval_test_split_seed=1, train_val_split_trajectory=trajectory)
+    valid = SplitGroup(
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        test_set=[refs[3]],
+        extra_tested_groups=[],
+        test_ratio=0.25,
+        trainval_test_split_seed=1,
+        train_val_split_trajectory=trajectory,
+    )
     assert valid.repeat_id == 0
 
     with pytest.raises(ValidationError, match="duplicate frames"):
-        TrainValSplitTrajectory(method="random", seed=4, requested_train_sizes=[1], selected_frames=[refs[0], refs[0]])
+        TrainValSplitTrajectory(
+            method="random",
+            seed=4,
+            requested_train_sizes=[1],
+            selected_frames=[refs[0], refs[0]],
+        )
     with pytest.raises(ValidationError, match="test_set size"):
-        SplitGroup(domain="domain", grouping_strategy="all", group_name="all", test_set=[], extra_tested_groups=[], test_ratio=0.25, trainval_test_split_seed=1, train_val_split_trajectory=trajectory)
+        SplitGroup(
+            domain="domain",
+            grouping_strategy="all",
+            group_name="all",
+            test_set=[],
+            extra_tested_groups=[],
+            test_ratio=0.25,
+            trainval_test_split_seed=1,
+            train_val_split_trajectory=trajectory,
+        )
     with pytest.raises(ValidationError, match="strictly increasing"):
-        EntropyProfile(points=[EntropyProfilePoint(training_size=2, cumulative_entropy=0, information_gain=0), EntropyProfilePoint(training_size=1, cumulative_entropy=0, information_gain=0)])
+        EntropyProfile(
+            points=[
+                EntropyProfilePoint(
+                    training_size=2, cumulative_entropy=0, information_gain=0
+                ),
+                EntropyProfilePoint(
+                    training_size=1, cumulative_entropy=0, information_gain=0
+                ),
+            ]
+        )
     infinite = EntropyProfilePoint(
         training_size=1,
         cumulative_entropy=float("inf"),
         information_gain=float("inf"),
     )
-    assert infinite.cumulative_entropy == infinite.information_gain == float("inf")
+    assert (
+        infinite.cumulative_entropy
+        == infinite.information_gain
+        == float("inf")
+    )
     infinite_profile_path = tmp_path / "infinite-entropy-profile.json"
     dumpfn(EntropyProfile(points=[infinite]), infinite_profile_path, indent=2)
     restored_infinite_profile = loadfn(infinite_profile_path)
@@ -289,15 +435,19 @@ def test_split_identity_is_deterministic_and_tracks_split_provenance(
     assert split.split_id != before_membership_change
 
     before_entropy_change = split.split_id
-    split.train_val_split_trajectory = trajectory.model_copy(update={
-        "entropy_profile": EntropyProfile(points=[
-            EntropyProfilePoint(
-                training_size=1,
-                cumulative_entropy=1.0,
-                information_gain=1.0,
+    split.train_val_split_trajectory = trajectory.model_copy(
+        update={
+            "entropy_profile": EntropyProfile(
+                points=[
+                    EntropyProfilePoint(
+                        training_size=1,
+                        cumulative_entropy=1.0,
+                        information_gain=1.0,
+                    )
+                ]
             )
-        ])
-    })
+        }
+    )
     assert split.split_id == before_entropy_change
 
     serialized = split.model_dump(mode="json")
@@ -310,7 +460,9 @@ def test_split_identity_is_deterministic_and_tracks_split_provenance(
     def unexpected_recomputation(_: SplitGroup) -> UUID:
         raise AssertionError("stored split_id should be reused")
 
-    monkeypatch.setattr(SplitGroup, "_compute_identity", unexpected_recomputation)
+    monkeypatch.setattr(
+        SplitGroup, "_compute_identity", unexpected_recomputation
+    )
     assert split.split_id == stored_id
     assert split.model_dump(mode="json")["split_id"] == str(stored_id)
 
@@ -326,17 +478,40 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
         (domain_root / name).write_text("", encoding="utf-8")
     split_id = UUID("70f7b0c5-1894-5964-8e7c-89454fb0f52a")
     unit = TrainingUnit(
-        domain="domain", grouping_strategy="all", group_name="all", method="random",
-        repeat_id=0, train_n_frames=1, val_n_frames=1, test_n_frames=1,
-        train_n_atoms=2, val_n_atoms=3, test_n_atoms=4, split_id=split_id,
-        train_set="train.extxyz", val_set="val.extxyz",
-        test_sets=["test.extxyz"], root_path=root,
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        method="random",
+        repeat_id=0,
+        train_n_frames=1,
+        val_n_frames=1,
+        test_n_frames=1,
+        train_n_atoms=2,
+        val_n_atoms=3,
+        test_n_atoms=4,
+        split_id=split_id,
+        train_set="train.extxyz",
+        val_set="val.extxyz",
+        test_sets=["test.extxyz"],
+        root_path=root,
     )
     zeroshot_unit = TrainingUnit(
-        domain="domain", grouping_strategy="all", group_name="all", method="random",
-        repeat_id=0, train_n_frames=0, val_n_frames=0, test_n_frames=1,
-        train_n_atoms=0, val_n_atoms=0, test_n_atoms=4, split_id=split_id,
-        train_set=None, val_set=None, test_sets=["test.extxyz"], root_path=root,
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        method="random",
+        repeat_id=0,
+        train_n_frames=0,
+        val_n_frames=0,
+        test_n_frames=1,
+        train_n_atoms=0,
+        val_n_atoms=0,
+        test_n_atoms=4,
+        split_id=split_id,
+        train_set=None,
+        val_set=None,
+        test_sets=["test.extxyz"],
+        root_path=root,
     )
     original_training_unit_id = unit.training_unit_id
     assert "training_unit_id" in TrainingUnit.model_fields
@@ -346,7 +521,9 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     assert zeroshot_unit.unit_type == "zeroshot"
     assert "unit_type" not in unit.model_dump()
     assert unit.training_unit_id.version == 5
-    assert unit.training_unit_id == UUID("ac8aab5e-4679-5bc8-a91e-99167ed36cd9")
+    assert unit.training_unit_id == UUID(
+        "ac8aab5e-4679-5bc8-a91e-99167ed36cd9"
+    )
     assert zeroshot_unit.training_unit_id != unit.training_unit_id
     unit.train_n_frames = 2
     assert unit.train_n_frames == 2
@@ -359,7 +536,10 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     with pytest.raises(ValidationError, match="train_n_atoms"):
         unit.model_copy(update={"train_n_atoms": 0})
     for derived_metric in (
-        "val_n_frames", "test_n_frames", "train_n_atoms", "val_n_atoms",
+        "val_n_frames",
+        "test_n_frames",
+        "train_n_atoms",
+        "val_n_atoms",
         "test_n_atoms",
     ):
         changed_metric = unit.model_copy(
@@ -408,11 +588,21 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     assert other_split.training_unit_id != unit.training_unit_id
 
     parentless_unit = TrainingUnit(
-        domain="domain", grouping_strategy="all", group_name="all", method="random",
-        repeat_id=0, train_n_frames=1, val_n_frames=1, test_n_frames=1,
-        train_n_atoms=2, val_n_atoms=3, test_n_atoms=4,
-        train_set="train.extxyz", val_set="val.extxyz",
-        test_sets=["test.extxyz"], root_path=moved_root,
+        domain="domain",
+        grouping_strategy="all",
+        group_name="all",
+        method="random",
+        repeat_id=0,
+        train_n_frames=1,
+        val_n_frames=1,
+        test_n_frames=1,
+        train_n_atoms=2,
+        val_n_atoms=3,
+        test_n_atoms=4,
+        train_set="train.extxyz",
+        val_set="val.extxyz",
+        test_sets=["test.extxyz"],
+        root_path=moved_root,
     )
     assert parentless_unit.split_id is None
     parentless_payload = parentless_unit.model_dump()
@@ -424,8 +614,12 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
 
     v1_payload = parentless_unit.model_dump()
     for metric in (
-        "train_n_frames", "val_n_frames", "test_n_frames", "train_n_atoms",
-        "val_n_atoms", "test_n_atoms",
+        "train_n_frames",
+        "val_n_frames",
+        "test_n_frames",
+        "train_n_atoms",
+        "val_n_atoms",
+        "test_n_atoms",
     ):
         v1_payload.pop(metric)
     v1_payload["n_train"] = 1
@@ -435,25 +629,38 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
 
     tampered_payload = unit.model_dump(mode="json")
     tampered_payload["train_n_frames"] = 3
-    with pytest.raises(ValidationError, match="does not match training-unit contents"):
+    with pytest.raises(
+        ValidationError, match="does not match training-unit contents"
+    ):
         TrainingUnit.model_validate(tampered_payload)
     with pytest.raises(ValueError, match="does not exist"):
         TrainingUnit(
-            domain="domain", grouping_strategy="all", group_name="all",
-            method="random", repeat_id=0, train_n_frames=1, val_n_frames=0,
-            test_n_frames=0, train_n_atoms=1, val_n_atoms=0,
-            test_n_atoms=0, train_set="missing.extxyz", test_sets=[],
+            domain="domain",
+            grouping_strategy="all",
+            group_name="all",
+            method="random",
+            repeat_id=0,
+            train_n_frames=1,
+            val_n_frames=0,
+            test_n_frames=0,
+            train_n_atoms=1,
+            val_n_atoms=0,
+            test_n_atoms=0,
+            train_set="missing.extxyz",
+            test_sets=[],
             root_path=root,
         ).dataset_source("missing.extxyz")
 
-    converted = unit.model_copy(update={
-        "train_set": None,
-        "val_set": None,
-        "train_n_frames": 0,
-        "val_n_frames": 0,
-        "train_n_atoms": 0,
-        "val_n_atoms": 0,
-    })
+    converted = unit.model_copy(
+        update={
+            "train_set": None,
+            "val_set": None,
+            "train_n_frames": 0,
+            "val_n_frames": 0,
+            "train_n_atoms": 0,
+            "val_n_atoms": 0,
+        }
+    )
     assert converted.unit_type == "zeroshot"
     assert converted.training_unit_id != unit.training_unit_id
 
@@ -548,22 +755,26 @@ def test_training_unit_checks_every_referenced_dataset_file(
 
     assert TrainingUnit(**base).unit_type == "zeroshot"
     with pytest.raises(ValueError, match="does not exist"):
-        TrainingUnit(**(base | {"test_sets": ["test.extxyz", "missing.extxyz"]})).dataset_source("missing.extxyz")
+        TrainingUnit(
+            **(base | {"test_sets": ["test.extxyz", "missing.extxyz"]})
+        ).dataset_source("missing.extxyz")
     with pytest.raises(ValidationError, match="extension"):
         TrainingUnit(**(base | {"test_sets": ["test.xyz"]}))
     with pytest.raises(ValidationError, match="extension"):
-        TrainingUnit(**(
-            base
-            | {
-                "train_set": "train.extxyz",
-                "train_n_frames": 1,
-                "train_n_atoms": 1,
-                "val_set": "val.xyz",
-            }
-        ))
+        TrainingUnit(
+            **(
+                base
+                | {
+                    "train_set": "train.extxyz",
+                    "train_n_frames": 1,
+                    "train_n_atoms": 1,
+                    "val_set": "val.xyz",
+                }
+            )
+        )
 
 
-def test_managed_identity_subclass_is_declarative_and_uses_validation_hook() -> None:
+def test_managed_identity_declaration_and_validation_hook() -> None:
     record = DeclarativeIdentityModel(
         name="alpha",
         nested=NestedIdentitySource(selected=1, ignored=10),
@@ -571,7 +782,9 @@ def test_managed_identity_subclass_is_declarative_and_uses_validation_hook() -> 
     )
 
     assert "_identity_payload" not in DeclarativeIdentityModel.__dict__
-    assert "_finalize_managed_identity" not in DeclarativeIdentityModel.__dict__
+    assert (
+        "_finalize_managed_identity" not in DeclarativeIdentityModel.__dict__
+    )
     assert record._identity_payload() == {
         "identity_schema": "temper.test-record.v1",
         "name": "alpha",

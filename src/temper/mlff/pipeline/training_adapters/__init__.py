@@ -15,7 +15,8 @@ from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 
 
 def mlff_adapter_factory(mlff_type: str) -> type[BaseMLFFAdapter]:
-    """Return the adapter class registered for a supported MLFF family."""
+    """Return the adapter class registered for a supported MLFF
+    family."""
     try:
         return BaseMLFFAdapter.registry[mlff_type]
     except KeyError as error:
@@ -23,6 +24,12 @@ def mlff_adapter_factory(mlff_type: str) -> type[BaseMLFFAdapter]:
 
 
 __all__ = [
-    "BaseMLFFAdapter", "DPA4Adapter", "DPA4CAdapter", "MACEAdapter",
-    "MatterSimAdapter", "NEP89Adapter", "SevenNetAdapter", "mlff_adapter_factory",
+    "BaseMLFFAdapter",
+    "DPA4Adapter",
+    "DPA4CAdapter",
+    "MACEAdapter",
+    "MatterSimAdapter",
+    "NEP89Adapter",
+    "SevenNetAdapter",
+    "mlff_adapter_factory",
 ]

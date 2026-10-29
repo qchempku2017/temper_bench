@@ -1,4 +1,5 @@
-"""Helpers for validating ASE structure properties and safe extxyz source paths used by schemas."""
+"""Helpers for validating ASE structure properties and safe extxyz
+source paths used by schemas."""
 
 from __future__ import annotations
 
@@ -12,13 +13,15 @@ from temper.logging import DataQualityWarning
 
 
 def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
-    """Validate a portable path that is safe to place below a submit directory.
+    """Validate a portable path that is safe to place below a submit
+    directory.
 
-    Submit bundles are created locally and may later be copied to a different
-    operating system. Their stored paths therefore use POSIX ``/`` separators
-    and must be relative to the bundle root. This helper rejects absolute paths,
-    Windows drive paths, traversal, redundant segments, and other forms whose
-    meaning could change after transport.
+    Submit bundles are created locally and may later be copied to a
+    different operating system. Their stored paths therefore use POSIX
+    ``/`` separators and must be relative to the bundle root. This
+    helper rejects absolute paths, Windows drive paths, traversal,
+    redundant segments, and other forms whose meaning could change after
+    transport.
 
     Parameters
     ----------
@@ -26,8 +29,8 @@ def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
         Path to validate, written with POSIX separators. It may contain
         subdirectories, for example ``"datasets/train.extxyz"``.
     label : str, optional
-        Human-readable name used in validation errors. It does not affect the
-        returned path.
+        Human-readable name used in validation errors. It does not
+        affect the returned path.
 
     Returns
     -------
@@ -39,12 +42,14 @@ def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
     TypeError
         If ``value`` or ``label`` is not a string.
     ValueError
-        If ``value`` is empty, absolute, drive-qualified, uses backslashes, or
-        contains empty, current-directory, parent-directory, or unnormalized
-        path segments.
+        If ``value`` is empty, absolute, drive-qualified, uses
+        backslashes, or contains empty, current-directory,
+        parent-directory, or unnormalized path segments.
     """
     if not isinstance(value, str):
-        raise TypeError(f"{label} must be a string, got {type(value).__name__}.")
+        raise TypeError(
+            f"{label} must be a string, got {type(value).__name__}."
+        )
     if not isinstance(label, str):
         raise TypeError(f"label must be a string, got {type(label).__name__}.")
     if not value:
@@ -56,9 +61,7 @@ def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
     windows = PureWindowsPath(value)
     if posix.is_absolute() or windows.is_absolute() or windows.drive:
         raise ValueError(f"{label} must be relative, got {value!r}.")
-    if not posix.parts or any(
-        part in {"", ".", ".."} for part in posix.parts
-    ):
+    if not posix.parts or any(part in {"", ".", ".."} for part in posix.parts):
         raise ValueError(
             f"{label} must not contain empty, '.' or '..' segments: {value!r}."
         )
@@ -68,11 +71,13 @@ def validate_submit_relative_path(value: str, *, label: str = "path") -> str:
 
 
 def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
-    """Check required labels and report whether every frame includes stress.
+    """Check required labels and report whether every frame includes
+    stress.
 
-    Energy, forces, and stress are queried through ASE rather than by inspecting
-    Calculator internals, so any Calculator implementing the standard methods
-    is accepted. Missing energy or forces is invalid; missing stress is reported
+    Energy, forces, and stress are queried through ASE rather than by
+    inspecting Calculator internals, so any Calculator implementing the
+    standard methods is accepted. Missing energy or forces is invalid;
+    missing stress is reported
     as a data-quality warning and a false return value.
 
     Parameters
@@ -135,15 +140,15 @@ def check_atoms_has_stress(frames: Atoms | List[Atoms]) -> bool:
 
 
 def check_atoms_have_other_properties(
-        frames: Atoms | list[Atoms],
+    frames: Atoms | list[Atoms],
 ) -> list[str]:
     """Check if the frames have other properties.
 
-    Checks within atoms.info and atoms.calc.results for properties other than
-    energy, forces, stress, and virial.
+    Checks within atoms.info and atoms.calc.results for properties other
+    than energy, forces, stress, and virial.
 
-    A property must be present in **all** frames to be reported. Properties
-    that appear in only a subset of frames are excluded.
+    A property must be present in **all** frames to be reported.
+    Properties that appear in only a subset of frames are excluded.
 
     Parameters
     ----------
@@ -162,7 +167,8 @@ def check_atoms_have_other_properties(
         return []
 
     def _get_other_properties(a: Atoms) -> set[str]:
-        """Collect non-standard property keys from a single Atoms object."""
+        """Collect non-standard property keys from a single Atoms
+        object."""
         props: set[str] = set()
         for key in a.info.keys():
             if key not in ["energy", "forces", "stress", "virial"]:
@@ -184,12 +190,14 @@ def check_atoms_have_other_properties(
 
 
 def validate_relative_extxyz_path(path: str) -> str:
-    """Validate that a path is a relative extxyz path without directory traversal.
+    """Validate that a path is a relative extxyz path without directory
+    traversal.
 
-    Used to validate persisted source filenames. The path must be relative
-    (not absolute, no drive/root), must not contain ``..`` traversal segments,
-    and must end with the ``.extxyz`` suffix. Subdirectories (e.g.
-    ``subdir/file.extxyz``) are allowed as long as they are relative.
+    Used to validate persisted source filenames. The path must be
+    relative (not absolute, no drive/root), must not contain ``..``
+    traversal segments, and must end with the ``.extxyz`` suffix.
+    Subdirectories (e.g. ``subdir/file.extxyz``) are allowed as long as
+    they are relative.
 
     Parameters
     ----------
@@ -206,18 +214,17 @@ def validate_relative_extxyz_path(path: str) -> str:
     TypeError
         If ``path`` is not a string.
     ValueError
-        If ``path`` is absolute, contains traversal, or does not end with
-        ``.extxyz``.
+        If ``path`` is absolute, contains traversal, or does not end
+        with ``.extxyz``.
     """
     if not isinstance(path, str):
-        raise TypeError(
-            f"path must be a str, got {type(path).__name__}."
-        )
+        raise TypeError(f"path must be a str, got {type(path).__name__}.")
 
     filepath = Path(path)
 
     # Reject absolute paths. On Windows a leading-root path such as
-    # "/a.extxyz" is drive-relative (is_absolute() is False) but is still
+    # "/a.extxyz" is drive-relative (is_absolute() is False) but is
+    # still
     # rooted, so a non-empty ``root`` is rejected as well.
     if filepath.is_absolute() or filepath.root:
         raise ValueError(
@@ -226,7 +233,8 @@ def validate_relative_extxyz_path(path: str) -> str:
 
     if ".." in filepath.parts:
         raise ValueError(
-            f"Source filename must not contain directory traversal, got: {path}."
+            "Source filename must not contain directory traversal, got:"
+            f" {path}."
         )
 
     if filepath.suffix != ".extxyz":

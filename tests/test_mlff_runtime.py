@@ -34,8 +34,10 @@ class FakeCalculator(Calculator):
         self.results = {
             "energy": float(atom_count),
             "forces": np.full((atom_count, 3), float(atom_count)),
-            # ASE's six-vector order is xx, yy, zz, yz, xz, xy. The generic
-            # runner requests voigt=False and persists the resulting tensor.
+            # ASE's six-vector order is xx, yy, zz, yz, xz, xy. The
+            # generic
+            # runner requests voigt=False and persists the resulting
+            # tensor.
             "stress": np.arange(6, dtype=float),
         }
 
@@ -121,7 +123,9 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
     _install_fake_adapter(monkeypatch, FakeCalculator())
     run_test.run_test(config, bundle_root=tmp_path)
 
-    with np.load(tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False) as data:
+    with np.load(
+        tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False
+    ) as data:
         assert data.files == [
             "energies",
             "forces",
@@ -142,12 +146,16 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
         )
         assert all(data[name].dtype != object for name in data.files)
 
-    with np.load(tmp_path / "testing_outputs" / "test_001.npz", allow_pickle=False) as data:
+    with np.load(
+        tmp_path / "testing_outputs" / "test_001.npz", allow_pickle=False
+    ) as data:
         np.testing.assert_array_equal(data["energies"], [1.0])
         np.testing.assert_array_equal(data["atom_offsets"], [0, 1])
 
     first_metadata = json.loads(
-        (tmp_path / "testing_outputs" / "test_000.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "test_000.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert first_metadata["dataset_id"] == "test_000"
     assert first_metadata["source_filename"] == "first.extxyz"
@@ -160,7 +168,9 @@ def test_generic_runner_preserves_frames_and_writes_ragged_arrays(
     }
 
     summary = json.loads(
-        (tmp_path / "testing_outputs" / "summary.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "summary.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert [item["dataset_id"] for item in summary["datasets"]] == [
         "test_000",
@@ -176,10 +186,14 @@ def test_generic_runner_omits_stress_when_not_requested(
     _install_fake_adapter(monkeypatch, FakeCalculator())
     run_test.run_test(config, bundle_root=tmp_path)
 
-    with np.load(tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False) as data:
+    with np.load(
+        tmp_path / "testing_outputs" / "test_000.npz", allow_pickle=False
+    ) as data:
         assert "stresses" not in data.files
     metadata = json.loads(
-        (tmp_path / "testing_outputs" / "test_000.json").read_text(encoding="utf-8")
+        (tmp_path / "testing_outputs" / "test_000.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert metadata["units"]["stress"] is None
 
@@ -194,7 +208,9 @@ def test_generic_runner_reports_unsupported_stress_with_dataset_and_frame(
         run_test.run_test(config, bundle_root=tmp_path)
 
 
-def test_generic_runner_rejects_dataset_escape(monkeypatch, tmp_path: Path) -> None:
+def test_generic_runner_rejects_dataset_escape(
+    monkeypatch, tmp_path: Path
+) -> None:
     config_path = _write_runtime_config(tmp_path, stress=False)
     outside = tmp_path.parent / "outside.extxyz"
     write(outside, Atoms("H"), format="extxyz")

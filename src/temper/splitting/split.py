@@ -1,4 +1,10 @@
-"""Splits each group of a grouped domain into repeatable train, validation, and test records. It configures the initial test partition and subsequent training-frame selection."""
+"""Splits each group of a grouped domain into repeatable train,
+validation, and test records.
+
+It configures the initial test partition and subsequent training-frame
+selection.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -14,12 +20,17 @@ from temper.schemas.group import GroupedDomain
 from temper.schemas.frame_refrence import FrameReference
 from temper.utils.defaults import DEFAULT_TEST_RATIO
 
-from temper.splitting.io import FrameReferenceResolver, load_frames_from_references
+from temper.splitting.io import (
+    FrameReferenceResolver,
+    load_frames_from_references,
+)
 from temper.splitting.selectors import selector_class_factory
-from temper.splitting.quests_adapter import QuestsDescriptorsStorage, QuestsAdapter
+from temper.splitting.quests_adapter import (
+    QuestsDescriptorsStorage,
+    QuestsAdapter,
+)
 from temper.schemas.split import SplitConfig
 from temper.logging import format_elapsed, progress_task
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +42,9 @@ def partition_trainval_test(
 ) -> Tuple[List[FrameReference], List[FrameReference], List[int], List[int]]:
     """Perform the initial seeded train+validation vs test partition.
 
-    The partition into (train+validation, test) is always performed at random
-    for every splitting method. Exactly one of ``test_ratio`` or ``test_size``
-    must be provided.
+    The partition into (train+validation, test) is always performed at
+    random for every splitting method. Exactly one of ``test_ratio`` or
+    ``test_size`` must be provided.
 
     Rounding: when ``test_ratio`` is used, the test size is computed as
     ``round(len(pool) * test_ratio)`` using Python's built-in ``round``
@@ -42,34 +53,36 @@ def partition_trainval_test(
     Parameters
     ----------
     pool : List[FrameReference]
-        The complete frame pool of the group (typically the deterministic
-        output of :func:`flatten_frames`).
+        The complete frame pool of the group (typically the
+        deterministic output of :func:`flatten_frames`).
     seed : int
-        Random seed for the partition. The partition is reproducible for a
-        given ``pool`` order and ``seed``.
+        Random seed for the partition. The partition is reproducible for
+        a given ``pool`` order and ``seed``.
     test_ratio : float, optional
-        Requested ratio of the test set to the total pool.
-        Defaults to "DEFAULT_TEST_RATIO".
+        Requested ratio of the test set to the total pool. Defaults to
+        "DEFAULT_TEST_RATIO".
 
     Returns
     -------
-    tuple[list[FrameReference], list[FrameReference], list[int], list[int]]
-        ``(trainval_pool, test_set, train_positions, test_positions)``. The
-        positions are the indices of the references in the original ``pool``,
+    tuple[list[FrameReference], list[FrameReference], list[int],
+    list[int]]
+        ``(trainval_pool, test_set, train_positions, test_positions)``.
+        The positions are the indices of the references in the original
+        ``pool``,
         i.e. ``trainval_pool = [pool[i] for i in train_positions]`` and
         ``test_set = [pool[i] for i in test_positions]``. The positions are
         always sorted in ascending order, i.e. ``train_positions ==
-        sorted(train_positions)`` and ``test_positions == sorted(test_positions)``.
-        ``trainval_pool`` preserves the order of
-        ``pool``; ``test_set`` preserves the order of the selected positions
-        within ``pool``.
+        sorted(train_positions)`` and ``test_positions ==
+        sorted(test_positions)``. ``trainval_pool`` preserves the order
+        of ``pool``; ``test_set`` preserves the order of the selected
+        positions within ``pool``.
 
     Raises
     ------
     ValueError
-        If neither nor both of ``test_ratio``/``test_size`` are provided, if the
-        resulting test size is outside ``[1, len(pool) - 1]``, or if the pool
-        contains duplicate frames.
+        If neither nor both of ``test_ratio``/``test_size`` are
+        provided, if the resulting test size is outside ``[1, len(pool)
+        - 1]``, or if the pool contains duplicate frames.
     """
 
     n_total = len(pool)
@@ -90,12 +103,14 @@ def partition_trainval_test(
         raise ValueError("pool must not contain duplicate frames.")
 
     rng = np.random.default_rng(seed)
-    test_positions: list[int] = [  # Annotate to prevent typing mismatch at return.
-        int(i)
-        for i in np.sort(
-            rng.choice(n_total, size=test_size, replace=False)
-        )
-    ]
+    test_positions: list[int] = (
+        [  # Annotate to prevent typing mismatch at return.
+            int(i)
+            for i in np.sort(
+                rng.choice(n_total, size=test_size, replace=False)
+            )
+        ]
+    )
 
     train_positions: list[int] = [
         int(i)
@@ -105,8 +120,10 @@ def partition_trainval_test(
         )
     ]
 
-    # Index both outputs against the original pool. The test positions refer
-    # to the original pool and must not be applied after it is shortened to
+    # Index both outputs against the original pool. The test positions
+    # refer
+    # to the original pool and must not be applied after it is shortened
+    # to
     # the train/validation subset.
     trainval_pool = [pool[i] for i in train_positions]
     test_set = [pool[i] for i in test_positions]
@@ -126,21 +143,24 @@ def split_grouped_domain(
     grouped_domain : GroupedDomain
         Grouped domain to split.
     config : SplitConfig | None
-        Configuration for the split. If not provided, will use all default settings.
-        See src.temper.splitting.split_config ``SplitConfig`` for details.
+        Configuration for the split. If not provided, will use all
+        default settings. See src.temper.splitting.split_config
+        ``SplitConfig`` for details.
 
     Returns
     -------
     List[SplitGroup]
-        List of split groups hosting train-val-test split records, each corresponds to
-        one group in the input grouped domain, and one independent repeated split.
+        List of split groups hosting train-val-test split records, each
+        corresponds to one group in the input grouped domain, and one
+        independent repeated split.
 
     Raises
     ------
     ValueError
-        If ``unified_seed`` is provided and either ``trainval_test_split_seed``
-        or ``train_val_split_seed`` is provided, if ``unified_seed`` is negative,
-        if ``trainval_test_split_seed`` is negative,
+        If ``unified_seed`` is provided and either
+        ``trainval_test_split_seed`` or ``train_val_split_seed`` is
+        provided, if ``unified_seed`` is negative, if
+        ``trainval_test_split_seed`` is negative,
     """
     config = config or SplitConfig()
     started_at = time.monotonic()
@@ -161,7 +181,8 @@ def split_grouped_domain(
     )
 
     # Load pools of frames in groups from references. Resolver reused.
-    # For resolver to be reusable, root_path must have been expanded and resolved
+    # For resolver to be reusable, root_path must have been expanded and
+    # resolved
     # to match the stored root_path in resolver.
     group_frames: Dict[str, List[Atoms]] = {}
     resolver = FrameReferenceResolver(config.root_path)
@@ -218,16 +239,20 @@ def split_grouped_domain(
     )
     with progress_task(
         logger,
-        f"Computing descriptors for strategy {grouped_domain.grouping_strategy!r}",
+        "Computing descriptors for strategy"
+        f" {grouped_domain.grouping_strategy!r}",
         total=total_frames,
         unit="frames",
     ) as progress:
         for group_name, structures in group_frames.items():
             progress.update(detail=f"current group {group_name!r}")
-            group_descriptors[group_name] = adapter.compute_descriptors(structures)
+            group_descriptors[group_name] = adapter.compute_descriptors(
+                structures
+            )
             progress.advance(len(structures))
 
-    # Determine extra_tests. Pre-specified tests over-write automatic determination.
+    # Determine extra_tests. Pre-specified tests over-write automatic
+    # determination.
     group_extra_tests: Dict[str, List[str]] = {}
     if grouped_domain.specify_cross_tests is not None:
         group_extra_tests = grouped_domain.specify_cross_tests
@@ -245,7 +270,9 @@ def split_grouped_domain(
                 group_extra_tests[group_name] = list(other_group_names)
 
     # Determine selector class.
-    selector_cls = selector_class_factory(selection_method=config.train_val_split_method)
+    selector_cls = selector_class_factory(
+        selection_method=config.train_val_split_method
+    )
 
     split_groups = []
     with progress_task(
@@ -262,10 +289,12 @@ def split_grouped_domain(
                         f"{repeat_id + 1}/{config.split_repeats}"
                     )
                 )
-                trainval_pool, test_set, trainval_positions, test_positions = partition_trainval_test(
-                    pool,
-                    seed=config.trainval_test_split_seeds[repeat_id],
-                    test_ratio=config.test_ratio,
+                trainval_pool, test_set, trainval_positions, test_positions = (
+                    partition_trainval_test(
+                        pool,
+                        seed=config.trainval_test_split_seeds[repeat_id],
+                        test_ratio=config.test_ratio,
+                    )
                 )
                 selector = selector_cls(
                     pool_descriptors=group_descriptors[group_name],
@@ -274,15 +303,23 @@ def split_grouped_domain(
                     max_train_size=config.max_train_size,
                     seed=config.train_val_split_seeds[repeat_id],
                 )
-                selected_frame_indices, remaining_frame_indices, entropy_profile = selector.run()
+                (
+                    selected_frame_indices,
+                    remaining_frame_indices,
+                    entropy_profile,
+                ) = selector.run()
                 selected_frames = [pool[i] for i in selected_frame_indices]
-                additional_trainval_frames = [pool[i] for i in remaining_frame_indices]
+                additional_trainval_frames = [
+                    pool[i] for i in remaining_frame_indices
+                ]
                 trajectory = TrainValSplitTrajectory(
                     method=config.train_val_split_method,
                     seed=config.train_val_split_seeds[repeat_id],
                     requested_train_sizes=selector.requested_train_sizes,
                     selected_frames=tuple(selected_frames),
-                    additional_trainval_frames=tuple(additional_trainval_frames),
+                    additional_trainval_frames=tuple(
+                        additional_trainval_frames
+                    ),
                     entropy_profile=entropy_profile,
                 )
                 split_group = SplitGroup(
@@ -294,7 +331,9 @@ def split_grouped_domain(
                         group_extra_tests.get(group_name, [])
                     ),
                     test_ratio=config.test_ratio,
-                    trainval_test_split_seed=config.trainval_test_split_seeds[repeat_id],
+                    trainval_test_split_seed=config.trainval_test_split_seeds[
+                        repeat_id
+                    ],
                     train_val_split_trajectory=trajectory,
                     repeat_id=repeat_id,
                     quests_adapter_config=config.quests_adapter_config,

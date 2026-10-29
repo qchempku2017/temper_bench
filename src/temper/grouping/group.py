@@ -1,5 +1,5 @@
-"""Loads a domain metadata and builds grouped-domain objects using its configured grouping strategies."""
-
+"""Loads a domain metadata and builds grouped-domain objects using its
+configured grouping strategies."""
 
 from __future__ import annotations
 
@@ -14,14 +14,13 @@ from temper.schemas.group import GroupedDomain
 from temper.utils.defaults import DEFAULT_DATA_DIR, DEFAULT_METADATA_FILE
 from temper.logging import format_elapsed, progress_task
 
-
 logger = logging.getLogger(__name__)
 
 
 def partition_domain_into_groups(
-        domain_name: str,
-        root_path: Union[str, Path] = DEFAULT_DATA_DIR,
-        metadata_file_name: str = DEFAULT_METADATA_FILE,
+    domain_name: str,
+    root_path: Union[str, Path] = DEFAULT_DATA_DIR,
+    metadata_file_name: str = DEFAULT_METADATA_FILE,
 ) -> List[GroupedDomain]:
     """Load data from a domain folder and partition data into groups.
 
@@ -32,16 +31,18 @@ def partition_domain_into_groups(
     domain_name: str
         Name of the domain to load data from.
     root_path: str | Path
-        The path to the directory containing the data. Defaults to ``DEFAULT_DATA_DIR``.
-        See ``src.temper.utils.defaults`` for more information.
+        The path to the directory containing the data. Defaults to
+        ``DEFAULT_DATA_DIR``. See ``src.temper.utils.defaults`` for more
+        information.
     metadata_file_name: str
         Name of the metadata file. Default is DEFAULT_METADATA_FILE.
 
     Returns
     -------
     List[GroupedDomain]:
-        A list of grouped domains, each represents a collection of groups partitioned
-        using one of the grouping strategies defined in the metadata file.
+        A list of grouped domains, each represents a collection of
+        groups partitioned using one of the grouping strategies defined
+        in the metadata file.
     """
     domain_path = (Path(root_path) / domain_name).resolve()
     started_at = time.monotonic()
@@ -69,8 +70,9 @@ def partition_domain_into_groups(
             strategy_name = str(kwargs.get("grouping_strategy", "unknown"))
             progress.update(
                 detail=(
-                    f"strategy {strategy_index}/{len(grouping_strategies_and_kwargs)} "
-                    f"{strategy_name!r}"
+                    "strategy"
+                    f" {strategy_index}/{len(grouping_strategies_and_kwargs)}"
+                    f" {strategy_name!r}"
                 )
             )
             if len(grouped_domains) == 0:
@@ -81,7 +83,7 @@ def partition_domain_into_groups(
                 domain_path,
                 info_entries=preload_info_entries,
                 metadata_file_name=metadata_file_name,
-                **kwargs
+                **kwargs,
             )
             grouped_domains.append(grouped_domain)
             progress.advance()
@@ -94,8 +96,7 @@ def partition_domain_into_groups(
     group_count = sum(len(grouped.groups) for grouped in grouped_domains)
     info_entries = grouped_domains[0].info_entries if grouped_domains else []
     frame_count = sum(
-        sum(entry.num_frames_per_system)
-        for entry in info_entries
+        sum(entry.num_frames_per_system) for entry in info_entries
     )
     files_without_stress = sum(not entry.has_stress for entry in info_entries)
     logger.info(

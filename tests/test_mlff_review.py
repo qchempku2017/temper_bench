@@ -1,4 +1,5 @@
 """Behavioral coverage for packaging and adapter review changes."""
+
 import json
 import logging
 from types import ModuleType
@@ -10,26 +11,37 @@ from pydantic import ValidationError
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.mlff.bundle_writers import MLFFBundleWriter, write_submit_folder
 from temper.mlff.pipeline import evaluate_mlff, runner
-from temper.mlff.pipeline.training_adapters import BaseMLFFAdapter, mlff_adapter_factory
+from temper.mlff.pipeline.training_adapters import (
+    BaseMLFFAdapter,
+    mlff_adapter_factory,
+)
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_train_bundle import MLFFBundleFiles
 
 
 @pytest.mark.parametrize("entrypoint", ["bundle", "writer", "function"])
 def test_packaging_returns_independent_serialized_record(
-    entrypoint, tmp_path, finetune_training_unit, mlff_spec_factory,
+    entrypoint,
+    tmp_path,
+    finetune_training_unit,
+    mlff_spec_factory,
 ):
     bundle = MLFFTrainBundle(
-        training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
+        training_unit=finetune_training_unit,
+        mlff_spec=mlff_spec_factory("mace"),
     )
     before = bundle.model_dump()
     if entrypoint == "bundle":
         target, packaged = bundle.write_submit_folder(tmp_path / "job")
     elif entrypoint == "writer":
-        target, packaged = MLFFBundleWriter(bundle).write_submit_folder(tmp_path / "job")
+        target, packaged = MLFFBundleWriter(bundle).write_submit_folder(
+            tmp_path / "job"
+        )
     else:
         target, packaged = write_submit_folder(bundle, tmp_path / "job")
-    assert packaged == MLFFTrainBundle.model_validate_json((target / "bundle.json").read_text())
+    assert packaged == MLFFTrainBundle.model_validate_json(
+        (target / "bundle.json").read_text()
+    )
     assert packaged.mlff_train_bundle_id == bundle.mlff_train_bundle_id
     assert bundle.model_dump() == before
     packaged.mlff_spec.training_parameters["seed"] = 17
@@ -46,14 +58,22 @@ def test_registration_accepts_multiple_aliases(base, aliases, monkeypatch):
     assert base.registry == dict.fromkeys(["canonical", *keys], registered)
 
 
-@pytest.mark.parametrize("family", ["dpa4", "dpa4c", "mace", "mattersim", "sevennet", "nep89"])
+@pytest.mark.parametrize(
+    "family", ["dpa4", "dpa4c", "mace", "mattersim", "sevennet", "nep89"]
+)
 @pytest.mark.parametrize("finetune", [False, True])
 def test_manifest_matches_results_and_native_inputs(
-    family, finetune, tmp_path, finetune_training_unit, zeroshot_training_unit,
+    family,
+    finetune,
+    tmp_path,
+    finetune_training_unit,
+    zeroshot_training_unit,
     mlff_spec_factory,
 ):
     bundle = MLFFTrainBundle(
-        training_unit=finetune_training_unit if finetune else zeroshot_training_unit,
+        training_unit=(
+            finetune_training_unit if finetune else zeroshot_training_unit
+        ),
         mlff_spec=mlff_spec_factory(family, with_training=finetune),
     )
     target, packaged = bundle.write_submit_folder(tmp_path / "job")
@@ -62,19 +82,38 @@ def test_manifest_matches_results_and_native_inputs(
     config = packaged.test_config()
     assert config["summary_output"] == files.test_output_files["summary"]
     for dataset in config["test_datasets"]:
-        for suffix, key in (("predictions", "output"), ("metadata", "metadata_output")):
-            assert dataset[key] == files.test_output_files[dataset["id"] + "_" + suffix]
+        for suffix, key in (
+            ("predictions", "output"),
+            ("metadata", "metadata_output"),
+        ):
+            assert (
+                dataset[key]
+                == files.test_output_files[dataset["id"] + "_" + suffix]
+            )
     if finetune:
-        assert files.training_output_files["training_log"] == "training_outputs/training.log"
+        assert (
+            files.training_output_files["training_log"]
+            == "training_outputs/training.log"
+        )
         for key in ("config", "script"):
             if key in files.training_input_files:
                 assert (target / files.training_input_files[key]).is_file()
         if family.startswith("dpa"):
-            assert adapter.trained_model_path == "training_outputs/model.ckpt.pt"
+            assert (
+                adapter.trained_model_path == "training_outputs/model.ckpt.pt"
+            )
             assert config["model"] == "training_outputs/evaluation.pt2"
-            assert files.evaluation_model not in files.training_output_files.values()
-            native = json.loads((target / "training_inputs/input.json").read_text())
-            assert native["training"]["disp_file"] == "training_outputs/lcurve.out"
+            assert (
+                files.evaluation_model
+                not in files.training_output_files.values()
+            )
+            native = json.loads(
+                (target / "training_inputs/input.json").read_text()
+            )
+            assert (
+                native["training"]["disp_file"]
+                == "training_outputs/lcurve.out"
+            )
     else:
         assert files.training_input_files == {}
         assert files.training_output_files == {}
@@ -84,11 +123,33 @@ def test_manifest_matches_results_and_native_inputs(
         assert not (target / "training_outputs").exists()
 
 
-@pytest.mark.parametrize("field", ["training_input_files", "training_output_files", "test_input_files", "test_output_files", "pretrained_model", "evaluation_model"])
-@pytest.mark.parametrize("path", ["../escape", "/absolute", "C:/outside", "a\\b"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "training_input_files",
+        "training_output_files",
+        "test_input_files",
+        "test_output_files",
+        "pretrained_model",
+        "evaluation_model",
+    ],
+)
+@pytest.mark.parametrize(
+    "path", ["../escape", "/absolute", "C:/outside", "a\\b"]
+)
 def test_manifest_rejects_nonportable_paths(field, path):
-    payload = dict(pretrained_model="pretrained_models/model", test_input_files={}, test_output_files={}, training_stress=None, test_stress=[])
-    payload[field] = path if field in {"pretrained_model", "evaluation_model"} else {"result": path}
+    payload = dict(
+        pretrained_model="pretrained_models/model",
+        test_input_files={},
+        test_output_files={},
+        training_stress=None,
+        test_stress=[],
+    )
+    payload[field] = (
+        path
+        if field in {"pretrained_model", "evaluation_model"}
+        else {"result": path}
+    )
     with pytest.raises(ValidationError):
         MLFFBundleFiles(**payload)
 
@@ -96,12 +157,18 @@ def test_manifest_rejects_nonportable_paths(field, path):
 @pytest.mark.parametrize("family", ["dpa4", "dpa4c"])
 @pytest.mark.parametrize("failure", [None, "freeze", "evaluate"])
 def test_deepmd_freezes_for_evaluation_and_cleans_up(
-    family, failure, tmp_path, finetune_training_unit, mlff_spec_factory, monkeypatch,
+    family,
+    failure,
+    tmp_path,
+    finetune_training_unit,
+    mlff_spec_factory,
+    monkeypatch,
 ):
     from temper.mlff.pipeline.training_adapters import deepmd
 
     target, packaged = MLFFTrainBundle(
-        training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory(family),
+        training_unit=finetune_training_unit,
+        mlff_spec=mlff_spec_factory(family),
     ).write_submit_folder(tmp_path / "job")
     events = []
     adapter_type = mlff_adapter_factory(family)
@@ -116,8 +183,17 @@ def test_deepmd_freezes_for_evaluation_and_cleans_up(
 
     def freeze(args, **kwargs):
         events.append("freeze")
-        assert args[:3] == ["dp", "--pt" if family == "dpa4" else "--pt-expt", "freeze"]
-        assert args[3:7] == ["-c", "training_outputs/model.ckpt.pt", "-o", "training_outputs/evaluation"]
+        assert args[:3] == [
+            "dp",
+            "--pt" if family == "dpa4" else "--pt-expt",
+            "freeze",
+        ]
+        assert args[3:7] == [
+            "-c",
+            "training_outputs/model.ckpt.pt",
+            "-o",
+            "training_outputs/evaluation",
+        ]
         assert ("--lower-kind" in args) == (family == "dpa4c")
         assert kwargs["cwd"] == target and kwargs["check"]
         temporary.parent.mkdir(parents=True, exist_ok=True)
@@ -141,24 +217,55 @@ def test_deepmd_freezes_for_evaluation_and_cleans_up(
             runner.run_pipeline(target / "bundle.json")
     else:
         runner.run_pipeline(target / "bundle.json")
-    assert events == (["train", "freeze"] if failure == "freeze" else ["train", "freeze", "evaluate"])
+    assert events == (
+        ["train", "freeze"]
+        if failure == "freeze"
+        else ["train", "freeze", "evaluate"]
+    )
     assert retained.read_bytes() == b"portable"
     assert not temporary.exists()
 
 
-def test_packaging_and_preparation_log_levels(tmp_path, finetune_training_unit, mlff_spec_factory, caplog):
+def test_packaging_and_preparation_log_levels(
+    tmp_path, finetune_training_unit, mlff_spec_factory, caplog
+):
     with caplog.at_level(logging.DEBUG, logger="temper"):
         target, _ = MLFFTrainBundle(
-            training_unit=finetune_training_unit, mlff_spec=mlff_spec_factory("mace"),
+            training_unit=finetune_training_unit,
+            mlff_spec=mlff_spec_factory("mace"),
         ).write_submit_folder(tmp_path / "job")
         runner.prepare_bundle(target / "bundle.json")
-    assert any(r.levelno == logging.INFO and "Packaging" in r.message for r in caplog.records)
-    assert any(r.levelno == logging.DEBUG and "Wrote configuration input" in r.message for r in caplog.records)
-    bundle_id = str(MLFFTrainBundle.model_validate_json((target / "bundle.json").read_text()).mlff_train_bundle_id)
-    assert all(bundle_id in r.message for r in caplog.records if "Packaging" in r.message or "Wrote bundle" in r.message)
+    assert any(
+        r.levelno == logging.INFO and "Packaging" in r.message
+        for r in caplog.records
+    )
+    assert any(
+        r.levelno == logging.DEBUG and "Wrote configuration input" in r.message
+        for r in caplog.records
+    )
+    bundle_id = str(
+        MLFFTrainBundle.model_validate_json(
+            (target / "bundle.json").read_text()
+        ).mlff_train_bundle_id
+    )
+    assert all(
+        bundle_id in r.message
+        for r in caplog.records
+        if "Packaging" in r.message or "Wrote bundle" in r.message
+    )
 
 
-@pytest.mark.parametrize("family,key", [("dpa4", "seed"), ("dpa4c", "seed"), ("mace", "seed"), ("mattersim", "seed"), ("sevennet", "random_seed"), ("nep89", "run_seed")])
+@pytest.mark.parametrize(
+    "family,key",
+    [
+        ("dpa4", "seed"),
+        ("dpa4c", "seed"),
+        ("mace", "seed"),
+        ("mattersim", "seed"),
+        ("sevennet", "random_seed"),
+        ("nep89", "run_seed"),
+    ],
+)
 def test_default_seeds_are_42(family, key, mlff_spec_factory):
     spec = mlff_spec_factory(family)
     assert spec.training_parameters[key] == 42

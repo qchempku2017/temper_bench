@@ -1,4 +1,6 @@
-"""Persisted configuration schema for QUESTS descriptor and entropy computation."""
+"""Persisted configuration schema for QUESTS descriptor and entropy
+computation."""
+
 from __future__ import annotations
 
 import math
@@ -13,53 +15,64 @@ from temper.schemas.base import MSONableModel
 class QuestsAdapterConfig(MSONableModel):
     """Typed configuration for the QUESTS adapter.
 
-    Persists every descriptor, entropy, device, and reproducibility parameter
-    consumed by the QUESTS adapter in ``src.temper.splitting.quests``. The
-    QUESTS selection itself is deterministic (greedy maximum-information-gain
-    selection conditioned on the descriptors selected so far), so no random
-    seed is required or stored; see the adapter module documentation.
+    Persists every descriptor, entropy, device, and reproducibility
+    parameter consumed by the QUESTS adapter in
+    ``src.temper.splitting.quests``. The QUESTS selection itself is
+    deterministic (greedy maximum-information-gain selection conditioned
+    on the descriptors selected so far), so no random seed is required
+    or stored; see the adapter module documentation.
 
     Attributes:
-        descriptor_k (int): Number of nearest neighbors ``k`` used by the
+        descriptor_k (int): Number of nearest neighbors ``k`` used by
+        the
             QUESTS per-atom descriptor. The concatenated descriptor has
             ``2*k - 1`` columns. Must be at least 2.
         descriptor_cutoff (float): Cutoff radius (in Ångström) of the
             descriptor weight function. Must be positive.
-        descriptor_dtype (Literal["float32", "float64"]): Floating-point dtype
-            of the computed descriptors and, for the GPU route, of the torch
-            tensors passed to the QUESTS backend. Defaults to ``"float64"``
-            to reduce distance-cancellation error and Gaussian-kernel
-            underflow. ``"float32"`` uses less memory and may be faster,
-            especially on GPUs with limited float64 throughput, but is more
-            susceptible to non-finite entropy results.
-        compute_descriptor_chunk_size (int): Number of frames processed at a
+        descriptor_dtype (Literal["float32", "float64"]): Floating-point
+        dtype
+            of the computed descriptors and, for the GPU route, of the
+            torch tensors passed to the QUESTS backend. Defaults to
+            ``"float64"`` to reduce distance-cancellation error and
+            Gaussian-kernel underflow. ``"float32"`` uses less memory
+            and may be faster, especially on GPUs with limited float64
+            throughput, but is more susceptible to non-finite entropy
+            results.
+        compute_descriptor_chunk_size (int): Number of frames processed
+        at a
             time when computing descriptors. Must be positive. This
-            allows chunked computation and prevents memory overflow. Defaults
-            to 200.
-        entropy_bandwidth (float): Bandwidth ``h`` of the Gaussian kernel used
+            allows chunked computation and prevents memory overflow.
+            Defaults to 200.
+        entropy_bandwidth (float): Bandwidth ``h`` of the Gaussian
+        kernel used
             by the QUESTS entropy adapter. Must be positive.
         entropy_batch_size (int): Maximum batch size used by the QUESTS
-            backend when batching distance computations. Must be positive.
-            Defaults to 4000 as a compromise between compute utilization,
-            quadratic distance-tile memory, and numerical stability. Larger
-            batches can reduce dispatch overhead but require substantially
-            more memory.
-        device (Literal["cpu", "gpu", "auto"]): Which QUESTS backend route to
-            use. ``"cpu"`` never imports or initializes a torch GPU backend;
-            ``"gpu"`` requires an available CUDA/ROCm PyTorch device and raises
+            backend when batching distance computations. Must be
+            positive. Defaults to 4000 as a compromise between compute
+            utilization, quadratic distance-tile memory, and numerical
+            stability. Larger batches can reduce dispatch overhead but
+            require substantially more memory.
+        device (Literal["cpu", "gpu", "auto"]): Which QUESTS backend
+        route to
+            use. ``"cpu"`` never imports or initializes a torch GPU
+            backend; ``"gpu"`` requires an available CUDA/ROCm PyTorch
+            device and raises
             :class:`src.temper.splitting.quests.QuestsUnavailableError`
             otherwise; ``"auto"`` uses the GPU route when
-            ``torch.cuda.is_available()`` is true and falls back to the CPU
-            route otherwise. This availability-only check does not preflight
-            PyTorch kernel support for the GPU architecture, and a later
-            kernel-launch failure does not trigger a CPU fallback.
+            ``torch.cuda.is_available()`` is true and falls back to the
+            CPU route otherwise. This availability-only check does not
+            preflight PyTorch kernel support for the GPU architecture,
+            and a later kernel-launch failure does not trigger a CPU
+            fallback.
         gpu_device (str | None): Optional torch device string (e.g.
-            ``"cuda:0"``) used by the GPU route. ROCm builds use the same
-            ``"cuda"`` spelling. Must be ``None`` when ``device == "cpu"``.
-        numba_threads (int | None): Optional number of threads for the numba
-            parallel sections of the CPU descriptor/entropy kernels. ``None``
-            will use half of the available CPU threads (maximum 8). The results are
-            deterministic regardless of this value.
+            ``"cuda:0"``) used by the GPU route. ROCm builds use the
+            same ``"cuda"`` spelling. Must be ``None`` when ``device ==
+            "cpu"``.
+        numba_threads (int | None): Optional number of threads for the
+        numba
+            parallel sections of the CPU descriptor/entropy kernels.
+            ``None`` will use half of the available CPU threads (maximum
+            8). The results are deterministic regardless of this value.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -93,7 +106,9 @@ class QuestsAdapterConfig(MSONableModel):
         if value is None:
             return min(8, max(1, mp.cpu_count() // 2))
         if value < 1:
-            raise ValueError(f"numba_threads must be positive when set, got {value}.")
+            raise ValueError(
+                f"numba_threads must be positive when set, got {value}."
+            )
         return min(8, value)
 
     @field_validator("gpu_device")
@@ -101,7 +116,9 @@ class QuestsAdapterConfig(MSONableModel):
     def validate_gpu_device(cls, value: str | None) -> str | None:
         """Require an explicit GPU device string to contain text."""
         if value is not None and not value.strip():
-            raise ValueError("gpu_device must be a non-empty device string when set.")
+            raise ValueError(
+                "gpu_device must be a non-empty device string when set."
+            )
         return value
 
     @model_validator(mode="after")

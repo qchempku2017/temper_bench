@@ -1,4 +1,6 @@
-"""Select scientific results and verify downloads before remote deletion."""
+"""Select scientific results and verify downloads before remote
+deletion."""
+
 from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
@@ -19,9 +21,10 @@ def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     -------
     tuple[list[str], list[str]]
         Exact bundle-relative download paths and required success paths.
-        Failed attempts may lack any calculation output; available diagnostics
-        are still collected. Converted datasets and intermediate checkpoints
-        are never selected by broad output-directory recursion.
+        Failed attempts may lack any calculation output; available
+        diagnostics are still collected. Converted datasets and
+        intermediate checkpoints are never selected by broad
+        output-directory recursion.
 
     Raises
     ------
@@ -35,10 +38,25 @@ def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
     required = list(files.test_output_files.values())
     if bundle.unit_type == "finetune":
         required.append(files.training_output_files["trained_model"])
-    selected = ["stdout.log", "stderr.log", "scheduler.stdout.log", "scheduler.stderr.log", "run.sh", "temper_job.sh"]
+    selected = [
+        "stdout.log",
+        "stderr.log",
+        "scheduler.stdout.log",
+        "scheduler.stderr.log",
+        "run.sh",
+        "temper_job.sh",
+    ]
     selected += list(files.test_output_files.values())
-    selected += [value for key, value in files.training_output_files.items() if key in adapter.retained_output_keys]
-    selected += [value for key, value in files.training_input_files.items() if key in {"script", "config"}]
+    selected += [
+        value
+        for key, value in files.training_output_files.items()
+        if key in adapter.retained_output_keys
+    ]
+    selected += [
+        value
+        for key, value in files.training_input_files.items()
+        if key in {"script", "config"}
+    ]
     selected += [files.test_input_files["config"]]
     for name in selected:
         validate_result_path(name)
@@ -46,7 +64,8 @@ def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
 
 
 def validate_result_path(name: str) -> None:
-    """Reject paths that cannot safely identify a file inside an attempt.
+    """Reject paths that cannot safely identify a file inside an
+    attempt.
 
     Parameters
     ----------
@@ -59,12 +78,19 @@ def validate_result_path(name: str) -> None:
         If a remote name could escape the local attempt directory.
     """
     path = PurePosixPath(name)
-    if not path.parts or path.is_absolute() or ".." in path.parts or "\\" in name or ":" in name:
+    if (
+        not path.parts
+        or path.is_absolute()
+        or ".." in path.parts
+        or "\\" in name
+        or ":" in name
+    ):
         raise ValueError("Unsafe remote result path.")
 
 
 def selected_file(name: str, filenames: list[str]) -> bool:
-    """Check an exact relative filename; wildcard expansion is not performed.
+    """Check an exact relative filename; wildcard expansion is not
+    performed.
 
     Parameters
     ----------
@@ -81,13 +107,16 @@ def selected_file(name: str, filenames: list[str]) -> bool:
     Raises
     ------
     ValueError
-        If name is absolute or contains parent traversal or a Windows drive.
+        If name is absolute or contains parent traversal or a Windows
+        drive.
     """
     validate_result_path(name)
     return PurePosixPath(name).as_posix() in filenames
 
 
-def verify_results(root: Path, manifest: dict[str, str], required: list[str]) -> None:
+def verify_results(
+    root: Path, manifest: dict[str, str], required: list[str]
+) -> None:
     """Verify all collected bytes and require the successful result set.
 
     Parameters
@@ -97,14 +126,17 @@ def verify_results(root: Path, manifest: dict[str, str], required: list[str]) ->
     manifest : dict[str, str]
         Relative downloaded paths and their expected SHA-256 digests.
     required : list[str]
-        Required nonempty successful output files; use [] for a failed job.
+        Required nonempty successful output files; use [] for a failed
+        job.
 
     Raises
     ------
     ValueError
-        If a required output is absent/empty or downloaded content changed.
+        If a required output is absent/empty or downloaded content
+        changed.
     OSError
-        If a downloaded file cannot be read. Remote deletion must be postponed.
+        If a downloaded file cannot be read. Remote deletion must be
+        postponed.
     """
     for name in [*required, *manifest]:
         validate_result_path(name)

@@ -14,6 +14,7 @@ def mlff_spec_builder_factory(mlff_type: str) -> type[BaseSpecBuilder]:
     """Return the registered builder class for an MLFF family key."""
     return BaseSpecBuilder.registry[mlff_type]
 
+
 __all__ = [
     "mlff_spec_builder_factory",
     "DPA4CSpecBuilder",

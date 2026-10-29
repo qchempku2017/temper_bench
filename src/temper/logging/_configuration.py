@@ -17,7 +17,6 @@ from temper.logging._progress import (
     _PROGRESS_MANAGER,
 )
 
-
 LOG_LEVEL_NAMES: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR")
 
 _WARNING_RECORD = re.compile(
@@ -96,7 +95,8 @@ class TemperFormatter(logging.Formatter):
 
 
 class ProgressAwareStreamHandler(logging.StreamHandler):
-    """A stream handler that does not corrupt an in-place progress line."""
+    """A stream handler that does not corrupt an in-place progress
+    line."""
 
     def __init__(self, stream: IO[str], manager: ProgressManager) -> None:
         super().__init__(stream)
@@ -104,7 +104,8 @@ class ProgressAwareStreamHandler(logging.StreamHandler):
         self._temper_owned_handler = True
 
     def emit(self, record: logging.LogRecord) -> None:
-        # Hold the renderer lock across the permanent write so the monitor
+        # Hold the renderer lock across the permanent write so the
+        # monitor
         # cannot redraw halfway through a log record.
         with self._progress_manager.suspend_status():
             super().emit(record)

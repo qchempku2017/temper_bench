@@ -2,6 +2,7 @@
 
 All values are read once, when this module is imported.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,9 +12,9 @@ from pathlib import PurePosixPath, PureWindowsPath
 def _env_float(name: str, default: float) -> float:
     """Read ``name`` as a float, falling back to ``default``.
 
-    An unset, empty, or whitespace-only variable falls back to ``default``.
-    A non-empty value is parsed with :func:`float`; an unparseable value
-    raises a ``ValueError`` naming the variable.
+    An unset, empty, or whitespace-only variable falls back to
+    ``default``. A non-empty value is parsed with :func:`float`; an
+    unparseable value raises a ``ValueError`` naming the variable.
 
     Parameters
     ----------
@@ -30,8 +31,8 @@ def _env_float(name: str, default: float) -> float:
     Raises
     ------
     ValueError
-        If the variable is set to a non-empty value that cannot be parsed as
-        a float.
+        If the variable is set to a non-empty value that cannot be
+        parsed as a float.
     """
     raw = os.environ.get(name)
     if raw is None or not raw.strip():
@@ -47,9 +48,9 @@ def _env_float(name: str, default: float) -> float:
 def _env_int(name: str, default: int) -> int:
     """Read ``name`` as an int, falling back to ``default``.
 
-    An unset, empty, or whitespace-only variable falls back to ``default``.
-    A non-empty value is parsed with :func:`int`; an unparseable value raises
-    a ``ValueError`` naming the variable.
+    An unset, empty, or whitespace-only variable falls back to
+    ``default``. A non-empty value is parsed with :func:`int`; an
+    unparseable value raises a ``ValueError`` naming the variable.
 
     Parameters
     ----------
@@ -66,8 +67,8 @@ def _env_int(name: str, default: int) -> int:
     Raises
     ------
     ValueError
-        If the variable is set to a non-empty value that cannot be parsed as
-        an int.
+        If the variable is set to a non-empty value that cannot be
+        parsed as an int.
     """
     raw = os.environ.get(name)
     if raw is None or not raw.strip():
@@ -109,25 +110,40 @@ def _env_submit_directory(name: str, default: str) -> str:
 # Default values for data storage.
 ##################################
 # Shared local root: create_bundles writes model/domain/bundles here;
-# job submit adds packaged attempts and job history beneath those bundles.
-DEFAULT_BUNDLE_WRITE_ROOT: str = os.environ.get("DEFAULT_BUNDLE_WRITE_ROOT", "./bundles")
+# job submit adds packaged attempts and job history beneath those
+# bundles.
+DEFAULT_BUNDLE_WRITE_ROOT: str = os.environ.get(
+    "DEFAULT_BUNDLE_WRITE_ROOT", "./bundles"
+)
 DEFAULT_DATA_DIR: str = os.environ.get("DEFAULT_DATA_DIR", "./data")
-# Split output root, also the default input directory for create_bundles.
-DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get("DEFAULT_SPLIT_RESULTS_DIR", "./split_results")
+# Split output root, also the default input directory for
+# create_bundles.
+DEFAULT_SPLIT_RESULTS_DIR: str = os.environ.get(
+    "DEFAULT_SPLIT_RESULTS_DIR", "./split_results"
+)
 # Default split configuration read by the ``temper_bench split`` CLI.
 DEFAULT_SPLIT_CONFIG_FILE: str = os.environ.get(
     "DEFAULT_SPLIT_CONFIG_FILE", "split_config.json"
 )
 # Default name of the info file under each data directory.
-DEFAULT_METADATA_FILE: str = os.environ.get("DEFAULT_METADATA_FILE", "metadata.json")
+DEFAULT_METADATA_FILE: str = os.environ.get(
+    "DEFAULT_METADATA_FILE", "metadata.json"
+)
 # Default name of the output file to save grouped domains in a domain.
-DEFAULT_GROUPED_DOMAIN_FILE: str = os.environ.get("DEFAULT_GROUPED_DOMAIN_FILE", "grouped_domains.json")
+DEFAULT_GROUPED_DOMAIN_FILE: str = os.environ.get(
+    "DEFAULT_GROUPED_DOMAIN_FILE", "grouped_domains.json"
+)
 # Default name of the output file to save split groups in a domain.
-DEFAULT_SPLIT_GROUPS_FILE: str = os.environ.get("DEFAULT_SPLIT_GROUPS_FILE", "split_groups.json")
+DEFAULT_SPLIT_GROUPS_FILE: str = os.environ.get(
+    "DEFAULT_SPLIT_GROUPS_FILE", "split_groups.json"
+)
 # Default name of the output file to save training units in a domain.
-DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get("DEFAULT_TRAINING_UNITS_FILE", "training_units.json")
+DEFAULT_TRAINING_UNITS_FILE: str = os.environ.get(
+    "DEFAULT_TRAINING_UNITS_FILE", "training_units.json"
+)
 
-# MLFF source artifacts and fixed submit-folder directories on the local machine.
+# MLFF source artifacts and fixed submit-folder directories on the local
+# machine.
 DEFAULT_MLFF_PRETRAINED_MODELS_DIR: str = os.environ.get(
     "DEFAULT_MLFF_PRETRAINED_MODELS_DIR", "./pretrained_models"
 )
@@ -152,7 +168,8 @@ DEFAULT_MLFF_TESTING_OUTPUTS_DIR: str = _env_submit_directory(
 ##################################
 # Default values for creating experiments from extxyz data.
 ##################################
-# Default ratio of test set size to total dataset size (train + val + test).
+# Default ratio of test set size to total dataset size (train + val +
+# test).
 DEFAULT_TEST_RATIO: float = _env_float("DEFAULT_TEST_RATIO", 0.2)
 # Default ratios of training set size to train + val dataset size.
 _DEFAULT_TRAIN_RATIOS: list[float] = [0.1, 0.2, 0.4, 0.6, 0.8, 0.9]
@@ -165,10 +182,12 @@ else:
         for ratio in _raw_train_ratios.split(",")
         if ratio.strip()
     ]
-# Default maximum number of training data points. If maximum training set exceeds this,
+# Default maximum number of training data points. If maximum training
+# set exceeds this,
 #  the training set ratios will be scaled down proportionally.
 DEFAULT_MAX_N_TRAIN: int = _env_int("DEFAULT_MAX_N_TRAIN", 3000)
-# Default maximum number of test data points. If maximum test set exceeds this,
+# Default maximum number of test data points. If maximum test set
+# exceeds this,
 #  the test set ratio will be scaled down proportionally.
 #  Cross test sets will also not exceed this size.
 DEFAULT_SPLIT_REPEATS: int = _env_int("DEFAULT_SPLIT_REPEATS", 3)

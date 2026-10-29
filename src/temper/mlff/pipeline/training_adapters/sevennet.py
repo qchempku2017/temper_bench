@@ -17,16 +17,19 @@ class SevenNetAdapter(BaseMLFFAdapter):
     pretrained_model_filename = "sevennet.pth"
     training_input_filenames = {"script": "run.sh", "config": "sevennet.yaml"}
     training_output_filenames = {
-        "trained_model": "finetuned_sevennet.pth", "training_log": "training.log",
-        "resolved_config": "sevennet_resolved.yaml", "native_outputs": "sevennet",
+        "trained_model": "finetuned_sevennet.pth",
+        "training_log": "training.log",
+        "resolved_config": "sevennet_resolved.yaml",
+        "native_outputs": "sevennet",
     }
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return YAML that fine-tunes SevenNet-0 via train.continue.
 
-        The checkpoint supplies pretrained weights and species statistics;
-        optimizer, scheduler and epoch counters restart for this dataset.
-        The runner reads architecture from the checkpoint before training.
+        The checkpoint supplies pretrained weights and species
+        statistics; optimizer, scheduler and epoch counters restart for
+        this dataset. The runner reads architecture from the checkpoint
+        before training.
         """
         parameters = dict(self.spec.training_parameters or {})
         model = {
@@ -37,9 +40,13 @@ class SevenNetAdapter(BaseMLFFAdapter):
         data_divide_ratio = parameters.pop("data_divide_ratio")
 
         train = parameters
-        # Native SevenNet saves only at multiples of per_epoch. Include the
-        # final epoch even when the requested budget is not a multiple of ten.
-        train["per_epoch"] = gcd(int(train.get("per_epoch", 10)), int(train["epoch"]))
+        # Native SevenNet saves only at multiples of per_epoch. Include
+        # the
+        # final epoch even when the requested budget is not a multiple
+        # of ten.
+        train["per_epoch"] = gcd(
+            int(train.get("per_epoch", 10)), int(train["epoch"])
+        )
         train["device"] = "cuda"
         train["is_train_stress"] = training_stress
         if not training_stress:
@@ -62,14 +69,10 @@ class SevenNetAdapter(BaseMLFFAdapter):
             "batch_size": batch_size,
             "data_divide_ratio": data_divide_ratio,
             "data_format_args": {"index": ":"},
-            "load_trainset_path": [
-                self.input_path("train")
-            ],
+            "load_trainset_path": [self.input_path("train")],
         }
         if self.training_unit.val_set is not None:
-            data["load_validset_path"] = [
-                self.input_path("validation")
-            ]
+            data["load_validset_path"] = [self.input_path("validation")]
         return {
             self.input_path("config"): yaml_text(
                 {"model": model, "train": train, "data": data}
@@ -77,8 +80,11 @@ class SevenNetAdapter(BaseMLFFAdapter):
         }
 
     def prepare_training(self) -> None:
-        """Resolve the checkpoint architecture before native SevenNet training."""
-        from temper.mlff.pipeline.data_preparation.sevennet import prepare_config
+        """Resolve the checkpoint architecture before native SevenNet
+        training."""
+        from temper.mlff.pipeline.data_preparation.sevennet import (
+            prepare_config,
+        )
 
         prepare_config(
             self.root / self.input_path("config"),
@@ -87,7 +93,8 @@ class SevenNetAdapter(BaseMLFFAdapter):
         )
 
     def _training_commands(self, training_stress: bool) -> tuple[str, ...]:
-        """Return the native continuation command and final checkpoint copy."""
+        """Return the native continuation command and final checkpoint
+        copy."""
         del training_stress
         epoch = (self.spec.training_parameters or {})["epoch"]
         work = self.output_path("native_outputs")

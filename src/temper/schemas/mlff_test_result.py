@@ -1,19 +1,21 @@
 """Serializable metadata for one MLFF test dataset.
 
-This standard-library schema is also copied into standalone submit folders,
-so result writing does not require TEMPER to be installed on the runner.
-Prediction arrays remain in the adjacent NPZ file.
+This standard-library schema is also copied into standalone submit
+folders, so result writing does not require TEMPER to be installed on
+the runner. Prediction arrays remain in the adjacent NPZ file.
 """
+
 from dataclasses import asdict, dataclass
 
 
 @dataclass
 class MLFFTestResult:
-    """Describe one test dataset's predictions and evaluation provenance.
+    """Describe one test dataset's predictions and evaluation
+    provenance.
 
-    Metadata is stored as JSON beside the prediction NPZ file. This schema
-    uses only the standard library so it can be copied into a standalone
-    submit folder and used without a TEMPER installation.
+    Metadata is stored as JSON beside the prediction NPZ file. This
+    schema uses only the standard library so it can be copied into a
+    standalone submit folder and used without a TEMPER installation.
 
     Parameters
     ----------
@@ -24,7 +26,8 @@ class MLFFTestResult:
     model : str
         Evaluated model path relative to the submit folder.
     package_versions : dict[str, str or None]
-        Installed distribution versions; None denotes an unavailable version.
+        Installed distribution versions; None denotes an unavailable
+        version.
     dataset_id : str
         Dataset identifier shared by the JSON and NPZ output filenames.
     source_domain : str

@@ -7,38 +7,69 @@ from uuid import UUID, uuid5
 from pydantic import (
     BaseModel,
     ConfigDict,
+    GetJsonSchemaHandler,
     PrivateAttr,
     model_serializer,
     model_validator,
 )
 from monty.json import MSONable
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
 
 
 class MSONableModel(BaseModel, MSONable):
-    """Pydantic model subclass to allow saving and loading from `json` files."""
+    """Pydantic model subclass to allow saving and loading from `json`
+    files."""
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        """Use Pydantic's schema generation instead of Monty's legacy hook."""
+    def __get_pydantic_json_schema__(
+        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        """Use Pydantic's schema generation instead of Monty's legacy
+        hook."""
         return handler(core_schema)
 
-    def as_dict(self):
-        """Return the model as a dictionary."""
+    def as_dict(self) -> dict[str, Any]:
+        """Return the model's serialized fields as a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Pydantic's default Python-mode representation, including any
+            field serializers. Values may require further JSON conversion.
+        """
         return self.model_dump()
 
     @classmethod
-    def from_dict(cls, d):
-        """Create a model from a dictionary."""
+    def from_dict(cls, d: dict[str, Any]) -> Self:
+        """Validate a dictionary and construct an instance of this class.
+
+        Parameters
+        ----------
+        d : dict[str, Any]
+            Field values to validate using this model's schema.
+
+        Returns
+        -------
+        Self
+            Validated model, with field defaults applied where appropriate.
+
+        Raises
+        ------
+        pydantic.ValidationError
+            If required values are absent or violate the model's constraints.
+        """
         return cls.model_validate(d)
 
 
 def canonical_uuid(namespace: UUID, payload: Any) -> UUID:
     """Return a deterministic UUIDv5 for a JSON-compatible payload.
 
-    Compact, key-sorted JSON is used as the UUID name so identity does not
-    depend on dictionary insertion order or presentation-only whitespace.
-    Callers are responsible for normalizing collections whose order is not
-    semantically significant before passing them here.
+    Compact, key-sorted JSON is used as the UUID name so identity does
+    not depend on dictionary insertion order or presentation-only
+    whitespace. Callers are responsible for normalizing collections
+    whose order is not semantically significant before passing them
+    here.
     """
     canonical_payload = json.dumps(
         payload,
@@ -54,16 +85,17 @@ class ManagedIdentityModel(MSONableModel):
     """MSONable model with a stored, content-derived identity lifecycle.
 
     Subclasses declaratively specify the stored identity field, UUIDv5
-    namespace, payload schema, and identity-source attribute paths. Dotted
-    paths select nested attributes. The base class constructs the canonical
-    payload, verifies or initializes the ID, serializes it as a UUID string,
-    and regenerates it after validated source-field reassignment.
+    namespace, payload schema, and identity-source attribute paths.
+    Dotted paths select nested attributes. The base class constructs the
+    canonical payload, verifies or initializes the ID, serializes it as
+    a UUID string, and regenerates it after validated source-field
+    reassignment.
 
-    Model-wide consistency checks that must precede identity verification
-    belong in :meth:`_validate_before_identity`. Managed-identity subclasses
-    must not add independent ``mode="after"`` or ``mode="wrap"`` model
-    validators, because their ordering relative to this inherited finalizer
-    would be unclear.
+    Model-wide consistency checks that must precede identity
+    verification belong in :meth:`_validate_before_identity`.
+    Managed-identity subclasses must not add independent
+    ``mode="after"`` or ``mode="wrap"`` model validators, because their
+    ordering relative to this inherited finalizer would be unclear.
     """
 
     model_config = ConfigDict(validate_assignment=True)
@@ -71,9 +103,9 @@ class ManagedIdentityModel(MSONableModel):
     _identity_initialized: bool = PrivateAttr(default=False)
     _IDENTITY_FIELD_NAME: ClassVar[str]
     _IDENTITY_SOURCE_FIELDS: ClassVar[tuple[str, ...]]
-    _IDENTITY_SOURCE_NORMALIZERS: ClassVar[
-        dict[str, Callable[[Any], Any]]
-    ] = {}
+    _IDENTITY_SOURCE_NORMALIZERS: ClassVar[dict[str, Callable[[Any], Any]]] = (
+        {}
+    )
     _IDENTITY_NAMESPACE: ClassVar[UUID]
     _IDENTITY_SCHEMA: ClassVar[str]
     _IDENTITY_LABEL: ClassVar[str]
@@ -85,12 +117,14 @@ class ManagedIdentityModel(MSONableModel):
 
         if "_finalize_managed_identity" in cls.__dict__:
             raise TypeError(
-                f"{cls.__name__} must not override _finalize_managed_identity; "
-                "override _validate_before_identity instead."
+                f"{cls.__name__} must not override _finalize_managed_identity;"
+                " override _validate_before_identity instead."
             )
         incompatible_validators = [
             name
-            for name, decorator in cls.__pydantic_decorators__.model_validators.items()
+            for name, decorator in (
+                cls.__pydantic_decorators__.model_validators.items()
+            )
             if name != "_finalize_managed_identity"
             and decorator.info.mode in {"after", "wrap"}
         ]
@@ -109,8 +143,13 @@ class ManagedIdentityModel(MSONableModel):
                 f"field {identity_field!r}."
             )
         if not isinstance(cls._IDENTITY_NAMESPACE, UUID):
-            raise TypeError(f"{cls.__name__}._IDENTITY_NAMESPACE must be a UUID.")
-        if not isinstance(cls._IDENTITY_SCHEMA, str) or not cls._IDENTITY_SCHEMA:
+            raise TypeError(
+                f"{cls.__name__}._IDENTITY_NAMESPACE must be a UUID."
+            )
+        if (
+            not isinstance(cls._IDENTITY_SCHEMA, str)
+            or not cls._IDENTITY_SCHEMA
+        ):
             raise TypeError(
                 f"{cls.__name__}._IDENTITY_SCHEMA must be a non-empty string."
             )
@@ -118,7 +157,8 @@ class ManagedIdentityModel(MSONableModel):
         sources = cls._IDENTITY_SOURCE_FIELDS
         if not isinstance(sources, tuple) or not sources:
             raise TypeError(
-                f"{cls.__name__}._IDENTITY_SOURCE_FIELDS must be a non-empty tuple."
+                f"{cls.__name__}._IDENTITY_SOURCE_FIELDS must be a non-empty"
+                " tuple."
             )
         if len(set(sources)) != len(sources):
             raise TypeError(
@@ -129,21 +169,24 @@ class ManagedIdentityModel(MSONableModel):
             if (
                 not isinstance(source, str)
                 or not source
-                or any(not segment.isidentifier() for segment in source.split("."))
+                or any(
+                    not segment.isidentifier() for segment in source.split(".")
+                )
             ):
                 raise TypeError(
-                    f"Invalid identity source path {source!r} on {cls.__name__}."
+                    f"Invalid identity source path {source!r} on"
+                    f" {cls.__name__}."
                 )
             root = source.split(".", 1)[0]
             if root not in cls.model_fields:
                 raise TypeError(
-                    f"Identity source {source!r} on {cls.__name__} starts with "
-                    f"missing model field {root!r}."
+                    f"Identity source {source!r} on {cls.__name__} starts with"
+                    f" missing model field {root!r}."
                 )
             if root == identity_field:
                 raise TypeError(
-                    f"Managed identity field {identity_field!r} cannot be one of "
-                    f"{cls.__name__}._IDENTITY_SOURCE_FIELDS."
+                    f"Managed identity field {identity_field!r} cannot be one"
+                    f" of {cls.__name__}._IDENTITY_SOURCE_FIELDS."
                 )
 
         for source in sources:
@@ -154,8 +197,8 @@ class ManagedIdentityModel(MSONableModel):
                     "more specific source path."
                 )
 
-        undeclared_normalizers = (
-            set(cls._IDENTITY_SOURCE_NORMALIZERS) - set(sources)
+        undeclared_normalizers = set(cls._IDENTITY_SOURCE_NORMALIZERS) - set(
+            sources
         )
         if undeclared_normalizers:
             raise TypeError(
@@ -167,12 +210,14 @@ class ManagedIdentityModel(MSONableModel):
             for value in cls._IDENTITY_SOURCE_NORMALIZERS.values()
         ):
             raise TypeError(
-                f"Every {cls.__name__} identity-source normalizer must be callable."
+                f"Every {cls.__name__} identity-source normalizer must be"
+                " callable."
             )
 
     @staticmethod
     def _identity_json_value(value: Any) -> Any:
-        """Convert a selected source value to deterministic JSON-compatible data."""
+        """Convert a selected source value to deterministic JSON-
+        compatible data."""
         if isinstance(value, BaseModel):
             return value.model_dump(mode="json")
         if isinstance(value, (UUID, Path)):
@@ -205,13 +250,14 @@ class ManagedIdentityModel(MSONableModel):
                 value = getattr(value, segment)
             except AttributeError as error:
                 raise TypeError(
-                    f"Identity source {source!r} on {type(self).__name__} cannot "
-                    f"resolve {'.'.join(traversed)!r}."
+                    f"Identity source {source!r} on {type(self).__name__}"
+                    f" cannot resolve {'.'.join(traversed)!r}."
                 ) from error
         return value
 
     def _identity_payload(self) -> dict[str, Any]:
-        """Build the canonical payload from declared identity-source paths."""
+        """Build the canonical payload from declared identity-source
+        paths."""
         payload: dict[str, Any] = {"identity_schema": self._IDENTITY_SCHEMA}
         for source in self._IDENTITY_SOURCE_FIELDS:
             value = self._resolve_identity_source(source)
@@ -236,19 +282,24 @@ class ManagedIdentityModel(MSONableModel):
         return payload
 
     def _validate_before_identity(self) -> None:
-        """Run subclass-specific model checks before finalizing identity.
+        """Run subclass-specific model checks before finalizing
+        identity.
 
-        Subclasses may override this ordinary method instead of declaring a
-        ``mode="after"`` model validator. They should raise ``ValueError`` for
-        invalid model-wide state and must not initialize the identity directly.
+        Subclasses may override this ordinary method instead of
+        declaring a ``mode="after"`` model validator. They should raise
+        ``ValueError`` for invalid model-wide state and must not
+        initialize the identity directly.
         """
 
     def _compute_identity(self) -> UUID:
         """Compute this model's deterministic UUIDv5 identity."""
-        return canonical_uuid(self._IDENTITY_NAMESPACE, self._identity_payload())
+        return canonical_uuid(
+            self._IDENTITY_NAMESPACE, self._identity_payload()
+        )
 
     def _initialize_or_verify_identity(self) -> Self:
-        """Initialize a missing identity or verify a serialized one once."""
+        """Initialize a missing identity or verify a serialized one
+        once."""
         identity = getattr(self, self._IDENTITY_FIELD_NAME)
         if self._identity_initialized and identity is not None:
             return self
@@ -265,18 +316,20 @@ class ManagedIdentityModel(MSONableModel):
 
     @classmethod
     def _identity_source_roots(cls) -> frozenset[str]:
-        """Return top-level fields whose reassignment invalidates identity."""
+        """Return top-level fields whose reassignment invalidates
+        identity."""
         return frozenset(
-            source.split(".", 1)[0]
-            for source in cls._IDENTITY_SOURCE_FIELDS
+            source.split(".", 1)[0] for source in cls._IDENTITY_SOURCE_FIELDS
         )
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Regenerate the stored identity after validated field reassignment."""
+        """Regenerate the stored identity after validated field
+        reassignment."""
         initialized = getattr(self, "_identity_initialized", False)
         if initialized and name == self._IDENTITY_FIELD_NAME:
             raise AttributeError(
-                f"{self._IDENTITY_FIELD_NAME} is system-managed and cannot be assigned."
+                f"{self._IDENTITY_FIELD_NAME} is system-managed and cannot be"
+                " assigned."
             )
         if not initialized or name not in self._identity_source_roots():
             super().__setattr__(name, value)
@@ -298,17 +351,20 @@ class ManagedIdentityModel(MSONableModel):
         update: Mapping[str, Any] | None = None,
         deep: bool = False,
     ) -> Self:
-        """Return a validated copy with identity regenerated from its contents."""
+        """Return a validated copy with identity regenerated from its
+        contents."""
         data = self.model_dump(
             mode="python",
             exclude={self._IDENTITY_FIELD_NAME},
         )
         if update:
-            data.update({
-                key: value
-                for key, value in update.items()
-                if key != self._IDENTITY_FIELD_NAME
-            })
+            data.update(
+                {
+                    key: value
+                    for key, value in update.items()
+                    if key != self._IDENTITY_FIELD_NAME
+                }
+            )
         cls = type(self)
         result = cls.model_validate(data)
         return cast(Self, result)
@@ -325,7 +381,8 @@ class ManagedIdentityModel(MSONableModel):
     @model_validator(mode="before")
     @classmethod
     def load_monty_identity(cls, data: Any) -> Any:
-        """Accept the managed UUID in Monty's tagged-dictionary format."""
+        """Accept the managed UUID in Monty's tagged-dictionary
+        format."""
         if not isinstance(data, dict):
             return data
         value = data.get(cls._IDENTITY_FIELD_NAME)
@@ -336,7 +393,7 @@ class ManagedIdentityModel(MSONableModel):
 
     @model_validator(mode="after")
     def _finalize_managed_identity(self) -> Self:
-        """Run model-wide checks, then initialize or verify the managed ID."""
+        """Run model-wide checks, then initialize or verify the managed
+        ID."""
         self._validate_before_identity()
         return self._initialize_or_verify_identity()
-

@@ -10,15 +10,18 @@ class FrameReference(MSONableModel):
     """Persisted reference to a single structure frame in a data group.
 
     References are lightweight: they only store the identity of a frame
-    (domain, relative extxyz source filename, and nonnegative frame index).
-    Structures and descriptors are never stored.
+    (domain, relative extxyz source filename, and nonnegative frame
+    index). Structures and descriptors are never stored.
 
     Attributes:
         domain (str): Name of the data domain the frame belongs to.
-        filename (str): Relative path to the extxyz source file, relative to
-            the domain directory. Must be relative, end with ``.extxyz``, and
-            must not contain directory-traversal segments.
-        frame_index (int): Zero-based, nonnegative index of the frame within
+        filename (str): Relative path to the extxyz source file,
+        relative to
+            the domain directory. Must be relative, end with
+            ``.extxyz``, and must not contain directory-traversal
+            segments.
+        frame_index (int): Zero-based, nonnegative index of the frame
+        within
             the source file.
     """
 
@@ -50,10 +53,11 @@ class FrameReference(MSONableModel):
 
     @property
     def identity(self) -> tuple[str, str, int]:
-        """A hashable identity tuple ``(domain, filename, frame_index)``.
+        """A hashable identity tuple ``(domain, filename,
+        frame_index)``.
 
         Used for set-membership checks (e.g. duplicate detection and
-        train/validation complement computation) without relying on model
-        hashing.
+        train/validation complement computation) without relying on
+        model hashing.
         """
         return self.domain, self.filename, self.frame_index

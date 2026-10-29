@@ -27,7 +27,6 @@ from temper.schemas.mlff_spec import (
 )
 from temper.schemas.utils import validate_submit_relative_path
 
-
 FAMILIES = ("dpa4", "dpa4c", "mattersim", "mace", "sevennet", "nep89")
 
 
@@ -55,18 +54,24 @@ def test_each_builder_records_fixed_implementations(
     )
 
 
-def test_model_paths_are_adjustable_and_content_addressed(tmp_path: Path) -> None:
+def test_model_paths_are_adjustable_and_content_addressed(
+    tmp_path: Path,
+) -> None:
     first = tmp_path / "first.model"
     second = tmp_path / "second.model"
     first.write_bytes(b"same")
     second.write_bytes(b"same")
     one = MACESpecBuilder(
-        model_name="test-model", model_version="test-release",
-        pretrained_model_dir=first.parent, model_filename=first.name,
+        model_name="test-model",
+        model_version="test-release",
+        pretrained_model_dir=first.parent,
+        model_filename=first.name,
     ).build()
     two = MACESpecBuilder(
-        model_name="test-model", model_version="test-release",
-        pretrained_model_dir=second.parent, model_filename=second.name,
+        model_name="test-model",
+        model_version="test-release",
+        pretrained_model_dir=second.parent,
+        model_filename=second.name,
     ).build()
 
     assert one.pretrained_model.artifacts["model"].path == first
@@ -74,13 +79,17 @@ def test_model_paths_are_adjustable_and_content_addressed(tmp_path: Path) -> Non
 
     second.write_bytes(b"different")
     changed = MACESpecBuilder(
-        model_name="test-model", model_version="test-release",
-        pretrained_model_dir=second.parent, model_filename=second.name,
+        model_name="test-model",
+        model_version="test-release",
+        pretrained_model_dir=second.parent,
+        model_filename=second.name,
     ).build()
     assert changed.mlff_spec_id != one.mlff_spec_id
 
 
-def test_explicit_model_paths_cover_every_family(monkeypatch, tmp_path: Path) -> None:
+def test_explicit_model_paths_cover_every_family(
+    monkeypatch, tmp_path: Path
+) -> None:
     root = tmp_path / "pretrained_models"
     root.mkdir()
     monkeypatch.chdir(tmp_path)
@@ -88,13 +97,19 @@ def test_explicit_model_paths_cover_every_family(monkeypatch, tmp_path: Path) ->
     for family in FAMILIES:
         filename = family + ".weights"
         (root / filename).write_bytes(family.encode())
-        specs.append(mlff_spec_builder_factory(family)(
-            model_name=family, model_version="test-release", model_filename=filename,
-        ).build())
+        specs.append(
+            mlff_spec_builder_factory(family)(
+                model_name=family,
+                model_version="test-release",
+                model_filename=filename,
+            ).build()
+        )
     assert [spec.mlff_type for spec in specs] == list(FAMILIES)
 
 
-def test_mlff_directory_defaults_are_read_from_environment(monkeypatch) -> None:
+def test_mlff_directory_defaults_are_read_from_environment(
+    monkeypatch,
+) -> None:
     import temper.utils.defaults as defaults
 
     with monkeypatch.context() as environment:
@@ -126,12 +141,16 @@ def test_none_means_zeroshot_and_empty_dict_enables_defaults(
     model = tmp_path / "mace.model"
     model.write_bytes(b"mace")
     zero = MACESpecBuilder(
-        model_name="test-model", model_version="test-release",
-        pretrained_model_dir=model.parent, model_filename=model.name,
+        model_name="test-model",
+        model_version="test-release",
+        pretrained_model_dir=model.parent,
+        model_filename=model.name,
     ).build()
     fine = MACESpecBuilder(
-        model_name="test-model", model_version="test-release",
-        pretrained_model_dir=model.parent, model_filename=model.name,
+        model_name="test-model",
+        model_version="test-release",
+        pretrained_model_dir=model.parent,
+        model_filename=model.name,
         training_parameters={},
     ).build()
 
@@ -157,15 +176,16 @@ def test_family_epoch_defaults(
     mlff_spec_factory,
 ) -> None:
     spec = mlff_spec_factory(family)
-    assert spec.training_parameters[epoch_key] == {"dpa4": 60, "mattersim": 200}.get(family, 100)
+    assert spec.training_parameters[epoch_key] == {
+        "dpa4": 60,
+        "mattersim": 200,
+    }.get(family, 100)
 
 
 def test_early_stopping_is_disabled_for_exact_epoch_runs(
     mlff_spec_factory,
 ) -> None:
-    mace = mlff_spec_factory(
-        "mace", training_parameters={"max_num_epochs": 7}
-    )
+    mace = mlff_spec_factory("mace", training_parameters={"max_num_epochs": 7})
     mattersim = mlff_spec_factory(
         "mattersim", training_parameters={"epochs": 7}
     )
@@ -215,9 +235,7 @@ def test_epoch_counts_must_be_positive_integers(
 ) -> None:
     for invalid in (0, -1, 1.5, True):
         with pytest.raises(ValueError, match="positive integer"):
-            mlff_spec_factory(
-                family, training_parameters={epoch_key: invalid}
-            )
+            mlff_spec_factory(family, training_parameters={epoch_key: invalid})
 
 
 def test_nep_uses_torchnep_only_for_finetuning(mlff_spec_factory) -> None:
@@ -234,9 +252,10 @@ def test_nep_uses_torchnep_only_for_finetuning(mlff_spec_factory) -> None:
         "gpumd",
         "calorine",
     }
-    assert "pretrained_restart_path" not in inspect.signature(
-        NEP89SpecBuilder
-    ).parameters
+    assert (
+        "pretrained_restart_path"
+        not in inspect.signature(NEP89SpecBuilder).parameters
+    )
 
 
 def test_nep_defaults_match_torchnep_1_0_2(mlff_spec_factory) -> None:
@@ -278,7 +297,9 @@ def test_parameter_dictionaries_are_plain_and_mutable(
     assert spec.training_parameters["custom"]["values"] == [1, 2, 3]
 
 
-def test_schema_and_monty_round_trip(tmp_path: Path, mlff_spec_factory) -> None:
+def test_schema_and_monty_round_trip(
+    tmp_path: Path, mlff_spec_factory
+) -> None:
     spec = mlff_spec_factory("nep89")
     path = tmp_path / "spec.json"
     dumpfn(spec, path, indent=2)

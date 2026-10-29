@@ -17,20 +17,31 @@ class MACEAdapter(BaseMLFFAdapter):
     pretrained_model_filename = "mace.model"
     training_input_filenames = {"script": "run.sh", "config": "mace.yaml"}
     training_output_filenames = {
-        "trained_model": "finetuned_mace.model", "training_log": "training.log",
+        "trained_model": "finetuned_mace.model",
+        "training_log": "training.log",
         "native_models": "mace/models",
-        "checkpoints": "mace/checkpoints", "logs": "mace/logs",
+        "checkpoints": "mace/checkpoints",
+        "logs": "mace/logs",
         "metrics": "mace/results",
     }
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
-        """Return native YAML with bundle paths and dataset-dependent stress."""
+        """Return native YAML with bundle paths and dataset-dependent
+        stress."""
         config = dict(self.spec.training_parameters or {})
-        # MACE otherwise reloads the latest *best* checkpoint before export.
-        # Save every evaluated epoch and disable early termination/averaging.
-        config.update(save_all_checkpoints=True, eval_interval=1,
-                      patience=int(config["max_num_epochs"]) + 1,
-                      swa=False, ema=False, restart_latest=False)
+
+        # MACE otherwise reloads the latest *best* checkpoint before
+        # export.
+        # Save every evaluated epoch and disable early
+        # termination/averaging.
+        config.update(
+            save_all_checkpoints=True,
+            eval_interval=1,
+            patience=int(config["max_num_epochs"]) + 1,
+            swa=False,
+            ema=False,
+            restart_latest=False,
+        )
         assert self.files is not None
         config.update(
             {
@@ -49,9 +60,7 @@ class MACEAdapter(BaseMLFFAdapter):
         config["compute_stress"] = training_stress
 
         if self.training_unit.val_set is not None:
-            config["valid_file"] = (
-                self.input_path("validation")
-            )
+            config["valid_file"] = self.input_path("validation")
             config.pop("valid_fraction", None)
         return {self.input_path("config"): yaml_text(config)}
 
@@ -75,17 +84,20 @@ class MACEAdapter(BaseMLFFAdapter):
         )
 
     def train(self) -> None:
-        """Train and require a checkpoint from the configured final epoch.
+        """Train and require a checkpoint from the configured final
+        epoch.
 
         Notes
         -----
-        Native MACE epochs are zero-based. Export uses the latest checkpoint;
-        averaging and early stopping are disabled in the generated config.
+        Native MACE epochs are zero-based. Export uses the latest
+        checkpoint; averaging and early stopping are disabled in the
+        generated config.
 
         Raises
         ------
         RuntimeError
-            If training returns without writing its final epoch checkpoint.
+            If training returns without writing its final epoch
+            checkpoint.
         subprocess.CalledProcessError
             If the native training command fails.
         """
@@ -93,6 +105,12 @@ class MACEAdapter(BaseMLFFAdapter):
         parameters = self.spec.training_parameters or {}
         epoch = int(parameters["max_num_epochs"]) - 1
         seed = parameters.get("seed", 123)
-        checkpoint = self.root / self.output_path("checkpoints") / f"temper_model_run-{seed}_epoch-{epoch}.pt"
+        checkpoint = (
+            self.root
+            / self.output_path("checkpoints")
+            / f"temper_model_run-{seed}_epoch-{epoch}.pt"
+        )
         if not checkpoint.is_file():
-            raise RuntimeError("MACE did not produce the configured final epoch checkpoint.")
+            raise RuntimeError(
+                "MACE did not produce the configured final epoch checkpoint."
+            )

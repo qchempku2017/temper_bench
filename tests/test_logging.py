@@ -1,4 +1,5 @@
 """Tests for CLI logging, warning formatting, and bounded progress output."""
+
 from __future__ import annotations
 
 from io import StringIO
@@ -41,7 +42,9 @@ def test_logging_package_exposes_public_api() -> None:
     }
     assert expected.issubset(temper_logging.__all__)
     assert temper_logging.TemperWarning is temper_warnings.TemperWarning
-    assert temper_logging.DataQualityWarning is temper_warnings.DataQualityWarning
+    assert (
+        temper_logging.DataQualityWarning is temper_warnings.DataQualityWarning
+    )
 
 
 def test_levels_and_formatter_separate_user_and_developer_detail() -> None:

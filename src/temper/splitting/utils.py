@@ -1,4 +1,10 @@
-"""Provides shared helpers for converting requested training ratios into valid frame counts. The counts are sorted and scaled when needed to respect the maximum training size."""
+"""Provides shared helpers for converting requested training ratios into
+valid frame counts.
+
+The counts are sorted and scaled when needed to respect the maximum
+training size.
+"""
+
 from __future__ import annotations
 
 from typing import List
@@ -18,9 +24,9 @@ def get_requested_train_sizes_from_ratios(
 ) -> List[int]:
     """Get training set sizes from training set ratios.
 
-    If requested training set size exceeds max_train_size, all requested training
-    set sizes are scaled down proportionally so that the largest requested
-    training set size equals max_train_size.
+    If requested training set size exceeds max_train_size, all requested
+    training set sizes are scaled down proportionally so that the
+    largest requested training set size equals max_train_size.
 
     Parameters
     ----------
@@ -52,13 +58,16 @@ def get_requested_train_sizes_from_ratios(
     round_sizes = np.round(sizes).astype(int)
 
     if np.max(round_sizes) > max_train_size:
-        round_sizes = np.round(sizes * max_train_size / np.max(sizes)).astype(int)
+        round_sizes = np.round(sizes * max_train_size / np.max(sizes)).astype(
+            int
+        )
 
     if np.any(round_sizes <= 0):
         raise ValueError(
-            f"requested_train_ratios too small for trainval_pool_size={trainval_pool_size}, "
-            f"produced training set sizes {round_sizes.tolist()}."
-            f" Choose more appropriate requested_train_ratios."
+            "requested_train_ratios too small for"
+            f" trainval_pool_size={trainval_pool_size}, produced training set"
+            f" sizes {round_sizes.tolist()}. Choose more appropriate"
+            " requested_train_ratios."
         )
 
     return round_sizes.tolist()
