@@ -63,7 +63,7 @@ def test_adapters_use_recorded_paths_instead_of_rebuilding_defaults(
     test_config = json.loads(
         (remote / files.test_input_files["config"]).read_text()
     )
-    assert test_config == bundle.test_config()
+    assert test_config == bundle.make_test_config()
     assert all(
         (remote / d["path"]).is_file() for d in test_config["test_datasets"]
     )

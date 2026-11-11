@@ -65,7 +65,7 @@ def write_configuration_files(
     config_path = files.test_input_files["config"]
     if not missing_only or not (adapter.root / config_path).exists():
         contents[config_path] = (
-            json.dumps(adapter.bundle.test_config(), indent=2) + "\n"
+                json.dumps(adapter.bundle.make_test_config(), indent=2) + "\n"
         )
     for relative, content in contents.items():
         destination = adapter.root / relative

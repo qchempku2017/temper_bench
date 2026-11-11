@@ -207,9 +207,15 @@ class MLFFTrainBundle(ManagedIdentityModel):
                 " parameters."
             )
 
-    def test_config(self) -> dict[str, Any]:
+    def make_test_config(self) -> dict[str, Any]:
         """Describe evaluation using the bundle and packaged file
         mapping.
+
+        Called when remote runner prepares the test_config.json.
+        These configs cannot be prepared on the local submission machine,
+             because the paths must be resolved relative to the bundle.json location at remote,
+             as training and testing happen at remote. The remote directory may
+             differ from the local working directory.
 
         Returns
         -------

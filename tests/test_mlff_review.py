@@ -79,7 +79,7 @@ def test_manifest_matches_results_and_native_inputs(
     target, packaged = bundle.write_submit_folder(tmp_path / "job")
     files = packaged.files
     adapter = runner.prepare_bundle(target / "bundle.json")
-    config = packaged.test_config()
+    config = packaged.make_test_config()
     assert config["summary_output"] == files.test_output_files["summary"]
     for dataset in config["test_datasets"]:
         for suffix, key in (

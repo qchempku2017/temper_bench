@@ -115,7 +115,7 @@ def test_preparation_preserves_configs_and_restores_missing_files(
 
     test_config.unlink()
     adapter = runner.prepare_bundle(target / "bundle.json")
-    assert json.loads(test_config.read_text()) == packaged.test_config()
+    assert json.loads(test_config.read_text()) == packaged.make_test_config()
     adapter.spec.testing_parameters["default_dtype"] = "float64"
     runner.write_configuration_files(adapter)
     assert (
@@ -420,7 +420,7 @@ def test_bundle_owns_test_configuration_after_serialization(
     bundle = MLFFTrainBundle.model_validate_json(
         (target / "bundle.json").read_text()
     )
-    config = bundle.test_config()
+    config = bundle.make_test_config()
     # Changing an installed builder's default cannot change a packaged
     # model path.
     monkeypatch.setattr(
