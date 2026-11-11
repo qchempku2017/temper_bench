@@ -15,9 +15,12 @@ _verification_cache: ContextVar[dict[Path, str] | None] = ContextVar(
 
 
 @contextmanager
-def hashing_session() -> Iterator[dict[Path, str]]:
-    """Share dataset hashes only for one packaging or submission
-    operation.
+def cache_dataset_hashes() -> Iterator[dict[Path, str]]:
+    """Cache dataset hashes during one decorated call or ``with`` block.
+
+    Code within the decorated call or block shares an in-memory dictionary
+    of file hashes, keyed by resolved file paths. Nested calls share the
+    cache until the outermost call or block exits, even on error.
 
     Yields
     ------
@@ -26,6 +29,14 @@ def hashing_session() -> Iterator[dict[Path, str]]:
         the outer operation discards it. File copies still hash the
         bytes written, and a later independent JSON load reads every
         referenced file again.
+
+    Notes
+    -----
+    Training-unit validation stores calculated SHA-256 hashes in this
+    in-memory dictionary, keyed by resolved file paths. Repeated validation
+    reuses those hashes to avoid reading the same dataset again. Nested calls
+    share the cache until the outermost call or block exits, even on error.
+    Use as ``@cache_dataset_hashes()`` or ``with cache_dataset_hashes():``.
     """
     current = _verification_cache.get()
     if current is not None:

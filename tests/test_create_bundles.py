@@ -25,7 +25,7 @@ def _write_units(root: Path, units: list[TrainingUnit]) -> None:
         path.write_text(
             json.dumps(
                 [
-                    unit.with_dataset_hashes().model_dump(mode="json")
+                    unit.copy_with_dataset_hashes().model_dump(mode="json")
                     for unit in units
                     if unit.domain == domain
                 ]

@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 from temper.job_management.paths import bundle_root
-from temper.job_management.storage_utils import atomic_json
+from temper.job_management.storage_utils import write_json_atomically
 from temper.job_management.schemas.records import JobRecord, utc_now
 
 
@@ -120,7 +120,7 @@ class JobStore:
         """
         record.updated_at = utc_now()
         root = self.path(record)
-        atomic_json(root / "job.json", record.model_dump(mode="json"))
+        write_json_atomically(root / "job.json", record.model_dump(mode="json"))
         self.repair_markers(record)
         with (root / "events.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(

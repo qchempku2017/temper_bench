@@ -23,7 +23,7 @@ from temper.job_management.input_utils import (
 )
 from temper.job_management.schemas.records import ComputationStatus, JobRecord
 from temper.job_management.schemas.resources import RemoteResource
-from temper.job_management.storage_utils import atomic_json
+from temper.job_management.storage_utils import write_json_atomically
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.utils.file_hashing import file_sha256
 
@@ -307,7 +307,7 @@ def _supervise(root: Path) -> None:
     # launching.
     with (root / ".local-started").open("x", encoding="utf-8"):
         pass
-    atomic_json(root / ".local-receipt.json", {"pid": os.getpid()})
+    write_json_atomically(root / ".local-receipt.json", {"pid": os.getpid()})
     with (root / "stdout.log").open("wb") as stdout, (
         root / "stderr.log"
     ).open("wb") as stderr:
@@ -321,7 +321,7 @@ def _supervise(root: Path) -> None:
             )
         except OSError:
             stderr.write(b"Could not start Bash for the local calculation.\n")
-            atomic_json(
+            write_json_atomically(
                 root / ".local-exit.json",
                 {"returncode": 127, "cancelled": False},
             )
@@ -349,7 +349,7 @@ def _supervise(root: Path) -> None:
                 child.wait()
                 break
             time.sleep(1)
-        atomic_json(
+        write_json_atomically(
             root / ".local-exit.json",
             {"returncode": child.wait(), "cancelled": cancelled},
         )

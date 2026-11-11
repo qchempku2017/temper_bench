@@ -329,7 +329,7 @@ changing its data files. For changed MLFF parameters
 or pretrained weights, rebuild the MLFFSpec and bundle through their normal
 builders. Pretrained weights are checked against their stored hash while copying.
 
-In Python, `unit.with_dataset_hashes()` returns a new hashed unit. It reads every
+In Python, `unit.copy_with_dataset_hashes()` returns a new hashed unit. It reads every
 distinct file once. Export, packaging and submission share short-lived hash
 caches within the operation; later independent loads read the files again.
 For a JSON list of units, `temper.schemas.load_training_units(path)` also shares

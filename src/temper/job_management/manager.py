@@ -20,7 +20,7 @@ from temper.job_management.input_utils import (
     verify_dataset_and_model_hashes,
 )
 from temper.job_management.paths import bundle_directory, next_attempt
-from temper.job_management.storage_utils import atomic_json, store_lock
+from temper.job_management.storage_utils import write_json_atomically, store_lock
 from temper.job_management.store import JobStore
 from temper.job_management.schemas.records import (
     ComputationStatus,
@@ -29,7 +29,7 @@ from temper.job_management.schemas.records import (
 )
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.schemas.resources import RemoteResource
-from temper.utils.file_hashing import hashing_session
+from temper.utils.file_hashing import cache_dataset_hashes
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class JobManager:
         self.store: JobStore = JobStore(root)
         self._factory = backend_factory or _backend
 
-    @hashing_session()
+    @cache_dataset_hashes()
     def submit(
         self, bundle: MLFFTrainBundle, resource: RemoteResource
     ) -> JobRecord:
@@ -195,11 +195,11 @@ class JobManager:
             bundle = saved
         else:
             bundle.files = None
-            atomic_json(shared, bundle.model_dump(mode="json"))
+            write_json_atomically(shared, bundle.model_dump(mode="json"))
         target = next_attempt(directory)
         root, packaged = bundle.write_submit_folder(target)
         if bundle.files is None:
-            atomic_json(shared, packaged.model_dump(mode="json"))
+            write_json_atomically(shared, packaged.model_dump(mode="json"))
         record = JobRecord(
             bundle_id=identity,
             attempt_folder_name=root.relative_to(self.store.root).as_posix(),
@@ -475,7 +475,7 @@ class JobManager:
             and (not failed or r.computation_status == "failed")
         ]
 
-    @hashing_session()
+    @cache_dataset_hashes()
     def resubmit(
         self,
         *,

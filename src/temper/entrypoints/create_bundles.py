@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 from ruamel.yaml import YAML
 
 from temper.job_management.paths import bundle_directory, bundle_root
-from temper.job_management.storage_utils import atomic_json, store_lock
+from temper.job_management.storage_utils import write_json_atomically, store_lock
 from temper.mlff.spec_builders import mlff_spec_builder_factory
 from temper.mlff.spec_builders.base import pretrained_model_defaults
 from temper.schemas.mlff_spec import MLFFSpec
@@ -21,7 +21,7 @@ from temper.utils.defaults import (
     DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_TRAINING_UNITS_FILE,
 )
-from temper.utils.file_hashing import hashing_session
+from temper.utils.file_hashing import cache_dataset_hashes
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ def _load_overrides(
     return overrides
 
 
-@hashing_session()
+@cache_dataset_hashes()
 def create_bundles_cli(
     split_results: Path,
     model_keys: list[tuple[str, str]],
@@ -360,7 +360,7 @@ def create_bundles_cli(
                 continue
             path = bundle_directory(root, bundle) / "bundle.json"
             path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_json(path, bundle.model_dump(mode="json"))
+            write_json_atomically(path, bundle.model_dump(mode="json"))
             paths.append(path)
             created += 1
     logger.info(

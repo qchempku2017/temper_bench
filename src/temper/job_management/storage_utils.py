@@ -73,24 +73,38 @@ def store_lock(root: Path) -> Iterator[None]:
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def atomic_json(path: Path, value: object) -> None:
-    """Replace a JSON file only after its complete replacement is
-    flushed.
+def write_json_atomically(path: Path, value: object) -> None:
+    """Write JSON through a temporary file before replacing the destination.
 
     Parameters
     ----------
     path : Path
-        Destination, whose parent must already exist.
+        Destination to create or replace, whose parent must already exist.
+        Relative paths are resolved against the current working directory.
     value : object
-        JSON-serializable data. UTF-8 and sorted keys make records
-        readable.
+        JSON-serializable data, written as UTF-8 with two-space indentation
+        and sorted keys. NaN and infinite floating-point values are rejected.
 
     Raises
     ------
+    TypeError
+        If the value contains an object that cannot be serialized as JSON.
+    ValueError
+        If the value contains NaN, infinity, or a circular reference.
     OSError
         If writing, flushing or replacing fails; the previous file is
         retained until the replacement succeeds. Filesystem durability
         still depends on the operating system and storage hardware.
+
+    Notes
+    -----
+    The temporary file is written in the destination directory and flushed
+    and synchronized before replacement. Readers see either the previous
+    file or the complete replacement, never a partially written replacement.
+    On non-Windows systems, the parent directory is also synchronized after
+    replacement; failure at that stage leaves the new file in place.
+    Temporary files are removed on exit. This function does not lock out
+    other writers; use ``store_lock`` when coordinating changes to the store.
     """
     descriptor, temporary = tempfile.mkstemp(
         prefix=".temper-", dir=path.parent

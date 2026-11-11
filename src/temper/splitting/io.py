@@ -913,7 +913,7 @@ def write_all_sets_in_split_group_to_extxyz(
     # again.
     hash_cache: dict[Path, str] = {}
     training_units = [
-        unit.with_dataset_hashes(hash_cache) for unit in training_units
+        unit.copy_with_dataset_hashes(hash_cache) for unit in training_units
     ]
     return training_units, resolver
 

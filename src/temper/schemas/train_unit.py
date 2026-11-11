@@ -122,13 +122,13 @@ class TrainingUnit(ManagedIdentityModel):
         Data splitting populates this before returning each unit. Empty
         means legacy metadata: inspection and local packaging remain
         supported, but remote submission requires explicit
-        with_dataset_hashes() conversion.
+        copy_with_dataset_hashes() conversion.
 
     Notes
     -----
     Changing a source file does not mutate an already loaded Python
     object's identity. Loading or submitting its hashed record detects
-    the mismatch. with_dataset_hashes() explicitly creates a new
+    the mismatch. copy_with_dataset_hashes() explicitly creates a new
     identity from changed files. Hash caches live only for one creation,
     packaging or submission operation; file size and modification time
     are never used as proof of unchanged bytes.
@@ -261,24 +261,32 @@ class TrainingUnit(ManagedIdentityModel):
             payload["dataset_sha256"] = self.dataset_sha256
         return payload
 
-    def with_dataset_hashes(
+    def copy_with_dataset_hashes(
         self, cache: dict[Path, str] | None = None
     ) -> "TrainingUnit":
-        """Create a new identity from the current dataset bytes.
+        """Return a new training unit with dataset hashes and a recalculated ID.
 
         Parameters
         ----------
         cache : dict[Path, str] or None, optional
-            Digests shared only within this creation operation. None
-            reads each distinct file once. Never reuse a cache across
-            separate operations.
+            Dataset SHA-256 hashes to reuse, keyed by resolved absolute file
+            paths. A cached hash is used without rereading that file's bytes.
+            Files missing from the cache are read and hashed, and their hashes
+            are added to the supplied dictionary. If None, a fresh dictionary
+            is used and every distinct dataset file is read and hashed again.
+            Existing hashes stored on this training unit are not reused.
+            Share a cache only within one operation while the dataset files
+            remain unchanged; reusing it after a file changes would reuse an
+            outdated hash.
 
         Returns
         -------
         TrainingUnit
-            Independent record with hashes for all datasets and a new
-            identity. This is also the explicit upgrade operation for
-            legacy metadata.
+            Independent record with hashes for all datasets and an identity
+            recalculated from the updated record. The ID may remain the same
+            when its defining contents are unchanged. The original training
+            unit is unchanged. This also adds hashes to older records that
+            do not yet contain them.
 
         Raises
         ------
@@ -500,7 +508,7 @@ def load_training_units(
         permits historical inspection when source files are unavailable;
         remote submission still verifies those files separately. Legacy
         units remain metadata-only until explicitly converted with
-        with_dataset_hashes().
+        copy_with_dataset_hashes().
 
     Returns
     -------

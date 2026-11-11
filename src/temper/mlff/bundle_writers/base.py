@@ -7,7 +7,7 @@ import logging
 from temper._version import __version__
 from pathlib import Path
 import shutil
-from temper.utils.file_hashing import copy_verified, hashing_session
+from temper.utils.file_hashing import copy_verified, cache_dataset_hashes
 from temper.job_management.paths import (
     bundle_root,
     bundle_directory,
@@ -55,7 +55,7 @@ class MLFFBundleWriter:
             adapter_class or mlff_adapter_factory(bundle.mlff_spec.mlff_type)
         )
 
-    @hashing_session()
+    @cache_dataset_hashes()
     def write_submit_folder(
         self,
         target_dir: str | Path | None = None,

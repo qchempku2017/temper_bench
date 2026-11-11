@@ -34,7 +34,7 @@ def source_bundle(
     finetune_training_unit: TrainingUnit, mlff_spec_factory: Callable
 ) -> MLFFTrainBundle:
     return MLFFTrainBundle(
-        training_unit=finetune_training_unit.with_dataset_hashes(),
+        training_unit=finetune_training_unit.copy_with_dataset_hashes(),
         mlff_spec=mlff_spec_factory("mace"),
     )
 
@@ -269,7 +269,7 @@ def test_hash_load_detects_same_size_same_timestamp_edit(
         data, context={"verify_files": False}
     )
     assert historical.training_unit_id == unit.training_unit_id
-    rebuilt = historical.with_dataset_hashes()
+    rebuilt = historical.copy_with_dataset_hashes()
     assert rebuilt.training_unit_id != unit.training_unit_id
 
 
@@ -285,8 +285,8 @@ def test_hash_cache_shared_only_within_creation(
         lambda path: calls.append(path) or file_sha256(path),
     )
     cache = {}
-    source_bundle.training_unit.with_dataset_hashes(cache)
-    source_bundle.training_unit.with_dataset_hashes(cache)
+    source_bundle.training_unit.copy_with_dataset_hashes(cache)
+    source_bundle.training_unit.copy_with_dataset_hashes(cache)
     assert len(calls) == len(source_bundle.training_unit.dataset_sha256)
     TrainingUnit.model_validate_json(
         source_bundle.training_unit.model_dump_json()

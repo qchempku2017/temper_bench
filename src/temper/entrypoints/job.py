@@ -7,10 +7,10 @@ import json
 from pathlib import Path
 
 from temper.job_management.manager import JobManager
-from temper.job_management.storage_utils import atomic_json
+from temper.job_management.storage_utils import write_json_atomically
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.schemas.resources import RemoteResource
-from temper.utils.file_hashing import hashing_session
+from temper.utils.file_hashing import cache_dataset_hashes
 
 
 def add_job_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -427,11 +427,11 @@ def job_cli(args: argparse.Namespace) -> int:
         bundle = MLFFTrainBundle.model_validate(
             data, context={"verify_files": False}
         )
-        unit = bundle.training_unit.with_dataset_hashes()
+        unit = bundle.training_unit.copy_with_dataset_hashes()
         refreshed = bundle.model_copy(
             update={"training_unit": unit, "files": None}
         )
-        atomic_json(args.bundle, refreshed.model_dump(mode="json"))
+        write_json_atomically(args.bundle, refreshed.model_dump(mode="json"))
         print(
             f"Refreshed {refreshed.mlff_train_bundle_id} at"
             f" {args.bundle.resolve()}"
@@ -447,7 +447,7 @@ def job_cli(args: argparse.Namespace) -> int:
         resource = RemoteResource.from_file(args.resource_file)
         records = []
         submitted_ids: set[str] = set()
-        with hashing_session():
+        with cache_dataset_hashes():
             for path in _bundle_paths(manager.store.root):
                 try:
                     bundle = MLFFTrainBundle.model_validate_json(
