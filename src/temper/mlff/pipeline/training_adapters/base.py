@@ -18,7 +18,7 @@ from ruamel.yaml import YAML
 _Adapter = TypeVar("_Adapter", bound="BaseMLFFAdapter")
 
 if TYPE_CHECKING:
-    from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+    from temper.schemas.mlff_train_bundle import MLFFBundleFiles, MLFFTrainBundle
     from temper.schemas.mlff_spec import MLFFSpec
     from temper.schemas.train_unit import TrainingUnit
 
@@ -84,35 +84,36 @@ class BaseMLFFAdapter(ABC):
 
     Attributes
     ----------
+    bundle : MLFFTrainBundle
+        Packaged experiment used for execution.
+    root : Path
+        Directory against which all paths in files are resolved.
     files : MLFFBundleFiles
         Input paths, output locations, and label availability from the
         bundle.
-    pretrained_model_filename : str
-        Default name of the copied model under pretrained_models/. The
-        source file remains recorded in
-        MLFFSpec.pretrained_model.artifacts. This is the name on the
-        remote runner machine, not the name on the local submission
-        machine.
-    training_input_filenames : dict[str, str]
-        Default config and script names relative to training_inputs/.
-    training_output_filenames : dict[str, str]
-        Default output names relative to training_outputs/, including
-        trained_model and training_log. Entries may also name
-        directories.
-    evaluation_model_filename : str or None
-        Default temporary export name relative to training_outputs/.
-        None means the backend does not need a separate evaluation
-        export.
     registry : dict[str, type[BaseMLFFAdapter]]
         Adapter classes indexed by family names and optional aliases.
     retained_output_keys : tuple[str, ...]
         Entries in training_output_files to download after a remote
         attempt. Checkpoint and converted-dataset directories are
         excluded.
+    spec : MLFFSpec
+        Model specification stored in bundle.
+    training_unit : TrainingUnit
+        Dataset selection stored in bundle.
+    trained_model_path : str
+        Bundle-relative fine-tuned model location. Available only for
+        fine-tuning bundles; zero-shot evaluation uses files.pretrained_model.
 
-    The writer turns these defaults into bundle-relative paths in
-    bundle.files. During execution, adapters use those recorded paths,
-    not these defaults.
+    Raises
+    ------
+    ValueError
+        If bundle.files is None because the bundle has not been packaged.
+
+    Notes
+    -----
+    Packaging filenames belong to MLFFSpec.file_layout. Adapters use
+    the resolved paths in bundle.files and never choose package names.
     """
 
     registry: ClassVar[dict[str, type[BaseMLFFAdapter]]] = {}
@@ -153,19 +154,14 @@ class BaseMLFFAdapter(ABC):
 
         return decorate
 
-    pretrained_model_filename: str
-    evaluation_model_filename: str | None = None
-    training_input_filenames: ClassVar[dict[str, str]] = {"script": "run.sh"}
-    training_output_filenames: ClassVar[dict[str, str]]
-
     def __init__(self, bundle: MLFFTrainBundle, root: Path) -> None:
-        self.bundle = bundle
-        self.root = root
+        self.bundle: MLFFTrainBundle = bundle
+        self.root: Path = root
         if bundle.files is None:
             raise ValueError(
                 "Bundle has not been packaged; call write_submit_folder first."
             )
-        self.files = bundle.files
+        self.files: MLFFBundleFiles = bundle.files
 
     @property
     def spec(self) -> MLFFSpec:

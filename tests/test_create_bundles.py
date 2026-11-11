@@ -87,6 +87,11 @@ def test_create_pairs_and_reuses_ids(
             == bundle_directory(bundle_root(output), bundle) / "bundle.json"
         )
         assert bundle.files is None
+        layout = bundle.mlff_spec.file_layout
+        assert layout.pretrained_model_filename == {
+            "mace": "mace.model", "dpa4": "dpa4.pt"
+        }[bundle.mlff_spec.mlff_type]
+        assert "trained_model" in layout.training_output_filenames
         assert (bundle.mlff_spec.training_parameters is None) == (
             bundle.unit_type == "zeroshot"
         )

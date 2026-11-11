@@ -1,14 +1,30 @@
 """MACE naive fine-tuning defaults."""
 
-from typing import Any
+from typing import Any, ClassVar
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas.mlff_spec import MLFFImplementation
+from temper.schemas.mlff_spec import MLFFFileLayout, MLFFImplementation
 
 
 @BaseSpecBuilder.register(name="mace")
 class MACESpecBuilder(BaseSpecBuilder):
     """Build a MACE specification; see BaseSpecBuilder for source and
     override options."""
+
+    default_file_layout: ClassVar[MLFFFileLayout] = MLFFFileLayout(
+        training_input_filenames={
+            "script": "run.sh",
+            "config": "mace.yaml",
+        },
+        pretrained_model_filename="mace.model",
+        training_output_filenames={
+            "trained_model": "finetuned_mace.model",
+            "training_log": "training.log",
+            "native_models": "mace/models",
+            "checkpoints": "mace/checkpoints",
+            "logs": "mace/logs",
+            "metrics": "mace/results",
+        },
+    )
 
     mlff_type = "mace"
     implementations = (

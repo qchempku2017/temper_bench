@@ -564,11 +564,31 @@ and native work directory; and MatterSim/TorchNEP native output directories.
 Directory entries identify where backend-generated files appear. These fields do
 not define download selection or implement a download manager.
 
-Adapters define filename defaults, which the writer expands into the recorded
-paths. `MLFFBundleWriter(bundle, adapter_class=None)` accepts an optional adapter
-class; omission selects the registered family adapter. Packaging uses its filename
-defaults without instantiating it. The runner selects an adapter from its installed
-registry and instantiates it with the packaged bundle and root. Adapters return configs and
+Spec builders copy their backend-specific filename defaults into the required
+`MLFFSpec.file_layout` field, an `MLFFFileLayout` record. It stores
+`pretrained_model_filename`, `training_input_filenames`,
+`training_output_filenames`, and optional `evaluation_model_filename`. Names may
+contain subdirectories and are relative to the writer's corresponding model,
+training-input, or training-output directory. For example, `mace.yaml` becomes
+`training_inputs/mace.yaml` in `files.training_input_files["config"]`.
+
+`create_bundles` saves these settings even though `bundle.files` is still None.
+`MLFFBundleWriter(bundle)` later reads the saved layout, copies source inputs, and
+records the resolved paths. It never consults a builder or adapter registry.
+Changing installed defaults therefore cannot change a previously saved
+specification's filename choices. Source checkpoints remain identified separately
+by `MLFFSpec.pretrained_model.artifacts`.
+
+Python callers can supply a complete `MLFFFileLayout` through a spec builder's
+`file_layout` argument, or edit `spec.file_layout` before packaging. Builders copy
+the layout so specifications do not share mutable filename dictionaries. Packaging
+names do not affect scientific specification or bundle IDs. Once a bundle has
+been packaged, further attempts must use the same file locations; changing them
+is rejected. A filename change alone also does not create a new experiment in
+`create_bundles`, which skips existing bundle IDs.
+
+The runner selects an adapter from its installed registry and instantiates it
+with the packaged bundle and root. Adapters return configs and
 scripts through `training_file_contents(training_stress)` without writing them.
 The standalone `pipeline.runner.write_configuration_files()` function writes these
 files during preparation. NEP rendering reads the copied model header

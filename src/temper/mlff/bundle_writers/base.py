@@ -15,8 +15,6 @@ from temper.job_management.paths import (
 )
 from temper.job_management.storage_utils import store_lock
 
-from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
-from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 from temper.schemas.mlff_train_bundle import MLFFBundleFiles, MLFFTrainBundle
 from temper.utils.defaults import (
     DEFAULT_MLFF_MODELS_DIR,
@@ -35,25 +33,22 @@ class MLFFBundleWriter:
 
     Parameters
     ----------
-        bundle : MLFFTrainBundle
+    bundle : MLFFTrainBundle
         Local experiment containing dataset and pretrained-model paths.
-        Can be read and uploaded to remote executor.
-    adapter_class : type[BaseMLFFAdapter] or None
-        Adapter class supplying filename defaults. None selects the
-        registered adapter for the bundle's MLFF family. Packaging does
-        not instantiate it; runtime preparation selects its adapter from
-        the installed registry.
+        Its MLFFSpec.file_layout supplies the native packaging filenames.
+        The writer copies inputs for upload without consulting a spec
+        builder or runtime adapter. Native configs are generated later
+        on the execution machine.
+
+    Attributes
+    ----------
+    bundle : MLFFTrainBundle
+        Source experiment. Packaging returns an independent bundle with
+        populated files and does not modify this object.
     """
 
-    def __init__(
-        self,
-        bundle: MLFFTrainBundle,
-        adapter_class: type[BaseMLFFAdapter] | None = None,
-    ) -> None:
+    def __init__(self, bundle: MLFFTrainBundle) -> None:
         self.bundle: MLFFTrainBundle = bundle
-        self.adapter_class: type[BaseMLFFAdapter] = (
-            adapter_class or mlff_adapter_factory(bundle.mlff_spec.mlff_type)
-        )
 
     @cache_dataset_hashes()
     def write_submit_folder(
@@ -118,7 +113,7 @@ class MLFFBundleWriter:
         )
         unit = self.bundle.training_unit
         spec = self.bundle.mlff_spec
-        adapter = self.adapter_class
+        layout = spec.file_layout
         logger.info(
             "Packaging bundle %s (%s, %s)",
             self.bundle.mlff_train_bundle_id,
@@ -132,7 +127,7 @@ class MLFFBundleWriter:
         training_inputs = (
             {
                 key: f"{DEFAULT_MLFF_TRAINING_INPUTS_DIR}/{name}"
-                for key, name in adapter.training_input_filenames.items()
+                for key, name in layout.training_input_filenames.items()
             }
             if finetune
             else {}
@@ -151,7 +146,7 @@ class MLFFBundleWriter:
         training_outputs = (
             {
                 key: f"{DEFAULT_MLFF_TRAINING_OUTPUTS_DIR}/{name}"
-                for key, name in adapter.training_output_filenames.items()
+                for key, name in layout.training_output_filenames.items()
             }
             if finetune
             else {}
@@ -183,14 +178,14 @@ class MLFFBundleWriter:
         # Pack potential evaluation model.
         evaluation_model = (
             f"{DEFAULT_MLFF_TRAINING_OUTPUTS_DIR}/"
-            f"{adapter.evaluation_model_filename}"
-            if finetune and adapter.evaluation_model_filename is not None
+            f"{layout.evaluation_model_filename}"
+            if finetune and layout.evaluation_model_filename is not None
             else None
         )
         files = MLFFBundleFiles(
             pretrained_model=(
                 f"{DEFAULT_MLFF_MODELS_DIR}/"
-                f"{adapter.pretrained_model_filename}"
+                f"{layout.pretrained_model_filename}"
             ),
             training_input_files=training_inputs,
             training_output_files=training_outputs,

@@ -135,14 +135,6 @@ def _parameter_line(key: str, value: str | int | float | bool) -> str:
 class NEP89Adapter(BaseMLFFAdapter):
     """Prepare TorchNEP 1.0.2 and calorine 3.5 bundles."""
 
-    pretrained_model_filename = "nep89.txt"
-    training_input_filenames = {"config": "nep.in"}
-    training_output_filenames = {
-        "trained_model": "finetuned_nep89.txt",
-        "training_log": "training.log",
-        "native_outputs": "torchnep",
-    }
-
     def _check_chemical_symbols(self, model_symbols: set[str]) -> None:
         """Require periodic data whose species are covered by the
         pretrained model."""

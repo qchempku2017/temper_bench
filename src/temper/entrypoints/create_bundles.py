@@ -221,8 +221,9 @@ def create_bundles_cli(
         Output root for bundle_directory's model/domain/bundle layout.
         None uses DEFAULT_BUNDLE_WRITE_ROOT. Relative paths use the
         current working directory. Each bundle is named bundle.json and
-        has files=None; job submit later copies inputs into separate
-        attempt directories.
+        has files=None and a complete MLFFSpec.file_layout; job submit
+        later copies inputs into separate attempt directories using
+        these saved filenames without consulting the spec builder again.
     model_override_config : Path or None, optional
         JSON or YAML mapping from MLFF family to variant to
         training_parameters and testing_parameters dictionaries. None
@@ -336,9 +337,9 @@ def create_bundles_cli(
                     ),
                     testing_parameters=options.testing_parameters,
                 ).build()
-            # Bundle files not populated until submission,
-            # in which bundle writer is called, and it copies inputs and
-            # configs into the bundle folder.
+            # The specification already owns the packaging filenames.
+            # Submission copies inputs and resolves bundle.files; runtime
+            # preparation later writes native configs at those paths.
             bundle = MLFFTrainBundle(training_unit=unit, mlff_spec=specs[key])
             bundles[str(bundle.mlff_train_bundle_id)] = bundle
     root = bundle_root(bundle_write_root)

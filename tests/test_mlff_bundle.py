@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import inspect
 import json
 import shutil
@@ -14,6 +15,8 @@ from ruamel.yaml import YAML
 
 from temper.mlff.spec_builders import DPA4SpecBuilder
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+from temper.schemas.mlff_spec import MLFFSpec
+from temper.schemas.train_unit import TrainingUnit
 from temper.mlff.spec_builders import NEP89SpecBuilder
 import temper.mlff.bundle_writers.base as writer_base
 from temper.mlff.bundle_writers.base import MLFFBundleWriter
@@ -572,9 +575,25 @@ def test_writer_uses_configured_submit_directories(
 
 
 def test_temporary_submit_folder_is_caller_owned(
-    zeroshot_training_unit,
-    mlff_spec_factory,
+    zeroshot_training_unit: TrainingUnit,
+    mlff_spec_factory: Callable[..., MLFFSpec],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Keep automatically allocated attempt folders until the caller removes them.
+
+    Parameters
+    ----------
+    zeroshot_training_unit : TrainingUnit
+        Test-only dataset references for the bundle.
+    mlff_spec_factory : Callable[..., MLFFSpec]
+        Factory for a valid model specification with local weights.
+    tmp_path : Path
+        Isolated working directory for the default bundle root.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture restoring the working directory after the test.
+    """
+    monkeypatch.chdir(tmp_path)
     target = write_prepared(
         MLFFTrainBundle(
             training_unit=zeroshot_training_unit,
@@ -605,28 +624,33 @@ def write_prepared(target):
     return target
 
 
-def test_writer_accepts_adapter_class_without_instantiating_or_rendering(
-    tmp_path,
-    finetune_training_unit,
-    mlff_spec_factory,
-):
-    from temper.mlff.pipeline.training_adapters.mace import MACEAdapter
+def test_writer_uses_spec_filenames_without_rendering(
+    tmp_path: Path,
+    finetune_training_unit: TrainingUnit,
+    mlff_spec_factory: Callable[..., MLFFSpec],
+) -> None:
+    """Copy the checkpoint to the name recorded in the specification.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary destination for the packaged bundle.
+    finetune_training_unit : TrainingUnit
+        Training unit with readable source datasets.
+    mlff_spec_factory : Callable[..., MLFFSpec]
+        Fixture creating a specification and its checkpoint.
+    """
 
     bundle = MLFFTrainBundle(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("mace"),
     )
+    bundle.mlff_spec.file_layout.pretrained_model_filename = "custom.model"
     before = bundle.model_dump()
 
-    class FailingAdapter(MACEAdapter):
-        pretrained_model_filename = "custom.model"
-
-        def __init__(self, *args):
-            pytest.fail("Packaging instantiated a runtime adapter")
-
-    target, packaged = MLFFBundleWriter(
-        bundle, FailingAdapter
-    ).write_submit_folder(tmp_path / "job")
+    target, packaged = MLFFBundleWriter(bundle).write_submit_folder(
+        tmp_path / "job"
+    )
     assert (target / "pretrained_models/custom.model").is_file()
     assert packaged.files.pretrained_model == "pretrained_models/custom.model"
     assert not (target / packaged.files.test_input_files["config"]).exists()
@@ -641,7 +665,7 @@ def test_writer_accepts_adapter_class_without_instantiating_or_rendering(
     sentinel = target / "keep.txt"
     sentinel.write_text("existing")
     with pytest.raises(FileExistsError):
-        MLFFBundleWriter(bundle, FailingAdapter).write_submit_folder(target)
+        MLFFBundleWriter(bundle).write_submit_folder(target)
     assert sentinel.read_text() == "existing"
 
 

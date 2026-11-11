@@ -1,9 +1,9 @@
 """NEP-89 TorchNEP fine-tuning defaults."""
 
 from __future__ import annotations
-from typing import Any
+from typing import Any, ClassVar
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas.mlff_spec import MLFFImplementation
+from temper.schemas.mlff_spec import MLFFFileLayout, MLFFImplementation
 
 _TRAINING_DEFAULTS: dict[str, Any] = {
     "run_seed": 42,
@@ -56,6 +56,18 @@ _LEGACY_TRAINING_KEYS = {
 class NEP89SpecBuilder(BaseSpecBuilder):
     """Build NEP-89 specifications with architecture owned by the
     pretrained file."""
+
+    default_file_layout: ClassVar[MLFFFileLayout] = MLFFFileLayout(
+        training_input_filenames={
+            "config": "nep.in",
+        },
+        pretrained_model_filename="nep89.txt",
+        training_output_filenames={
+            "trained_model": "finetuned_nep89.txt",
+            "training_log": "training.log",
+            "native_outputs": "torchnep",
+        },
+    )
 
     mlff_type = "nep89"
     implementations = (

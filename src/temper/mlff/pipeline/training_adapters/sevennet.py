@@ -14,15 +14,6 @@ from temper.mlff.pipeline.training_adapters.base import (
 class SevenNetAdapter(BaseMLFFAdapter):
     """Prepare SevenNet 0.13.0 train-and-test bundles."""
 
-    pretrained_model_filename = "sevennet.pth"
-    training_input_filenames = {"script": "run.sh", "config": "sevennet.yaml"}
-    training_output_filenames = {
-        "trained_model": "finetuned_sevennet.pth",
-        "training_log": "training.log",
-        "resolved_config": "sevennet_resolved.yaml",
-        "native_outputs": "sevennet",
-    }
-
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return YAML that fine-tunes SevenNet-0 via train.continue.
 

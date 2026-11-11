@@ -14,17 +14,6 @@ from temper.mlff.pipeline.training_adapters.base import (
 class MACEAdapter(BaseMLFFAdapter):
     """Prepare mace-torch 0.3.16 train-and-test bundles."""
 
-    pretrained_model_filename = "mace.model"
-    training_input_filenames = {"script": "run.sh", "config": "mace.yaml"}
-    training_output_filenames = {
-        "trained_model": "finetuned_mace.model",
-        "training_log": "training.log",
-        "native_models": "mace/models",
-        "checkpoints": "mace/checkpoints",
-        "logs": "mace/logs",
-        "metrics": "mace/results",
-    }
-
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return native YAML with bundle paths and dataset-dependent
         stress."""

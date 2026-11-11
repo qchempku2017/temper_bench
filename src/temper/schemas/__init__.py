@@ -4,6 +4,7 @@ experiments."""
 from temper.schemas.mlff_test_result import MLFFTestResult
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
+    MLFFFileLayout,
     MLFFImplementation,
     MLFFSpec,
     PretrainedMLFFSpec,
@@ -14,6 +15,7 @@ from temper.schemas.train_unit import TrainingUnit, load_training_units
 __all__ = [
     "GroupedDomain",
     "LocalArtifactRef",
+    "MLFFFileLayout",
     "MLFFImplementation",
     "MLFFSpec",
     "MLFFTestResult",

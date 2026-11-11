@@ -1,5 +1,6 @@
 """Portable bundle execution and optional dependency boundaries."""
 
+from collections.abc import Callable
 import json
 from pathlib import Path
 import shutil
@@ -9,6 +10,8 @@ import sys
 import pytest
 
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+from temper.schemas.mlff_spec import MLFFSpec
+from temper.schemas.train_unit import TrainingUnit
 from temper.mlff.pipeline import runner
 from temper.mlff.pipeline import evaluate_mlff
 from temper.mlff.pipeline.training_adapters.mace import MACEAdapter
@@ -390,11 +393,26 @@ def test_training_failure_does_not_start_testing(
 
 
 def test_bundle_owns_test_configuration_after_serialization(
-    tmp_path,
-    finetune_training_unit,
-    mlff_spec_factory,
-    monkeypatch,
-):
+    tmp_path: Path,
+    finetune_training_unit: TrainingUnit,
+    mlff_spec_factory: Callable[..., MLFFSpec],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep runtime paths fixed when installed builder defaults change.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary bundle directory.
+    finetune_training_unit : TrainingUnit
+        Unit with readable training and testing datasets.
+    mlff_spec_factory : Callable[..., MLFFSpec]
+        Fixture constructing a specification with a local checkpoint.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing builder defaults only for this test.
+    """
+    from temper.mlff.spec_builders import MACESpecBuilder
+
     target = MLFFTrainBundle(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("mace"),
@@ -403,12 +421,17 @@ def test_bundle_owns_test_configuration_after_serialization(
         (target / "bundle.json").read_text()
     )
     config = bundle.test_config()
-    # Changing an installed adapter's default cannot change a packaged
+    # Changing an installed builder's default cannot change a packaged
     # model path.
     monkeypatch.setattr(
-        MACEAdapter,
-        "training_output_filenames",
-        {"trained_model": "another.model"},
+        MACESpecBuilder,
+        "default_file_layout",
+        MACESpecBuilder.default_file_layout.model_copy(
+            update={
+                "training_output_filenames": {"trained_model": "another.model"}
+            },
+            deep=True,
+        ),
     )
     adapter = runner.prepare_bundle(target / "bundle.json")
     assert (

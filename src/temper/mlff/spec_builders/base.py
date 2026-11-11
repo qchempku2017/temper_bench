@@ -12,6 +12,7 @@ from typing import Any, ClassVar, TypeVar
 
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
+    MLFFFileLayout,
     MLFFImplementation,
     MLFFSpec,
     PretrainedMLFFSpec,
@@ -125,14 +126,21 @@ class BaseSpecBuilder(ABC):
         Checkpoint filename or POSIX subpath relative to
         pretrained_model_dir. Required for custom checkpoints and
         supplied by the catalog for variants.
-    training_parameters : dict or None
+    training_parameters : dict[str, Any] or None, optional
         Native overrides; None selects zero-shot, {} enables training
         defaults.
-    testing_parameters : dict or None
+    testing_parameters : dict[str, Any] or None, optional
         ASE calculator options; TEMPER manages hardware selection.
         Variant options are included automatically. Conflicting task or
         model-type options are rejected so the selected model identity
         stays accurate.
+    file_layout : MLFFFileLayout or None, optional
+        Complete packaging filename settings. None copies this family's
+        default_file_layout. Names are relative to the writer's respective
+        input/output directories, not to the local checkpoint directory.
+        Copies are made at initialization and build time, so edits to one
+        specification do not affect another or the builder's defaults.
+        Not recommended for general use.
 
     Attributes
     ----------
@@ -150,6 +158,17 @@ class BaseSpecBuilder(ABC):
         Additional software required only for fine-tuning.
     training_defaults : dict[str, Any]
         Native controls copied and merged with caller overrides.
+    default_file_layout : MLFFFileLayout
+        Family filename defaults used when no layout is supplied.
+    file_layout : MLFFFileLayout
+        Independent packaging settings copied into each built specification.
+    pretrained_model_dir : Path
+        Expanded source directory; relative paths use the working directory
+        at build time.
+    training_parameters : dict[str, Any] or None
+        Caller overrides, or None to build a zero-shot specification.
+    testing_parameters : dict[str, Any]
+        Calculator options with any required variant options included.
     epoch_key : str
         Native field specifying the positive training epoch count.
     patience_key : str or None
@@ -158,9 +177,18 @@ class BaseSpecBuilder(ABC):
     registry : dict[str, type[BaseSpecBuilder]]
         Builder classes indexed by explicit registration names and
         aliases.
+
+    Raises
+    ------
+    ValueError
+        If variant and explicit checkpoint identity fields are mixed,
+        required identity fields are absent, the source filename is not
+        a portable relative path, calculator options conflict with the
+        selected variant, or packaging filenames are invalid.
     """
 
     registry: ClassVar[dict[str, type[BaseSpecBuilder]]] = {}
+    default_file_layout: ClassVar[MLFFFileLayout]
     implementations: tuple[MLFFImplementation, ...]
     training_implementations: tuple[MLFFImplementation, ...] = ()
     training_defaults: dict[str, Any]
@@ -212,6 +240,7 @@ class BaseSpecBuilder(ABC):
         model_filename: str | None = None,
         training_parameters: dict[str, Any] | None = None,
         testing_parameters: dict[str, Any] | None = None,
+        file_layout: MLFFFileLayout | None = None,
     ) -> None:
         explicit = (model_name, model_version, model_filename)
         preset: dict[str, Any] = {}
@@ -263,6 +292,10 @@ class BaseSpecBuilder(ABC):
                 )
             options[key] = deepcopy(value)
         self.testing_parameters = options
+        layout = self.default_file_layout if file_layout is None else file_layout
+        self.file_layout: MLFFFileLayout = MLFFFileLayout.model_validate(
+            layout.model_dump()
+        )
 
     @classmethod
     def available_variants(cls) -> tuple[str, ...]:
@@ -297,12 +330,25 @@ class BaseSpecBuilder(ABC):
         specification.
 
         The returned spec contains the selected model identity, local
-        artifact reference, software requirements, and
-        training/calculator parameters. No weights are downloaded or
-        modified. Raises ValueError for missing files or invalid
-        training controls. Building a specification does not execute the
-        backend or verify that its checkpoint requirements are
-        installed.
+        artifact reference, software requirements, training/calculator
+        parameters, and an independent copy of the packaging filenames.
+        No weights are downloaded or modified. Building a specification
+        does not execute the backend or verify that its checkpoint
+        requirements are installed.
+
+        Returns
+        -------
+        MLFFSpec
+            Complete specification that can be serialized and packaged
+            without consulting this builder or a runtime adapter again.
+
+        Raises
+        ------
+        ValueError
+            If the checkpoint is missing, training controls are invalid,
+            or the packaging filenames are invalid.
+        OSError
+            If the checkpoint or backend metadata cannot be read.
         """
         artifacts = {
             "model": LocalArtifactRef.from_path(
@@ -316,6 +362,9 @@ class BaseSpecBuilder(ABC):
         )
         return MLFFSpec(
             mlff_type=self.mlff_type,
+            file_layout=MLFFFileLayout.model_validate(
+                self.file_layout.model_dump()
+            ),
             implementations=(
                 self.implementations
                 + (

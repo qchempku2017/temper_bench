@@ -22,13 +22,6 @@ _BOOLEAN_OPTIONS = {
 class MatterSimAdapter(BaseMLFFAdapter):
     """Prepare MatterSim 1.2.5 train-and-test bundles."""
 
-    pretrained_model_filename = "mattersim.pth"
-    training_output_filenames = {
-        "trained_model": "finetuned_mattersim.pth",
-        "training_log": "training.log",
-        "native_outputs": "mattersim",
-    }
-
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Return no config files: MatterSim accepts all controls on its
         CLI."""

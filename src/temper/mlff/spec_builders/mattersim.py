@@ -1,7 +1,9 @@
 """MatterSim fine-tuning defaults."""
 
+from typing import ClassVar
+
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas.mlff_spec import MLFFImplementation
+from temper.schemas.mlff_spec import MLFFFileLayout, MLFFImplementation
 
 
 @BaseSpecBuilder.register(name="mattersim")
@@ -13,6 +15,18 @@ class MatterSimSpecBuilder(BaseSpecBuilder):
     unresolved in the pinned 1.2.5 release; callers can override it for
     patched builds.
     """
+
+    default_file_layout: ClassVar[MLFFFileLayout] = MLFFFileLayout(
+        training_input_filenames={
+            "script": "run.sh",
+        },
+        pretrained_model_filename="mattersim.pth",
+        training_output_filenames={
+            "trained_model": "finetuned_mattersim.pth",
+            "training_log": "training.log",
+            "native_outputs": "mattersim",
+        },
+    )
 
     mlff_type = "mattersim"
     implementations = (MLFFImplementation(name="mattersim", version="1.2.5"),)

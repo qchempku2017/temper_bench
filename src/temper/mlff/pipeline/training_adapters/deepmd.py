@@ -20,20 +20,6 @@ class _DeepMDAdapter(BaseMLFFAdapter):
     backend_flag: str
     model_type: str = "standard"
     freeze_options: tuple[str, ...] = ()
-    evaluation_model_filename = "evaluation.pt2"
-    training_output_filenames = {
-        "trained_model": "model.ckpt.pt",
-        "training_log": "training.log",
-        "adapted_config": "train_adapted.json",
-        "learning_curve": "lcurve.out",
-        "checkpoints": "deepmd/checkpoints",
-    }
-    training_input_filenames = {
-        "script": "run.sh",
-        "config": "input.json",
-        "converted_train": "data/train",
-        "converted_validation": "data/validation",
-    }
 
     def _training_file_contents(self, training_stress: bool) -> dict[str, str]:
         """Preserve the checkpoint's model settings and add bundle data
@@ -239,7 +225,6 @@ class DPA4Adapter(_DeepMDAdapter):
 
     backend_flag = "--pt"
     model_type = "dpa4"
-    pretrained_model_filename = "dpa4.pt"
 
 
 @BaseMLFFAdapter.register(name="dpa4c")
@@ -247,5 +232,4 @@ class DPA4CAdapter(_DeepMDAdapter):
     """Prepare DPA-4C train-and-test bundles."""
 
     backend_flag = "--pt-expt"
-    pretrained_model_filename = "dpa4c.pt"
     freeze_options = ("--lower-kind", "graph")

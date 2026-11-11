@@ -5,15 +5,40 @@ from __future__ import annotations
 from abc import ABC
 from copy import deepcopy
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas.mlff_spec import MLFFImplementation
+from temper.schemas.mlff_spec import MLFFFileLayout, MLFFImplementation
 
 
 class _DeepMDSpecBuilder(BaseSpecBuilder, ABC):
-    """Share DPA training policy; instances select the pretrained
-    release."""
+    """Share DPA training policy and packaging filenames.
+
+    Attributes
+    ----------
+    default_file_layout : MLFFFileLayout
+        Common DeepMD input/output names and the DPA-4 checkpoint name.
+        Subclasses changing filenames must copy this layout, including
+        its dictionaries, to keep the parent defaults unchanged.
+    """
+
+    default_file_layout: ClassVar[MLFFFileLayout] = MLFFFileLayout(
+        evaluation_model_filename="evaluation.pt2",
+        training_input_filenames={
+            "script": "run.sh",
+            "config": "input.json",
+            "converted_train": "data/train",
+            "converted_validation": "data/validation",
+        },
+        training_output_filenames={
+            "trained_model": "model.ckpt.pt",
+            "training_log": "training.log",
+            "adapted_config": "train_adapted.json",
+            "learning_curve": "lcurve.out",
+            "checkpoints": "deepmd/checkpoints",
+        },
+        pretrained_model_filename="dpa4.pt",
+    )
 
     implementations = (MLFFImplementation(name="deepmd-kit", version="3.2.0"),)
     epoch_key = "numb_epoch"
@@ -128,6 +153,12 @@ class DPA4SpecBuilder(_DeepMDSpecBuilder):
 class DPA4CSpecBuilder(_DeepMDSpecBuilder):
     """Build a selected DPA-4C checkpoint specification with 100
     training epochs."""
+
+    default_file_layout: ClassVar[MLFFFileLayout] = (
+        _DeepMDSpecBuilder.default_file_layout.model_copy(
+            update={"pretrained_model_filename": "dpa4c.pt"}, deep=True
+        )
+    )
 
     mlff_type = "dpa4c"
     training_defaults = {

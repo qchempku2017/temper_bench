@@ -1,13 +1,29 @@
 """SevenNet checkpoint fine-tuning defaults."""
 
+from typing import ClassVar
+
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas.mlff_spec import MLFFImplementation
+from temper.schemas.mlff_spec import MLFFFileLayout, MLFFImplementation
 
 
 @BaseSpecBuilder.register(name="sevennet")
 class SevenNetSpecBuilder(BaseSpecBuilder):
     """Build a SevenNet specification; the runtime resumes its
     pretrained weights."""
+
+    default_file_layout: ClassVar[MLFFFileLayout] = MLFFFileLayout(
+        training_input_filenames={
+            "script": "run.sh",
+            "config": "sevennet.yaml",
+        },
+        pretrained_model_filename="sevennet.pth",
+        training_output_filenames={
+            "trained_model": "finetuned_sevennet.pth",
+            "training_log": "training.log",
+            "resolved_config": "sevennet_resolved.yaml",
+            "native_outputs": "sevennet",
+        },
+    )
 
     mlff_type = "sevennet"
     implementations = (MLFFImplementation(name="sevenn", version="0.13.0"),)
