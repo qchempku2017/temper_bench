@@ -267,14 +267,15 @@ Paramiko timeout, including its internal key-exchange waits. Some DPDispatcher
 status-query paths wait for a command's exit status without a total deadline;
 raising `timeout` therefore does not guarantee that every operation will finish
 or fail within that many seconds. A lost submission response leaves the attempt
-`uncertain`, because the scheduler may already have accepted the job. Use
-recovery to establish the existing job's identity rather than blindly submitting
-it again. Query or download errors are recorded separately from calculation
+`uncertain`, because the scheduler may already have accepted the job. Run
+`job submit` again to look for that existing job; TEMPER will not launch a new
+attempt while the outcome remains unknown. Query or download errors are recorded
+separately from calculation
 failure; failed collection does not authorize remote cleanup.
 
 ## Local execution
 
-Use the same submit, status, synchronize, cancel, recover, and resubmit commands
+Use the same submit, status, synchronize_remote, and cancel commands
 with this profile on a POSIX host (for example Linux or a configured WSL project):
 
 ```yaml
@@ -313,8 +314,17 @@ temper_bench job refresh_bundle_identity bundle.json
 ```
 
 This recomputes dataset hashes and the training-unit and bundle identities,
-then replaces `bundle.json` at its current location. The original file remains
-intact until the complete replacement is ready.
+then replaces the bundle JSON. For `bundle.json` in the standard
+`root/model/domain/bundle__...` layout, it also renames the containing bundle
+directory to include the refreshed ID, preserving other files in that
+directory. It holds the store lock and rejects an occupied destination rather
+than overwriting it. Standalone JSON files keep their paths. The command prints
+the final bundle path.
+
+Directory renaming and JSON replacement are separate operations. If writing
+fails before replacement, the command attempts to restore the original
+directory name. Abrupt termination can interrupt this recovery; rerun refresh
+using the file's current path to reconcile the directory name.
 An existing attempt depends on its shared bundle. Refresh therefore rejects
 bundles in bundle directories containing attempts, and bundles inside an
 attempt directory. Create a separate bundle for a changed experiment.
@@ -363,11 +373,48 @@ temper_bench job submit --resource-file cluster.yaml --bundle-write-root ./bundl
 
 Submission reads `*/*/bundle__*/bundle.json` beneath the root: one bundle per
 model/domain/bundle directory. It excludes bundles inside `attempt_*` directories
-and submits each bundle ID once. Individual bundle paths and JSON lists are no
-longer command arguments. An empty root is an error. Existing successful,
-unfinished, uncertain, or not-yet-cleaned attempts still prevent another
-submission of the same bundle; those errors are reported while other bundles
-are processed. Use `resubmit` for explicit retries of failed calculations.
+and considers each bundle ID once. Individual bundle paths and JSON lists are
+not command arguments. An empty root or a selection with no matches reports
+that no bundles were found; it launches nothing.
+
+**Run `job submit` again to continue an interrupted campaign.** Before launching
+anything, TEMPER checks saved attempts and available remote evidence. It leaves
+successful or running calculations alone, resumes interrupted preparation where
+possible, and creates new attempts only when the previous outcome permits it.
+An unreachable resource or an unknown submission outcome is reported and blocks
+a new launch for that bundle; other bundles can still proceed. Exceptional
+cases that cannot be recovered can be explicitly abandoned, as described below;
+ordinary `submit` never makes that decision for you.
+
+Supply `--resource-file` for bundles that have never been submitted. Existing
+attempts are always checked and recovered using their saved resource settings.
+New retries reuse those settings unless you supply a replacement resource file;
+that replacement affects only new attempts. This lets you resume with:
+
+```console
+temper_bench job submit --bundle-write-root ./bundles
+```
+
+Use `--bundle-id`, `--domain`, or `--resource` to narrow the selection.
+`--resource` is a resource name, not a profile filename. It matches the latest
+saved attempt's resource, or the supplied profile for a bundle with no history.
+Selection never allows an older failure to bypass a later active or successful
+attempt.
+
+To inspect the proposed actions without launching jobs:
+
+```console
+temper_bench job submit --bundle-write-root ./bundles --preview
+# -p is the short form of --preview.
+```
+
+Preview contacts resources to check status and find existing jobs. It can save
+those observations in local history, but does not upload, submit, cancel,
+download results, or delete remote files. It reports the proposed action and
+reason for each bundle, including missing resources and unresolved submissions.
+The normal command checks again before acting, because jobs can change after a
+preview. Preview cannot be combined with `--keep-watching`. `--json` provides
+the same decisions in a machine-readable form.
 
 `create_bundles` stores absolute dataset and pretrained-weight paths. Keep those
 inputs available until submission packages them. Restarting from a different
@@ -414,12 +461,17 @@ semantics differ.
 Inputs are **ordinary copies** in `pretrained_models/`, `training_inputs/` and
 `testing_inputs/`. After confirmed upload and a durable recovery record, TEMPER
 removes only these copied datasets/weights and its upload archives. Your source
-files, bundle, scripts, small job records and eventual outputs remain. Explicit
-resubmission validates and copies the original inputs again into a new attempt.
+files, bundle, scripts, small job records and eventual outputs remain. A retry
+validates and copies the original inputs again into a new attempt.
 
 ## One-pass synchronization and watching
 
-Submission returns after launching; it does not keep watching by default.
+Submission returns after its checks and submission actions; it does not keep
+watching by default. Each invocation creates at most one new attempt per bundle.
+`submit --keep-watching` then monitors the confirmed attempts selected by that
+invocation. It excludes blocked cases and does not add attempts launched later
+by another command. It does not repeatedly restart failed calculations. Run
+`submit` again when you want another eligible retry.
 To check jobs once, download terminal results, verify them, and clean up:
 
 ```console
@@ -448,14 +500,18 @@ temper_bench job list --failed --domain my_domain
 temper_bench job inspect --bundle-id FULL_UUID
 temper_bench job logs --bundle-id FULL_UUID
 temper_bench job status --refresh --resource paratera
-temper_bench job download --bundle-id FULL_UUID
+temper_bench job synchronize_remote --bundle-id FULL_UUID --keep-remote-files
 ```
 
 `list` and `inspect` read local records. `status --refresh` queries and saves
 status only: it does not upload, launch, cancel, download or delete anything.
 This includes Bohrium: TEMPER bypasses dpdispatcher's status method that downloads
-completed results. `download` collects and verifies terminal results but leaves
-remote deletion for synchronization. `logs` prints the paths of retained logs;
+completed results. `synchronize_remote --keep-remote-files` collects and verifies
+terminal results but retains remote working files. Run synchronization without
+this option later to delete those files. Combining `--keep-remote-files` with
+`--keep-watching` stops when every selected attempt has verified results,
+without waiting for remote cleanup. The former `job download` command has been
+removed. `logs` prints the paths of retained logs;
 it does not implicitly download them. `--json` provides machine-readable records.
 
 Each attempt separately records submission progress, computation outcome,
@@ -463,7 +519,7 @@ result collection, and remote cleanup. For example, a calculation can succeed
 while its download is pending, or have verified results while deletion is pending.
 Transient network errors do not turn a running calculation into a failed one.
 The next synchronization retries the pending communication operation. Failed
-calculations themselves are never automatically relaunched.
+calculations themselves are never relaunched by synchronization or watching.
 
 ## Retained results and remote deletion
 
@@ -503,61 +559,175 @@ and does not invalidate verified successful results.
 `success` is created only after successful calculation **and verified results**.
 Synchronization repairs missing or incorrect marker files from the record.
 
-## Explicit retries, cancellation and emergency recovery
+## Safe retries, cancellation and interrupted submissions
 
-Inspect failures first, then retry eligible bundles together:
+There is one command for starting and continuing work: `job submit`. The former
+`recover` and `resubmit` subcommands are removed. You do not need to decide which
+kind of interruption occurred before running `submit` again.
+
+| What TEMPER finds | What `submit` does |
+| --- | --- |
+| A successful attempt | Skips a new calculation; finishes outstanding collection or cleanup if needed. |
+| A successful attempt alongside unfinished attempts | Reports the conflicting history for inspection; launches nothing. |
+| A queued or running attempt | Keeps the existing attempt; does not submit another job. |
+| Preparation or upload stopped before launch | Continues the same attempt where possible. |
+| A launch began but its reply was lost | Looks for the existing job; resumes only when its identity is established. |
+| The outcome remains unknown or the resource cannot be reached | Reports the problem and skips a new launch. |
+| A confirmed failure or rejected submission | Completes required collection/cleanup, then creates one new attempt. |
+| A cancelled attempt | Leaves it cancelled unless `--retry-cancelled` is supplied. |
+| No attempt exists | Creates the first attempt using `--resource-file`. |
+
+For example, inspect failures, preview, and then continue:
 
 ```console
 temper_bench job list --failed
-temper_bench job resubmit --domain my_domain --dry-run
-temper_bench job resubmit --domain my_domain
-# Retry eligible failures using the backup resource:
-temper_bench job resubmit --resource paratera --resource-file bohrium.yaml
+temper_bench job submit --domain my_domain --preview
+temper_bench job submit --domain my_domain
+# Use a different resource for new attempts, while checking old jobs where they ran:
+temper_bench job submit --resource paratera --resource-file bohrium.yaml
 ```
 
-Each bundle is retried at most once per command. Earlier attempts remain intact.
-There is no training/evaluation-stage resume: a new attempt runs the whole bundle.
-Source changes are rejected; explicitly rebuild a new identity for changed science.
-An active, uncertain or incompletely collected attempt blocks another attempt.
-Any successful attempt blocks that bundle permanently within the retained store,
-including when the command selected an older failure. Changing a queue, image,
-scratch directory or execution resource does not create a new scientific identity.
-Keep or back up the store: a separate/deleted history cannot know about earlier
-successes.
+Earlier attempts and their diagnostics remain in the local store. A new attempt
+runs the whole bundle; it does not continue training from an intermediate
+checkpoint. Source changes are rejected: create a new bundle identity when the
+scientific inputs change. Collection or cleanup errors block a retry rather than
+starting another calculation. Changing a queue, image, scratch directory, or
+execution resource does not change the scientific identity.
+
+These protections depend on retaining one shared local job store. Commands using
+that store take its lock before making submission decisions. A copied or deleted
+history cannot coordinate with the original history, and TEMPER cannot detect
+unrelated jobs that you launch manually. Keep the store with the shared bundles
+and their attempts; do not use independent copies to submit the same campaign.
+Explicitly abandoning an unresolved attempt is an exception: it allows future
+submission without proving that the old remote job has stopped.
+
+To cancel a bundle's unfinished attempts:
 
 ```console
 temper_bench job cancel --bundle-id FULL_UUID
-temper_bench job recover --bundle-id FULL_UUID
 ```
 
 Cancellation intent is saved before contacting the scheduler. Synchronization
-waits for actual termination before downloading diagnostics and deleting data.
+waits for actual termination before collecting diagnostics and deleting remote
+files. A later `submit` leaves the cancellation in effect unless you explicitly
+request `--retry-cancelled`.
 
-Recovery is distinct from resubmission. For a crash before a launch was attempted,
-it can finish the original upload/submission. If a launch response was lost,
-TEMPER reads its remote SSH receipt or saved cloud ID and attaches to that job;
-it never assumes the launch failed merely because the local ID is missing.
-If no receipt survives, find the existing job on the remote resource first:
+An unknown outcome is different from a confirmed failure. A scheduler can accept
+a job just before the connection drops. TEMPER therefore checks saved job IDs
+and submission receipts (files recording the scheduler's reply) before trying
+another launch. Slurm can also be searched
+by the attempt's unique working directory. An empty queue or missing accounting
+record is inconclusive: the job may already have finished.
+
+PBS recovery uses saved IDs or receipts. Bohrium uses its saved cloud identifiers.
+Local execution uses the supervisor's receipt. If those records are insufficient,
+TEMPER leaves the attempt unresolved rather than guessing that no job exists.
+For a remote job you have independently identified, associate it with the exact
+local attempt:
 
 ```console
-temper_bench job recover --bundle-id FULL_UUID --job-id EXISTING_REMOTE_ID
+temper_bench job attach --bundle-id FULL_UUID --attempt attempt_001 --job-id EXISTING_REMOTE_ID
+temper_bench job submit --bundle-id FULL_UUID
 ```
 
-The supplied ID is your assertion that this is the same attempt. Do not provide
-an unrelated job ID. An unresolved attempt stays blocked instead of risking a
-duplicate calculation. This is especially important after a lost cloud creation
-response; the cloud job name contains the saved attempt token for lookup.
+`attach` records an existing job; it never launches one. It accepts unresolved
+remote submissions and Bohrium upload drafts, not completed attempts or local
+processes. Check the remote job's account, working directory, and other
+identifying information before supplying its ID. Do not use the ID of an
+unrelated calculation. The attempt name is required because one bundle may have
+several saved attempts.
 
-A Bohrium upload can expire before launch. When its draft ID was saved, recovery
-deletes the unlaunched draft and recreates the upload to obtain a fresh credential.
+Supplied IDs must agree with saved IDs and any available remote receipts or
+scheduler matches. For SSH, if no such evidence survives, attachment relies on
+your independent verification. Bohrium additionally requires the job or draft
+name returned by the service to equal `temper-<attempt token>`; its project ID,
+when returned, must also match. If the service omits the identifying name,
+TEMPER refuses the association rather than assuming ownership. An unresolved
+attempt stays blocked until sufficient evidence is available or you explicitly
+abandon it after investigating the remote job.
+
+A Bohrium upload can expire before launch. When the draft ID was saved, continuing
+the same attempt can recreate the unlaunched upload to obtain a fresh credential.
 It does not rerun a calculation. Upload credentials and signed result URLs are
-never written to the store. If even the draft-creation response was lost, provide
-that draft ID explicitly before recovery; do not start a second blind submission.
+never written to the store. If the draft-creation response was lost, first find
+the original draft in Bohrium and use `attach` with that draft ID and the exact
+attempt. The next `submit` resumes its upload. Do not start a second blind
+submission.
+
+### Abandoning an unresolved attempt
+
+Use `job abandon` only when TEMPER cannot establish an attempt's outcome and you
+have decided to stop managing that attempt. It records that decision in local
+history so later `submit` commands can create a replacement. **It does not stop
+the remote calculation.** If the old job is still running, a later submission
+can run the calculation twice. First inspect the scheduler or service and, when
+possible, use `attach` to reconnect to the existing job instead.
+
+A `blocked` submission decision does not by itself make an attempt eligible for
+abandonment. TEMPER checks status and recovery evidence again, without changing
+remote jobs or files. Only an unresolved submission, an unknown calculation
+status, or an unresolved Bohrium upload draft can be selected. Attempts known
+to be queued, running, successful, failed, or cancelled are excluded. Missing
+resource profiles and pending result collection or cleanup are also not reasons
+to abandon a job: fix the profile or retry synchronization for those cases.
+A Bohrium upload with a saved draft ID is excluded when only the connection
+fails; restore connectivity and continue the known draft instead.
+
+Preview the eligible attempts first:
+
+```console
+temper_bench job abandon --preview
+temper_bench job abandon --bundle-id FULL_UUID --preview
+```
+
+Without filters, `abandon` considers every eligible attempt in the selected
+store. Optional `--bundle-id`, `--resource`, and `--domain` narrow the selection;
+use the same `--bundle-write-root` as for submission. `--preview` (or `-p`)
+reports the candidates without prompting or abandoning them. Status checks may
+update the local observations used to explain eligibility.
+
+To proceed interactively:
+
+```console
+temper_bench job abandon --bundle-id FULL_UUID
+```
+
+The command displays the selected attempts and the risk of a duplicate
+calculation, then asks for confirmation with `[y/N]`. Pressing Enter declines.
+For an unattended command, `--yes` is required:
+
+```console
+temper_bench job abandon --bundle-id FULL_UUID --yes
+```
+
+`--yes` skips only the prompt; it does not bypass eligibility checks. After
+confirmation, TEMPER checks relevant local and remote state again while holding
+the store lock. If the selection has changed, it stops without applying the
+abandonment; run a fresh command to inspect and confirm the current selection.
+Changes to statuses, execution settings, or saved job identifiers require a new
+review. A new check time or an updated error message alone does not invalidate
+confirmation, but the attempt must still be eligible. Records are written one
+at a time: a local write failure can leave some attempts abandoned and others
+unchanged. Inspect the history before retrying after such an error.
+
+Abandonment never submits, cancels, or deletes anything. It retains the existing
+job record, statuses, identifiers, diagnostics, and files, and adds the
+`abandoned_at` timestamp and `abandoned_reason`. `job list` and `job inspect`
+continue to show the attempt, marked as abandoned. Routine submission,
+monitoring, cancellation, and cleanup stop managing it. Investigating or removing
+any remaining remote work becomes your responsibility.
+
+Run `job submit` separately when ready to start again. It can reuse the resource
+settings from the last abandoned attempt unless you supply another profile.
+Other active or successful attempts for the same bundle still prevent an
+unnecessary new calculation. Do not abandon a known job to work around a
+configuration error or a failed download.
 
 ## Validation boundary
 
 For native Windows transfer, explicit Slurm task/CPU fields, confirmed rejection
-recovery (`job resubmit`), optional `sbatch --test-only`, and job-local
+recovery through `job submit`, optional `sbatch --test-only`, and job-local
 cache configuration, see [deployment compatibility](deployment-compatibility.md).
 That guide distinguishes unit coverage from recorded GPU and JobManager tests.
 
@@ -589,6 +759,13 @@ be exercised on the intended compute resources.
 ## Python names and saved-history compatibility
 
 `JobManager.list_attempts()` reads filtered local history without remote calls.
+`JobManager.submit_bundles()` implements the CLI's check-and-continue behavior
+and returns a `SubmissionDecision` for each selected bundle. Each decision
+explains the action, reason, chosen resource, and attempt path when available.
+`JobManager.watch_submissions()` monitors the confirmed attempts from those
+decisions without starting retries. The older Python methods `submit`,
+`recover`, and `resubmit` remain available for callers that explicitly need
+their separate operations; the CLI uses the unified workflow.
 `get_dataset_and_model_hashes(bundle)` excludes configuration files and scripts;
 `verify_dataset_and_model_hashes(bundle, root)` checks only those copied files.
 `get_download_files(bundle)` returns exact download names and required-success
@@ -622,19 +799,24 @@ Old saved Bohrium field names and frozen `environment`
 remain readable. New profile files should use the names documented above.
 Per-attempt `job.json` remains authoritative. Storage indexing is deferred pending
 benchmarks of large histories; no unified JSONL database has been introduced.
+The optional `abandoned_at` and `abandoned_reason` fields retain an explicit
+decision to stop managing an unresolved attempt. Existing records without these
+fields are treated as not abandoned. Abandonment does not rewrite the recorded calculation
+outcome or remove its history.
 
 
 ### Retrying a scheduler rejection
 
-`job resubmit` handles both failed calculations and confirmed rejected
-submissions. No bundle ID is required: use `--dry-run` to see all eligible
+`job submit` handles both failed calculations and confirmed rejected
+submissions. No bundle ID is required: use `--preview` to see all eligible
 bundles and skip reasons, and `--resource-file corrected.yaml` to apply corrected
 resources. Optional `--bundle-id`, `--resource`, and `--domain` filters narrow
 the selection. A newer attempt outside the filters still prevents replaying
 an older failure. Rejected attempts retain their submission diagnostics and
 are cleaned before retrying; they are not recorded as failed calculations.
-Unknown outcomes must be reconciled with `job recover` first. Cleanup failure
-prevents launch and is reported without stopping other selected bundles.
+Unknown outcomes are checked for an existing remote job before any new launch.
+An unresolved outcome or cleanup failure prevents launch and is reported without
+stopping other selected bundles.
 
 `slurm_preflight: true` optionally checks the scheduler request with
 `sbatch --test-only`, then submits the real job if the check passes. It does not

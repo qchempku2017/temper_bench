@@ -837,14 +837,84 @@ def test_profile_relative_key_and_family_environment(tmp_path: Path) -> None:
 
 
 def test_cli_job_parser_defaults_and_alias() -> None:
+    """Check watch defaults and reject the removed download subcommand."""
     from temper.entrypoints.main import main_parser
 
     parser = main_parser()
     args = parser.parse_args(["job", "synchronize_remote"])
     assert not args.keep_watching and args.interval == 60
+    assert not args.keep_remote_files
+    with pytest.raises(SystemExit):
+        parser.parse_args(["job", "download"])
     assert parser.parse_args(
         ["job", "synchronize_remote", "--keep_watching"]
     ).keep_watching
+
+
+@pytest.mark.parametrize("watch", [False, True])
+@pytest.mark.parametrize("keep_remote_files", [False, True])
+def test_cli_synchronize_retains_remote_files(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    watch: bool,
+    keep_remote_files: bool,
+) -> None:
+    """Collect results with optional cleanup in one-shot and watch modes.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend controls.
+    source_bundle : MLFFTrainBundle
+        Valid bundle to submit before synchronization.
+    resource : RemoteResource
+        Remote execution profile for the simulated backend.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing CLI manager construction and the watch delay.
+    watch : bool
+        Whether to simulate a running job that finishes during watching.
+    keep_remote_files : bool
+        Whether collection should leave remote files for later cleanup.
+    """
+    import temper.entrypoints.job as cli
+    import temper.job_management.manager as manager_module
+    from temper.entrypoints.main import main_parser
+
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "running" if watch else "success"
+
+    def existing_manager(root: str | Path | None) -> JobManager:
+        return manager
+
+    sleeps = 0
+
+    def finish_job(interval: float) -> None:
+        nonlocal sleeps
+        sleeps += 1
+        assert sleeps == 1, "Watch failed to stop after successful collection"
+        control["status"] = "success"
+
+    monkeypatch.setattr(cli, "JobManager", existing_manager)
+    monkeypatch.setattr(manager_module.time, "sleep", finish_job)
+    arguments = ["job", "synchronize_remote"]
+    if keep_remote_files:
+        arguments.append("--keep-remote-files")
+    if watch:
+        arguments.append("--keep-watching")
+    assert cli.job_cli(main_parser().parse_args(arguments)) == 0
+    record = manager.list_attempts()[0]
+    assert record.collection_status == "verified"
+    assert control["downloads"] == 1
+    assert control["cleanups"] == (0 if keep_remote_files else 1)
+    assert (record.cleanup_status == "complete") is not keep_remote_files
+    assert sleeps == int(watch)
+    if keep_remote_files:
+        assert manager.synchronize()[0].cleanup_status == "complete"
+        assert control["downloads"] == 1
+        assert control["cleanups"] == 1
 
 
 def test_bohrium_status_has_no_download_side_effect() -> None:
@@ -1156,6 +1226,92 @@ def test_environment_is_frozen_per_family(
     )
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    ["rename", "unchanged", "conflict", "write_failure", "rename_failure", "attempt"],
+)
+def test_cli_refresh_managed_bundle_directory(
+    source_bundle: MLFFTrainBundle,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    scenario: str,
+) -> None:
+    """Keep managed directory names consistent and preserve files on failure.
+
+    Parameters
+    ----------
+    source_bundle : MLFFTrainBundle
+        Bundle with accessible datasets and current hashes.
+    tmp_path : Path
+        Isolated root for the managed bundle directories.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture for simulating failure to replace the JSON file.
+    capsys : pytest.CaptureFixture[str]
+        Captured command output, including the final bundle path.
+    scenario : str
+        Successful rename, unchanged identity, occupied destination,
+        failed JSON write or directory rename, or existing attempt protection.
+    """
+    from temper.entrypoints.job import job_cli
+    from temper.entrypoints.main import main_parser
+    from temper.job_management.paths import bundle_directory
+    import temper.job_management.storage_utils as storage
+
+    data = source_bundle.model_dump(mode="json")
+    if scenario != "unchanged":
+        data.pop("mlff_train_bundle_id")
+        data["training_unit"].pop("training_unit_id")
+        data["training_unit"].pop("dataset_sha256")
+    original_bundle = MLFFTrainBundle.model_validate(data)
+    source = bundle_directory(tmp_path, original_bundle) / "bundle.json"
+    source.parent.mkdir(parents=True)
+    original = original_bundle.model_dump_json()
+    source.write_text(original, encoding="utf-8")
+    companion = source.parent / "notes.txt"
+    companion.write_text("Preserve this file", encoding="utf-8")
+    destination = bundle_directory(tmp_path, source_bundle) / "bundle.json"
+    if scenario == "conflict":
+        destination.parent.mkdir()
+        destination.write_text("Existing destination", encoding="utf-8")
+    elif scenario == "attempt":
+        attempt = source.parent / "attempt_001"
+        attempt.mkdir()
+        (attempt / "job.json").write_text("{}", encoding="utf-8")
+    elif scenario == "write_failure":
+        def fail_replace(source_path: str, destination_path: Path) -> None:
+            raise OSError("Simulated replacement failure")
+
+        monkeypatch.setattr(storage.os, "replace", fail_replace)
+    elif scenario == "rename_failure":
+        def fail_rename(self: Path, target: str | Path) -> Path:
+            raise OSError("Simulated directory rename failure")
+
+        monkeypatch.setattr(Path, "rename", fail_rename)
+    args = main_parser().parse_args(
+        ["job", "refresh_bundle_identity", str(source)]
+    )
+    if scenario in {"conflict", "write_failure", "rename_failure", "attempt"}:
+        with pytest.raises((ValueError, OSError)):
+            job_cli(args)
+        assert source.read_text(encoding="utf-8") == original
+        assert companion.exists()
+        if scenario == "conflict":
+            assert destination.read_text(encoding="utf-8") == "Existing destination"
+        else:
+            assert not destination.parent.exists()
+    else:
+        assert job_cli(args) == 0
+        refreshed = MLFFTrainBundle.model_validate_json(destination.read_text())
+        assert refreshed.mlff_train_bundle_id == source_bundle.mlff_train_bundle_id
+        assert refreshed.files is None
+        assert (destination.parent / companion.name).read_text() == "Preserve this file"
+        assert str(destination.resolve()) in capsys.readouterr().out
+        if scenario == "rename":
+            assert not source.parent.exists()
+        assert len(list(tmp_path.glob("*/*/bundle__*/bundle.json"))) == 1
+
+
 def test_cli_refresh_bundle_identity_replaces_bundle(
     source_bundle: MLFFTrainBundle, tmp_path: Path
 ) -> None:
@@ -1300,7 +1456,7 @@ def test_submit_discovers_bundles_but_not_attempts(
     assert control["submits"] == 1
     assert (directory / "attempt_002" / "job.json").is_file()
     assert len(manager.list_attempts()) == 1
-    assert job.job_cli(args) == 1  # Existing active attempt is not relaunched.
+    assert job.job_cli(args) == 0  # Monitoring an existing job is normal.
     assert control["submits"] == 1
 
 
@@ -1736,3 +1892,1218 @@ def test_local_supervisor_records_completion_and_cancellation(
             if process.poll() is None:
                 (root / ".local-cancel").touch()
                 process.wait(timeout=20)
+
+
+def _save_unsubmitted_bundle(
+    manager: JobManager, bundle: MLFFTrainBundle
+) -> Path:
+    """Write a discoverable bundle without creating an attempt."""
+    from temper.job_management.paths import bundle_directory
+
+    path = bundle_directory(manager.store.root, bundle) / "bundle.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(bundle.model_dump_json(), encoding="utf-8")
+    return path
+
+
+def test_submit_bundles_first_submission_and_repeat(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Repeating submission monitors the existing job without another launch.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with accessible local inputs and current identities.
+    resource : RemoteResource
+        Profile for the first submission.
+    """
+    manager, control = managed
+    _save_unsubmitted_bundle(manager, source_bundle)
+    assert manager.submit_bundles(resource=resource)[0].action == "submitted"
+    assert manager.submit_bundles()[0].action == "monitor"
+    assert control["submits"] == 1
+    assert control["uploads"] == 1
+    assert len(manager.list_attempts()) == 1
+
+
+@pytest.mark.parametrize("interruption", ["upload", "response", "power_loss"])
+def test_submit_bundles_resumes_existing_attempt(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    interruption: str,
+) -> None:
+    """Continue an interrupted attempt without allocating a replacement.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle to package and submit.
+    resource : RemoteResource
+        Saved execution profile that recovery must reuse.
+    interruption : str
+        Interrupted upload, lost submission response, or process interruption
+        after the durable submission intent was written.
+    """
+    manager, control = managed
+    flag = {
+        "upload": "upload_error",
+        "response": "submit_error",
+        "power_loss": "power_loss",
+    }[interruption]
+    control[flag] = True
+    if interruption == "power_loss":
+        with pytest.raises(KeyboardInterrupt):
+            manager.submit(source_bundle, resource)
+    else:
+        manager.submit(source_bundle, resource)
+    first = manager.list_attempts()[0]
+    control[flag] = False
+    decisions = manager.submit_bundles()
+    assert decisions[0].action in {"resumed", "monitor"}
+    records = manager.list_attempts()
+    assert len(records) == 1
+    assert records[0].attempt_folder_name == first.attempt_folder_name
+    assert records[0].submission_status == "submitted"
+    assert control["submits"] == 1
+
+
+@pytest.mark.parametrize("failure", ["no_receipt", "status_error"])
+def test_submit_bundles_uncertainty_prevents_duplicate(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    """Missing evidence or an unreachable resource never authorizes a retry.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Original submitted bundle.
+    resource : RemoteResource
+        Saved remote profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture replacing the receipt lookup when evidence is absent.
+    failure : str
+        Missing submission receipt or failed status query.
+    """
+    manager, control = managed
+    control["submit_error"] = failure == "no_receipt"
+    manager.submit(source_bundle, resource)
+    control["submit_error"] = False
+    if failure == "no_receipt":
+        def missing_receipt(
+            self: FakeBackend, job_id: str | None = None
+        ) -> bool:
+            return False
+
+        monkeypatch.setattr(FakeBackend, "recover", missing_receipt)
+    else:
+        control["status_error"] = True
+    decisions = manager.submit_bundles()
+    assert decisions[0].action in {"blocked", "error"}
+    assert decisions[0].reason
+    assert len(manager.list_attempts()) == 1
+    assert control["submits"] == 1
+    assert control["cleanups"] == 0
+
+
+@pytest.mark.parametrize("state", ["new", "upload", "uncertain", "failed", "cancel_requested"])
+def test_submit_bundles_preview_has_no_remote_changes(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    state: str,
+) -> None:
+    """Preview may query evidence but never upload, launch, collect or delete.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle in the requested initial state.
+    resource : RemoteResource
+        Execution profile for existing or proposed attempts.
+    state : str
+        New bundle, interrupted upload, uncertain submission, confirmed
+        failure, or pending cancellation request.
+    """
+    manager, control = managed
+    if state == "new":
+        _save_unsubmitted_bundle(manager, source_bundle)
+    else:
+        control["upload_error"] = state == "upload"
+        control["submit_error"] = state == "uncertain"
+        record = manager.submit(source_bundle, resource)
+        control["upload_error"] = False
+        control["submit_error"] = False
+        if state == "failed":
+            control["status"] = "failed"
+        if state == "cancel_requested":
+            record.cancel_requested = True
+            manager.store.save(record, "cancellation_requested")
+    before = {name: control[name] for name in (
+        "uploads", "submits", "downloads", "cleanups", "cancels"
+    )}
+    count = len(manager.list_attempts())
+    decisions = manager.submit_bundles(resource=resource, preview=True)
+    assert len(decisions) == 1
+    assert decisions[0].reason
+    assert len(manager.list_attempts()) == count
+    assert {name: control[name] for name in before} == before
+    if state == "new":
+        assert decisions[0].action == "new"
+    elif state == "failed":
+        assert decisions[0].action == "retry"
+
+
+@pytest.mark.parametrize("failure", ["failed", "rejected"])
+def test_submit_bundles_retries_once_per_invocation(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    failure: str,
+) -> None:
+    """A confirmed failure creates one replacement attempt and preserves history.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose initial attempt fails.
+    resource : RemoteResource
+        Profile reused for the new attempt.
+    failure : str
+        Failed calculation or confirmed submission rejection.
+    """
+    manager, control = managed
+    control["rejected"] = failure == "rejected"
+    first = manager.submit(source_bundle, resource)
+    if failure == "failed":
+        control["status"] = "failed"
+    decisions = manager.submit_bundles()
+    assert len(decisions) == 1
+    records = manager.list_attempts()
+    assert len(records) == 2
+    assert records[0].attempt_folder_name == first.attempt_folder_name
+    assert records[0].cleanup_status == "complete"
+    assert records[1].attempt_folder_name != records[0].attempt_folder_name
+    assert control["submits"] == 2
+
+
+@pytest.mark.parametrize("error", ["download_error", "cleanup_error"])
+def test_submit_bundles_collection_failure_blocks_retry(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    error: str,
+) -> None:
+    """Preserve failed-attempt diagnostics before creating a replacement.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose calculation fails.
+    resource : RemoteResource
+        Saved remote profile.
+    error : str
+        Simulated collection or cleanup failure.
+    """
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "failed"
+    control[error] = True
+    decisions = manager.submit_bundles()
+    assert decisions[0].action in {"blocked", "error"}
+    assert len(manager.list_attempts()) == 1
+    assert control["submits"] == 1
+
+
+@pytest.mark.parametrize("collection_error", [False, True])
+def test_submit_bundles_success_never_relaunches(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    collection_error: bool,
+) -> None:
+    """A successful calculation is not repeated even if collection fails.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose submitted calculation succeeds.
+    resource : RemoteResource
+        Saved execution profile.
+    collection_error : bool
+        Whether result collection fails after observing success.
+    """
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "success"
+    control["download_error"] = collection_error
+    manager.submit_bundles()
+    manager.submit_bundles()
+    assert len(manager.list_attempts()) == 1
+    assert control["submits"] == 1
+
+
+def test_submit_bundles_cancelled_requires_opt_in(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Repeated submission preserves cancellation unless explicitly retried.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Submitted bundle to cancel.
+    resource : RemoteResource
+        Saved profile reused after explicit retry.
+    """
+    manager, control = managed
+    record = manager.submit(source_bundle, resource)
+    manager.cancel(record.bundle_id)
+    control["status"] = "failed"
+    assert manager.submit_bundles()[0].action == "cancelled"
+    assert control["submits"] == 1
+    manager.submit_bundles(retry_cancelled=True)
+    assert control["submits"] == 2
+    assert len(manager.list_attempts()) == 2
+
+
+def test_submit_bundles_resource_override_only_affects_new_attempts(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Recovery keeps the saved profile while a later retry may change it.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle interrupted during upload.
+    resource : RemoteResource
+        Original execution profile.
+    """
+    manager, control = managed
+    control["upload_error"] = True
+    manager.submit(source_bundle, resource)
+    control["upload_error"] = False
+    replacement = resource.model_copy(update={"name": "replacement"})
+    manager.submit_bundles(resource=replacement)
+    assert manager.list_attempts()[0].resource["name"] == resource.name
+    control["status"] = "failed"
+    manager.submit_bundles(resource=replacement)
+    assert manager.list_attempts()[-1].resource["name"] == "replacement"
+    assert control["submits"] == 2
+
+
+def test_submit_bundles_filter_does_not_hide_newer_active_attempt(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Filtering old history cannot authorize a third attempt beside an active one.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with a failed first attempt and running replacement.
+    resource : RemoteResource
+        First attempt's resource, used as the later selection filter.
+    """
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "failed"
+    manager.synchronize()
+    control["status"] = "running"
+    manager.submit(source_bundle, resource.model_copy(update={"name": "new_cluster"}))
+    manager.submit_bundles(resource_name=resource.name)
+    assert len(manager.list_attempts()) == 2
+    assert control["submits"] == 2
+
+
+def test_submit_bundles_store_lock_prevents_concurrent_launch(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """A second operation cannot decide and submit while the store is locked.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Discoverable bundle without previous attempts.
+    resource : RemoteResource
+        Profile for the proposed submission.
+    """
+    import errno
+
+    manager, control = managed
+    _save_unsubmitted_bundle(manager, source_bundle)
+    with store_lock(manager.store.root):
+        with pytest.raises(OSError) as error:
+            manager.submit_bundles(resource=resource)
+        assert error.value.errno in {errno.EACCES, errno.EAGAIN}
+    assert control["submits"] == 0
+    assert manager.list_attempts() == []
+
+
+def test_submit_bundles_missing_resource_is_reported(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+) -> None:
+    """A new bundle needs an execution profile before its first launch.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle without any saved execution settings.
+    """
+    manager, control = managed
+    _save_unsubmitted_bundle(manager, source_bundle)
+    decisions = manager.submit_bundles()
+    assert decisions[0].action in {"blocked", "error"}
+    assert "resource" in decisions[0].reason.lower()
+    assert control["submits"] == 0
+
+
+def test_attach_uses_exact_attempt_without_launching(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Associate an uncertain attempt with a job without creating another job.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose submission response is lost.
+    resource : RemoteResource
+        Profile saved for the uncertain attempt.
+    """
+    manager, control = managed
+    control["submit_error"] = True
+    original = manager.submit(source_bundle, resource)
+    attempt = Path(original.attempt_folder_name).name
+    with pytest.raises(ValueError):
+        manager.attach(original.bundle_id, "attempt_999", "456")
+    attached = manager.attach(original.bundle_id, attempt, "456")
+    assert attached.submission_status == "submitted"
+    assert attached.dispatcher["job_id"] == "456"
+    assert attached.attempt_folder_name == original.attempt_folder_name
+    assert len(manager.list_attempts()) == 1
+    assert control["submits"] == 1
+    with pytest.raises(ValueError):
+        manager.attach(original.bundle_id, attempt, "789")
+
+
+def test_unified_submit_cli_options() -> None:
+    """Expose preview and attachment without the former recovery commands."""
+    from temper.entrypoints.main import main_parser
+
+    parser = main_parser()
+    args = parser.parse_args(["job", "submit", "-p", "--retry-cancelled"])
+    assert args.preview and args.retry_cancelled
+    assert args.resource_file is None
+    for command in ("recover", "resubmit"):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["job", command])
+    attached = parser.parse_args([
+        "job", "attach", "--bundle-id", "bundle", "--attempt", "attempt_001",
+        "--job-id", "123",
+    ])
+    assert attached.attempt == "attempt_001"
+    assert attached.job_id == "123"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["job", "attach", "--bundle-id", "bundle", "--job-id", "123"])
+
+
+def test_submit_watch_does_not_retry_again(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Watching a replacement that fails collects it without launching again.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose first and replacement attempts both fail.
+    resource : RemoteResource
+        Saved profile for the failed attempts.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture preventing an unnoticed indefinite watch loop.
+    """
+    import temper.job_management.manager as manager_module
+
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "failed"
+    decisions = manager.submit_bundles()
+    assert control["submits"] == 2
+
+    def unexpected_wait(interval: float) -> None:
+        pytest.fail("Completed attempts should not require another watch pass")
+
+    monkeypatch.setattr(manager_module.time, "sleep", unexpected_wait)
+    manager.watch_submissions(decisions, interval=1)
+    assert control["submits"] == 2
+    records = manager.list_attempts()
+    assert len(records) == 2
+    assert all(record.cleanup_status == "complete" for record in records)
+
+
+def test_cli_submit_preview_does_not_create_attempt(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Preview presents a new submission without packaging or launching it.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Discoverable bundle without attempts.
+    resource : RemoteResource
+        Profile for the proposed submission.
+    tmp_path : Path
+        Directory for the temporary resource profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture connecting the CLI to the simulated manager.
+    capsys : pytest.CaptureFixture[str]
+        Captured decision output.
+    """
+    from temper.entrypoints import job
+    from temper.entrypoints.main import main_parser
+
+    manager, control = managed
+    _save_unsubmitted_bundle(manager, source_bundle)
+    profile = tmp_path / "preview-resource.json"
+    profile.write_text(
+        resource.model_dump_json(exclude={"resolved_environment"}),
+        encoding="utf-8",
+    )
+
+    def existing_manager(root: str | Path | None) -> JobManager:
+        return manager
+
+    monkeypatch.setattr(job, "JobManager", existing_manager)
+    arguments = [
+        "job", "submit", "--resource-file", str(profile), "--preview", "--json"
+    ]
+    assert job.job_cli(main_parser().parse_args(arguments)) == 0
+    assert str(source_bundle.mlff_train_bundle_id) in capsys.readouterr().out
+    assert control["submits"] == control["uploads"] == 0
+    assert manager.list_attempts() == []
+    with pytest.raises((ValueError, SystemExit)):
+        job.job_cli(main_parser().parse_args(arguments + ["--keep-watching"]))
+
+
+def test_submit_bundles_success_with_unfinished_history_is_blocked(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Do not ignore an unfinished attempt merely because another succeeded.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with an initially successful attempt.
+    resource : RemoteResource
+        Saved execution profile.
+    """
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+    control["status"] = "success"
+    completed = manager.synchronize()[0]
+    duplicate_path = Path(completed.attempt_folder_name).with_name("attempt_002")
+    unfinished = completed.model_copy(deep=True, update={
+        "attempt_folder_name": duplicate_path.as_posix(),
+        "computation_status": "running",
+        "collection_status": "pending",
+        "cleanup_status": "pending",
+    })
+    manager.store.path(unfinished).mkdir()
+    manager.store.save(unfinished, "existing_unfinished_attempt")
+    control["status"] = "running"
+    decisions = manager.submit_bundles()
+    assert decisions[0].action == "blocked"
+    assert control["submits"] == 1
+    assert len(manager.list_attempts()) == 2
+
+
+def test_submit_watch_ignores_unresolved_historical_cleanup(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only submitted attempts keep a submission watcher alive.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose rejected first attempt has a submitted replacement.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture failing if historical rejection causes another wait.
+    """
+    import temper.job_management.manager as manager_module
+
+    manager, control = managed
+    control["rejected"] = True
+    manager.submit(source_bundle, resource)
+    control["rejected"] = False
+    decisions = manager.submit_bundles()
+    historical = manager.list_attempts()[0]
+    historical.cleanup_status = "pending"
+    manager.store.save(historical, "historical_cleanup_pending")
+    control["status"] = "success"
+
+    def unexpected_wait(interval: float) -> None:
+        pytest.fail("Rejected historical attempts must not keep watching alive")
+
+    monkeypatch.setattr(manager_module.time, "sleep", unexpected_wait)
+    manager.watch_submissions(decisions, interval=1)
+    assert manager.list_attempts()[-1].cleanup_status == "complete"
+    assert control["submits"] == 2
+
+
+def test_submit_bundles_finishes_interrupted_prelaunch_cancellation(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """A cancellation interrupted during cleanup is completed without a launch.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose upload was interrupted before submission began.
+    resource : RemoteResource
+        Saved execution profile.
+    """
+    manager, control = managed
+    control["upload_error"] = True
+    record = manager.submit(source_bundle, resource)
+    control["cleanup_error"] = True
+    manager.cancel(record.bundle_id)
+    control["cleanup_error"] = False
+    control["upload_error"] = False
+    decisions = manager.submit_bundles()
+    assert decisions[0].action == "cancelled"
+    saved = manager.list_attempts()[0]
+    assert saved.computation_status == "cancelled"
+    assert saved.cleanup_status == "complete"
+    assert control["submits"] == 0
+
+
+@pytest.mark.parametrize("preview", [False, True])
+def test_submit_bundles_lost_cloud_draft_does_not_repeat_upload(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    preview: bool,
+) -> None:
+    """A lost cloud draft response remains unresolved until its ID is known.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose upload was interrupted before launch.
+    resource : RemoteResource
+        Profile used to prepare the interrupted attempt.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture making recovery report that no cloud draft ID is available.
+    preview : bool
+        Whether to inspect the proposed actions or execute safe actions.
+    """
+    manager, control = managed
+    control["upload_error"] = True
+    record = manager.submit(source_bundle, resource)
+    record.resource["backend"] = "Bohrium"
+    record.dispatcher["cloud_create_intent"] = True
+    manager.store.save(record, "cloud_draft_reply_lost")
+    control["upload_error"] = False
+
+    def no_draft_id(self: FakeBackend, job_id: str | None = None) -> bool:
+        return False
+
+    monkeypatch.setattr(FakeBackend, "recover", no_draft_id)
+    before = {name: control[name] for name in (
+        "uploads", "submits", "downloads", "cleanups", "cancels"
+    )}
+    decisions = manager.submit_bundles(preview=preview)
+    assert decisions[0].action == "blocked"
+    assert {name: control[name] for name in before} == before
+    assert len(manager.list_attempts()) == 1
+
+
+def _unknown_attempt(
+    manager: JobManager,
+    control: dict[str, object],
+    bundle: MLFFTrainBundle,
+    profile: RemoteResource,
+) -> JobRecord:
+    """Save an uncertain launch whose remote calculation remains unknown."""
+    control["submit_error"] = True
+    record = manager.submit(bundle, profile)
+    control["submit_error"] = False
+    control["status"] = "unknown"
+    return record
+
+
+def _remote_changes(control: dict[str, object]) -> dict[str, object]:
+    """Capture operations that change files or launch or cancel calculations."""
+    return {name: control[name] for name in (
+        "uploads", "submits", "downloads", "cleanups", "cancels"
+    )}
+
+
+def test_abandon_preserves_attempt_and_allows_new_submission(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Record abandonment without claiming cancellation, cleanup, or failure.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose original launch outcome cannot be established.
+    resource : RemoteResource
+        Saved profile reused for the later new attempt.
+    """
+    manager, control = managed
+    original = _unknown_attempt(manager, control, source_bundle, resource)
+    directory = manager.store.path(original)
+    retained = directory / "unknown-job-notes.txt"
+    retained.write_text("Keep diagnostics and remote references", encoding="utf-8")
+    (directory / "success").write_text(
+        "Preserve an existing marker even when status is unknown", encoding="utf-8"
+    )
+    files_before = {
+        path.relative_to(directory): path.read_bytes()
+        for path in directory.rglob("*")
+        if path.is_file() and path.name not in {"job.json", "events.jsonl"}
+    }
+    before = _remote_changes(control)
+    candidates = manager.plan_abandonment()
+    assert len(candidates) == 1
+    assert candidates[0].bundle_id == original.bundle_id
+    assert candidates[0].attempt == original.attempt_folder_name
+    assert candidates[0].resource == resource.name
+    assert candidates[0].reason and candidates[0].review_token
+    assert {
+        path.relative_to(directory): path.read_bytes()
+        for path in directory.rglob("*")
+        if path.is_file() and path.name not in {"job.json", "events.jsonl"}
+    } == files_before
+    reviewed = manager.list_attempts()[0]
+    abandoned = manager.abandon_attempts(candidates)[0]
+    assert abandoned.abandoned_at is not None
+    assert abandoned.abandoned_reason
+    for field in (
+        "submission_status", "computation_status", "collection_status",
+        "cleanup_status", "dispatcher", "resource", "attempt_folder_name",
+    ):
+        assert getattr(abandoned, field) == getattr(reviewed, field)
+    assert _remote_changes(control) == before
+    assert {
+        path.relative_to(directory): path.read_bytes()
+        for path in directory.rglob("*")
+        if path.is_file() and path.name not in {"job.json", "events.jsonl"}
+    } == files_before
+    assert manager.list_attempts()[0].abandoned_at == abandoned.abandoned_at
+    assert manager.plan_abandonment() == []
+    assert manager._blocked(original.bundle_id, manager.list_attempts()) is None
+    control["status"] = "running"
+    result = manager.submit_bundles()
+    assert result[0].action == "submitted"
+    records = manager.list_attempts()
+    assert len(records) == 2
+    assert records[0].abandoned_at == abandoned.abandoned_at
+    assert records[0].cleanup_status == "pending"
+    assert records[1].resource["name"] == resource.name
+    assert records[1].abandoned_at is None
+    assert control["submits"] == 2
+    assert control["cleanups"] == before["cleanups"]
+    assert retained.exists()
+
+
+@pytest.mark.parametrize(
+    ("submission", "computation", "cloud_draft", "eligible"),
+    [
+        ("uncertain", "unknown", False, True),
+        ("submitting", "unknown", False, True),
+        ("submitted", "unknown", False, True),
+        ("uploading", "unknown", True, True),
+        ("prepared", "unknown", False, False),
+        ("uploading", "unknown", False, False),
+        ("uploaded", "unknown", False, False),
+        ("submitted", "waiting", False, False),
+        ("submitted", "running", False, False),
+        ("submitted", "success", False, False),
+        ("submitted", "failed", False, False),
+        ("submitted", "cancelled", False, False),
+    ],
+)
+def test_abandon_only_selects_unknown_launches(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    submission: str,
+    computation: str,
+    cloud_draft: bool,
+    eligible: bool,
+) -> None:
+    """Distinguish unknown launches from ordinary preparation and known jobs.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle used to construct one saved attempt.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture keeping a lost Bohrium draft ID unresolved.
+    submission : str
+        Persisted progress of the upload or launch request.
+    computation : str
+        Known or unknown calculation state.
+    cloud_draft : bool
+        Whether a Bohrium draft creation reply was lost during upload.
+    eligible : bool
+        Whether this state may be selected for explicit abandonment.
+    """
+    manager, control = managed
+    record = _unknown_attempt(manager, control, source_bundle, resource)
+    record.submission_status = submission
+    record.computation_status = computation
+    if cloud_draft:
+        record.resource["backend"] = "Bohrium"
+        record.dispatcher["cloud_create_intent"] = True
+
+        def missing_draft(
+            self: FakeBackend, job_id: str | None = None
+        ) -> bool:
+            return False
+
+        monkeypatch.setattr(FakeBackend, "recover", missing_draft)
+    manager.store.save(record, "test_launch_state")
+    # A later inconclusive query must not erase a known waiting state.
+    control["status"] = "unknown" if computation == "waiting" else computation
+    before = _remote_changes(control)
+    assert bool(manager.plan_abandonment()) is eligible
+    assert _remote_changes(control) == before
+    assert manager.list_attempts()[0].abandoned_at is None
+
+
+def test_abandon_filters_match_saved_attempts(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+) -> None:
+    """Limit review candidates by exact bundle, resource, and domain values.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle in the test dataset domain.
+    resource : RemoteResource
+        Saved resource name used for filtering.
+    """
+    manager, control = managed
+    record = _unknown_attempt(manager, control, source_bundle, resource)
+    matching = {
+        "bundle_id": record.bundle_id,
+        "resource": resource.name,
+        "domain": source_bundle.training_unit.domain,
+    }
+    assert len(manager.plan_abandonment(**matching)) == 1
+    for key in matching:
+        mismatch = dict(matching)
+        mismatch[key] = "does-not-match"
+        assert manager.plan_abandonment(**mismatch) == []
+
+
+@pytest.mark.parametrize("change", ["local", "remote"])
+def test_abandon_rechecks_entire_selection_before_changing_records(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    """Do not partially abandon a batch when one reviewed attempt has changed.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Original bundle used to create two distinct unknown calculations.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture changing only the second attempt's remote status.
+    change : str
+        A local record edit or a remote report that work is now running.
+    """
+    manager, control = managed
+    first = _unknown_attempt(manager, control, source_bundle, resource)
+    second_bundle = source_bundle.model_copy(update={
+        "training_unit": source_bundle.training_unit.model_copy(
+            update={"repeat_id": source_bundle.training_unit.repeat_id + 1}
+        )
+    })
+    second = _unknown_attempt(manager, control, second_bundle, resource)
+    candidates = manager.plan_abandonment()
+    assert len(candidates) == 2
+    if change == "local":
+        second = manager.list_attempts(bundle_id=second.bundle_id)[0]
+        second.resource["name"] = "Edited after review"
+        manager.store.save(second, "changed_after_review")
+    else:
+        def current_status(self: FakeBackend) -> str:
+            return "running" if self.record.bundle_id == second.bundle_id else "unknown"
+
+        monkeypatch.setattr(FakeBackend, "status", current_status)
+    before = _remote_changes(control)
+    with pytest.raises((ValueError, RuntimeError)):
+        manager.abandon_attempts(candidates)
+    assert _remote_changes(control) == before
+    assert all(record.abandoned_at is None for record in manager.list_attempts())
+    assert {record.bundle_id for record in manager.list_attempts()} == {
+        first.bundle_id, second.bundle_id
+    }
+
+
+def test_abandoned_attempts_are_excluded_from_automatic_operations(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Retain abandoned history without reconnecting, cancelling, or deleting it.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle whose only attempt is explicitly abandoned.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture making any subsequent backend connection fail immediately.
+    capsys : pytest.CaptureFixture[str]
+        Captured CLI history listing, which should still identify abandonment.
+    """
+    from temper.job_management.schemas.submission import SubmissionDecision
+    import temper.job_management.manager as manager_module
+    from temper.entrypoints import job
+    from temper.entrypoints.main import main_parser
+
+    manager, control = managed
+    record = _unknown_attempt(manager, control, source_bundle, resource)
+    abandoned = manager.abandon_attempts(manager.plan_abandonment())[0]
+    marker = manager.store.path(abandoned) / "success"
+    marker.write_text("Retain this historical marker", encoding="utf-8")
+
+    def forbidden_connection(record: JobRecord) -> FakeBackend:
+        pytest.fail("Abandoned attempts must not contact their backend")
+
+    def forbidden_wait(interval: float) -> None:
+        pytest.fail("Abandoned attempts must not keep a watcher alive")
+
+    monkeypatch.setattr(manager, "_connect", forbidden_connection)
+    monkeypatch.setattr(manager_module.time, "sleep", forbidden_wait)
+    manager.synchronize()
+    manager.cancel(record.bundle_id)
+    manager.recover(record.bundle_id)
+    manager.watch(interval=1)
+    manager.watch_submissions([SubmissionDecision(
+        bundle_id=record.bundle_id, action="monitor", reason="Saved selection",
+        attempt=record.attempt_folder_name, resource=resource.name,
+    )], interval=1)
+    with pytest.raises(ValueError):
+        manager.attach(record.bundle_id, Path(record.attempt_folder_name).name, "123")
+    saved = manager.list_attempts()[0]
+    assert saved.abandoned_at == abandoned.abandoned_at
+    assert saved.cancel_requested == record.cancel_requested
+    assert saved.cleanup_status == "pending"
+    assert marker.read_text(encoding="utf-8") == "Retain this historical marker"
+
+    def existing_manager(root: str | Path | None) -> JobManager:
+        return manager
+
+    monkeypatch.setattr(job, "JobManager", existing_manager)
+    assert job.job_cli(main_parser().parse_args(["job", "synchronize_remote"])) == 0
+    assert job.job_cli(main_parser().parse_args(["job", "list"])) == 0
+    listing = capsys.readouterr().out
+    assert "abandon" in listing.lower()
+    assert record.bundle_id in listing
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_code", "expected_abandoned"),
+    [
+        ("empty", 1, False),
+        ("no", 1, False),
+        ("yes", 0, True),
+        ("eof", 1, False),
+        ("noninteractive", 1, False),
+        ("yes_flag", 0, True),
+        ("preview", 0, False),
+    ],
+)
+def test_abandon_cli_confirmation_and_preview(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    expected_code: int,
+    expected_abandoned: bool,
+) -> None:
+    """Require explicit confirmation and explain that remote jobs may still exist.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with an unknown launch outcome.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture supplying terminal behavior and confirmation input.
+    capsys : pytest.CaptureFixture[str]
+        Captured candidate list and warning.
+    mode : str
+        Confirmation response, noninteractive execution, explicit yes flag,
+        or preview without changes.
+    expected_code : int
+        Expected CLI exit status.
+    expected_abandoned : bool
+        Whether the selected attempt should be marked abandoned.
+    """
+    import sys
+    from temper.entrypoints import job
+    from temper.entrypoints.main import main_parser
+
+    manager, control = managed
+    record = _unknown_attempt(manager, control, source_bundle, resource)
+
+    def existing_manager(root: str | Path | None) -> JobManager:
+        return manager
+
+    def terminal_available() -> bool:
+        return mode not in {"noninteractive", "yes_flag"}
+
+    def answer(prompt: str = "") -> str:
+        if mode in {"yes_flag", "preview", "noninteractive"}:
+            pytest.fail("This mode must not request interactive confirmation")
+        if mode == "eof":
+            raise EOFError
+        return {"empty": "", "no": "no", "yes": "yes"}[mode]
+
+    monkeypatch.setattr(job, "JobManager", existing_manager)
+    monkeypatch.setattr(sys.stdin, "isatty", terminal_available)
+    monkeypatch.setattr("builtins.input", answer)
+    arguments = ["job", "abandon", "--bundle-id", record.bundle_id]
+    if mode == "yes_flag":
+        arguments.append("--yes")
+    elif mode == "preview":
+        arguments += ["-p", "--json"]
+    before = _remote_changes(control)
+    assert job.job_cli(main_parser().parse_args(arguments)) == expected_code
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert record.bundle_id in output
+    assert any(word in output.lower() for word in ("remote", "scheduler", "cloud"))
+    assert "duplicat" in output.lower()
+    assert (manager.list_attempts()[0].abandoned_at is not None) is expected_abandoned
+    assert _remote_changes(control) == before
+    if mode == "preview":
+        payload = json.loads(captured.out)
+        assert len(payload["candidates"]) == 1
+        assert "review_token" not in payload["candidates"][0]
+
+
+def test_abandon_cli_no_candidates_needs_no_confirmation(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Report an empty selection without prompting or changing running jobs.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with a confirmed running job.
+    resource : RemoteResource
+        Saved execution profile.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture connecting the CLI to the manager and forbidding a prompt.
+    capsys : pytest.CaptureFixture[str]
+        Captured JSON report.
+    """
+    from temper.entrypoints import job
+    from temper.entrypoints.main import main_parser
+
+    manager, control = managed
+    manager.submit(source_bundle, resource)
+
+    def existing_manager(root: str | Path | None) -> JobManager:
+        return manager
+
+    def forbidden_prompt(prompt: str = "") -> str:
+        pytest.fail("An empty candidate list must not prompt")
+
+    monkeypatch.setattr(job, "JobManager", existing_manager)
+    monkeypatch.setattr("builtins.input", forbidden_prompt)
+    before = _remote_changes(control)
+    assert job.job_cli(main_parser().parse_args(["job", "abandon", "--json"])) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["candidates"] == result["attempts"] == []
+    assert manager.list_attempts()[0].abandoned_at is None
+    assert _remote_changes(control) == before
+
+
+@pytest.mark.parametrize("operation", ["review", "apply"])
+def test_abandon_respects_job_store_lock(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    operation: str,
+) -> None:
+    """Prevent review or application while another command owns the store lock.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle with an unknown remote launch.
+    resource : RemoteResource
+        Saved execution profile.
+    operation : str
+        Whether to test candidate review or abandonment after review.
+    """
+    import errno
+
+    manager, control = managed
+    _unknown_attempt(manager, control, source_bundle, resource)
+    candidates = manager.plan_abandonment()
+    before = _remote_changes(control)
+    with store_lock(manager.store.root):
+        with pytest.raises(OSError) as error:
+            if operation == "review":
+                manager.plan_abandonment()
+            else:
+                manager.abandon_attempts(candidates)
+        assert error.value.errno in {errno.EACCES, errno.EAGAIN}
+    assert manager.list_attempts()[0].abandoned_at is None
+    assert _remote_changes(control) == before
+
+
+def test_abandon_excludes_known_cloud_draft_when_connection_fails(
+    managed: tuple[JobManager, dict[str, object]],
+    source_bundle: MLFFTrainBundle,
+    resource: RemoteResource,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A known upload draft is resumable rather than an unknown launch.
+
+    Parameters
+    ----------
+    managed : tuple[JobManager, dict[str, object]]
+        Manager and simulated backend counters.
+    source_bundle : MLFFTrainBundle
+        Bundle interrupted while uploading input files.
+    resource : RemoteResource
+        Profile used to prepare the saved attempt.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture simulating a temporary cloud connection failure.
+    """
+    manager, control = managed
+    control["upload_error"] = True
+    record = manager.submit(source_bundle, resource)
+    record.resource["backend"] = "Bohrium"
+    record.dispatcher["cloud_create_intent"] = True
+    record.dispatcher["job_id"] = "known-draft-123"
+    manager.store.save(record, "saved_cloud_draft")
+
+    def unavailable_draft(self: FakeBackend, job_id: str | None = None) -> bool:
+        raise ConnectionError("Cloud service unavailable")
+
+    monkeypatch.setattr(FakeBackend, "recover", unavailable_draft)
+    before = _remote_changes(control)
+    assert manager.plan_abandonment() == []
+    assert _remote_changes(control) == before
+    assert manager.list_attempts()[0].abandoned_at is None

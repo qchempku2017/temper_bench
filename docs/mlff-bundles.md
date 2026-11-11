@@ -70,8 +70,15 @@ bundles/
 
 At this stage, `bundle.json` describes an experiment and has `files: null`.
 No datasets or weights are copied. `job submit` discovers every bundle-level
-bundle under the root and creates `attempt_001`, `attempt_002`, and so on for
-execution. It does not treat packaged bundles inside attempts as new inputs.
+bundle under the root and checks its saved job history before acting. It creates
+`attempt_001` for new work, reconnects to interrupted or running attempts, and
+creates a later attempt only for an eligible retry. Repeating `submit` does not
+restart a successful calculation or launch another copy of a running one.
+`submit --preview` reports the proposed actions without launching anything.
+Explicitly abandoned attempts are excluded from these active checks; abandoning
+does not stop a remote job, so investigate it before allowing a replacement.
+See [abandoning unresolved attempts](remote-jobs.md#abandoning-an-unresolved-attempt).
+It does not treat packaged bundles inside attempts as new inputs.
 The attempt's local `bundle.json` is temporary: remote submission removes it
 after launch is confirmed, while local execution retains it until completion
 cleanup. The first submission saves its packaged file locations in the shared

@@ -10,7 +10,7 @@ from temper.utils.file_hashing import file_sha256
 
 
 def get_download_files(bundle: MLFFTrainBundle) -> tuple[list[str], list[str]]:
-    """Describe retained files and required successful outputs.
+    """Get files to download and required successful outputs.
 
     Parameters
     ----------

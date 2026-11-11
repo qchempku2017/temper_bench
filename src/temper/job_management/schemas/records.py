@@ -63,7 +63,8 @@ class JobRecord(BaseModel):
         scheduler policy/input rejection. A nonzero client exit with
         lost-response diagnostics remains uncertain because the
         scheduler may already have accepted the job. Uncertain
-        submissions must be reconciled before another launch.
+        submissions must be reconciled before another launch unless the user
+        explicitly abandons the attempt and accepts possible duplication.
     computation_status : str
         unknown, waiting, running, success, failed or cancelled.
     collection_status : str
@@ -83,6 +84,16 @@ class JobRecord(BaseModel):
     cancel_requested : bool
         Durable cancellation intent, written before contacting the
         scheduler.
+    abandoned_at : str or None
+        UTC time when the user deliberately stopped tracking this unresolved
+        attempt. None means it is still managed. An abandoned attempt remains
+        in history but no longer prevents another submission. Abandonment
+        does not cancel its remote job or prove that its files were cleaned.
+        Older records without this field are treated as still managed.
+    abandoned_reason : str or None
+        Explanation recorded when abandoning the attempt; absent until then.
+        Original submission, calculation, collection, and cleanup statuses
+        are retained so the unresolved history remains inspectable.
     created_at, updated_at, checked_at : str or None
         UTC timestamps; checked_at is absent until a successful
         observation.
@@ -120,6 +131,8 @@ class JobRecord(BaseModel):
         validation_alias=AliasChoices("downloaded_file_hashes", "manifest"),
     )
     cancel_requested: bool = False
+    abandoned_at: str | None = None
+    abandoned_reason: str | None = None
     created_at: str = Field(default_factory=utc_now)
     updated_at: str = Field(default_factory=utc_now)
     checked_at: str | None = None

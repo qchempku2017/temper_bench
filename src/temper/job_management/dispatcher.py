@@ -794,15 +794,19 @@ class DispatcherBackend:
     def recover(self, job_id: str | None = None) -> bool:
         """Attach an uncertain submission to an existing remote job.
 
-        This handles the case where a previous launch succeeded but the
-        local receipt was lost. Will reassign the uncertain submission
-        to the existing job ID if it is valid.
+        Use this after a launch may have succeeded but its local receipt was
+        lost. Supplied IDs must agree with saved and remote evidence. Cloud
+        jobs must carry this attempt's unique name and, when reported, the
+        expected project ID. This method never starts a new calculation.
+
         Parameters
         ----------
         job_id : str or None, optional
-            User-confirmed existing scheduler ID when a receipt was
-            lost. None reads the SSH receipt or uses the previously
-            persisted Bohrium ID.
+            Existing scheduler ID verified by the caller when a receipt was
+            lost. Conflicting saved IDs, remote receipts, or scheduler matches
+            are rejected. None reads the SSH receipt or uses the previously
+            persisted Bohrium ID. Where no remote evidence remains, an SSH
+            attachment relies on the caller's verification.
 
         Returns
         -------
@@ -815,8 +819,8 @@ class DispatcherBackend:
         SubmissionRejected
             If the durable remote status confirms rejection.
         ValueError
-            If a supplied or recovered receipt contains an invalid job
-            ID.
+            If a supplied or recovered ID is invalid, conflicts with saved
+            or remote evidence, or cloud ownership cannot be verified.
         RuntimeError
             If multiple Slurm jobs match the unique attempt working
             directory.
@@ -829,6 +833,52 @@ class DispatcherBackend:
             parsed = self._parse_id(job_id)
             if self.profile.backend == "Bohrium" and not parsed.isdigit():
                 raise ValueError("Bohrium job IDs must be numeric.")
+            if self._job.job_id and str(self._job.job_id) != parsed:
+                raise ValueError(
+                    "Supplied job ID conflicts with this attempt's saved ID."
+                )
+            if self.profile.backend == "Bohrium":
+                detail = self._cloud_machine().job.detail(int(parsed))
+                expected_name = "temper-" + str(
+                    self.record.dispatcher["token"]
+                )
+                if not isinstance(detail, dict) or detail.get(
+                    "jobName", detail.get("name")
+                ) != expected_name:
+                    raise ValueError(
+                        "Cloud job ownership cannot be verified from its"
+                        " attempt name."
+                    )
+                project = detail.get("projectId")
+                if project is not None and str(project) != str(
+                    self.profile.bohrium_project_id
+                ):
+                    raise ValueError(
+                        "Cloud job belongs to a different project."
+                    )
+            else:
+                # A user-supplied ID must not override a durable receipt or
+                # a contradictory queue/accounting match for this directory.
+                try:
+                    recorded_id = self._parse_id(
+                        self._read_submission_result("submit")
+                    )
+                except FileNotFoundError:
+                    try:
+                        receipt = self.submission.machine.context.read_file(
+                            ".temper-receipt"
+                        )
+                    except FileNotFoundError:
+                        receipt = ""
+                    recorded_id = (
+                        self._parse_id(receipt) if receipt.strip()
+                        else self._find_scheduler_job()
+                    )
+                if recorded_id and recorded_id != parsed:
+                    raise ValueError(
+                        "Supplied job ID conflicts with remote submission"
+                        " evidence."
+                    )
             self._job.job_id = (
                 int(parsed) if self.profile.backend == "Bohrium" else parsed
             )

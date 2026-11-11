@@ -198,20 +198,21 @@ diagnostics are intentionally retained for troubleshooting.
 For a rejection, correct the profile and run:
 
 ```bash
-temper_bench job resubmit --bundle-write-root ./bundles \
-  --resource-file corrected.yaml --dry-run
-# Remove --dry-run after reviewing eligibility.
+temper_bench job submit --bundle-write-root ./bundles \
+  --resource-file corrected.yaml --preview
+# Remove --preview after reviewing the proposed actions.
 ```
 
-The Python equivalent is `manager.resubmit(replacement_resource=resource)`.
 Optional bundle, resource-name, and domain filters narrow the selection. Without
-filters, all matching bundles are considered once. This preserves the rejected attempt and diagnostics, cleans only its owned
-remote directory, and creates a fresh attempt under the existing store lock.
-For unknown outcomes, run `job recover` first. Slurm recovery checks the durable
-receipt, then queue/accounting records by the unique attempt working directory.
+filters, all matching bundles are considered once. This preserves the rejected
+attempt and diagnostics, cleans only its owned remote directory, and creates a
+fresh attempt under the existing store lock. For unknown outcomes, `job submit`
+looks for the existing job first. Slurm checks the saved receipt, then
+queue/accounting records by the unique attempt working directory.
 No match is inconclusive and never authorizes resubmission. If accounting is
-unavailable, verify the existing job's working directory yourself and pass
-`--job-id`. PBS requires that explicit verification when its receipt is missing.
+unavailable, verify the existing job's working directory yourself and use
+`job attach --bundle-id FULL_UUID --attempt attempt_001 --job-id REMOTE_ID`.
+PBS requires that explicit verification when its receipt is missing.
 Never manually edit `job.json` to bypass uncertainty.
 
 ## Job-local caches and environment checks

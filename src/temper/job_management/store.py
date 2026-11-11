@@ -98,7 +98,9 @@ class JobStore:
             key=lambda item: (item.created_at, item.attempt_folder_name),
         )
 
-    def save(self, record: JobRecord, event: str) -> None:
+    def save(
+        self, record: JobRecord, event: str, *, update_markers: bool = True,
+    ) -> None:
         """Commit one record, repair markers, and append a small event
         entry.
 
@@ -110,6 +112,10 @@ class JobStore:
             Non-secret description, such as uploaded or collected. No
             backend exception bodies or credential values should be
             passed here.
+        update_markers : bool, default True
+            Update the convenient success, failed, or cancelled marker files.
+            False preserves these files while saving observations for an
+            abandonment review. Abandoned records always keep their markers.
 
         Raises
         ------
@@ -121,7 +127,8 @@ class JobStore:
         record.updated_at = utc_now()
         root = self.path(record)
         write_json_atomically(root / "job.json", record.model_dump(mode="json"))
-        self.repair_markers(record)
+        if update_markers:
+            self.repair_markers(record)
         with (root / "events.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(
                 json.dumps({"time": record.updated_at, "event": event}) + "\n"
@@ -138,8 +145,11 @@ class JobStore:
         record : JobRecord
             Confirmed computation and collection status. Success
             requires verified results; failed and cancelled can precede
-            collection.
+            collection. Abandoned records are left untouched, including any
+            marker files preserved with their history.
         """
+        if record.abandoned_at is not None:
+            return
         expected = (
             record.computation_status
             if record.computation_status in {"failed", "cancelled"}
