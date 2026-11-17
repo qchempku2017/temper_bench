@@ -5,6 +5,120 @@ this repository. Before completing a change, verify that every added or modified
 public API satisfies them. Preserve existing user-written explanations and type
 specificity when updating APIs.
 
+## Design priorities: minimalism and clarity
+
+- Prefer the smallest implementation that fully satisfies the current
+  requirement. Every abstraction, intermediate representation, helper, copy,
+  and persisted file should have a concrete purpose for an existing caller.
+- Use the domain's typed schemas directly. Avoid converting a manifest into
+  intermediate configuration dictionaries and reconstructing it afterward when
+  the manifest can already supply the required information.
+- Avoid convenience wrappers that merely chain one or two straightforward
+  calls without adding a useful API or distinct behavior. For example, reading
+  a manifest and then loading its referenced bundle does not need a separate
+  function that only returns those two objects.
+- Do not add speculative recovery paths, reference archives, compatibility
+  layers, fallback formats, or duplicate metadata to cover hypothetical needs.
+  Preserve validation required for correctness, such as checksums, path
+  containment, identities, array shapes, units, and frame alignment.
+- Prefer direct, coherent refactors. Update callers and remove superseded code
+  when a replacement is authorized. Add compatibility aliases or migration
+  machinery only for an established requirement, not automatically.
+
+## Ownership and separation of responsibilities
+
+- Place behavior with the component responsible for its purpose. Merely
+  reading a schema object does not make an operation a method of that schema.
+  Read-only methods are still appropriate when they naturally describe or
+  access that object's own data.
+- The pipeline runner constructs execution and result manifests. For example,
+  make_test_manifests belongs beside create_result_manifest in the runner;
+  MLFFTrainBundle supplies its inputs rather than constructing result records.
+- Test manifests provide execution instructions before evaluation, with result
+  fields unfilled. Execution fills measured results and writes output files;
+  the experiment manifest retains the corresponding test manifests. Avoid a
+  second test-configuration format that repeats the same information.
+- Job management submits, monitors, downloads, verifies, and cleans up jobs.
+  It must not manufacture execution results or rewrite downloaded manifests
+  to invent missing information. Keep runner-written results.json and its
+  referenced bundle.json unchanged during collection.
+- Result loading reads and validates recorded metadata, original labels, and
+  predictions, then assembles scientific data. Keep it free of submission,
+  execution, reference-archiving, and manifest-reconstruction responsibilities.
+
+## Dataset and result lifecycle
+
+- Users are responsible for retaining original split datasets unchanged at
+  their recorded local locations. State this requirement in documentation;
+  do not create additional permanent reference copies to compensate for it.
+- Copy datasets into submission folders only as needed for execution. Remove
+  temporary copies at the appropriate upload or execution cleanup stage.
+  Recover reference labels from the original paths recorded in the training
+  unit, not from a second content-addressed dataset archive.
+- Preserve original test filenames and relative subdirectories through
+  packaging, manifests, prediction mappings, and analysis. Avoid replacing
+  meaningful names with identifiers such as test_001 when the originals suffice.
+- Distinguish original local dataset paths from execution copies. For example,
+  execution_input_path identifies a copied input for either local or remote
+  execution; it is not the original reference-file location.
+- Missing required runner output is a collection failure. In particular, do
+  not synthesize a pending manifest when results.json was not downloaded, and
+  do not proceed to destructive cleanup after unsuccessful verification.
+  Missing or changed original labels must produce a clear analysis error.
+
+## Construction, validation, and explicit refresh
+
+- Establish required derived metadata during ordinary construction or
+  validation, before finalizing identity. Avoid requiring callers to construct
+  an incomplete object and then create another copy just to complete it.
+- Normal TrainingUnit construction calculates missing dataset hashes and
+  verifies supplied hashes before finalizing training_unit_id. Supplied hashes
+  must not be silently replaced when file contents differ.
+- Preserve an explicit metadata-only loading mode for remote execution and
+  inspection without original local files. verify_files=False preserves recorded
+  hashes and identities without reading datasets; it does not establish that
+  the files are suitable for execution.
+- Deliberately accepting changed input bytes is an explicit refresh operation.
+  A function that returns a refreshed copy must say so in its name and document
+  identity recalculation and preservation of the original object. Ordinary
+  construction should not require that refresh operation.
+- Reuse expensive file hashes within one clearly bounded operation when files
+  are unchanged. Do not treat file size or modification time as proof of equal
+  bytes, or retain a stale cache across independent operations.
+
+## Shared utilities and dependency direction
+
+- Put shared production helpers in temper.utils, grouped by relevance and functionality:
+  file_paths, file_hashing, file_writing, extxyz, dataset_sizes, cuda, and
+  defaults. Extend an appropriate existing module before adding another one.
+- Check actual callers before placing a helper in the production package.
+  Helpers used exclusively by tests belong under tests/, even when several
+  test modules share them. Do not expose them through temper.utils for
+  hypothetical future reuse.
+- Keep path validation separate from file hashing and writing, and extxyz
+  metadata parsing in its own module. Avoid miscellaneous utils
+  modules scattered throughout schemas and pipelines.
+- Keep job-specific operations, such as choosing downloaded outputs, locating
+  a job's bundle, or allocating attempt directories, in job_management. A
+  function is not a general utility merely because several callers use it.
+- Shared utilities must not depend on schemas, pipelines, result loading, or
+  job management. Those components import utilities. Keep optional model and
+  GPU dependencies lazy so importing a utility does not require those runtimes.
+- Import helpers from their defining modules. Do not add blanket re-exports in
+  temper.utils.__init__ or enumerate every public function in __all__ without
+  a specific need for export control.
+
+## Public and private functions
+
+- Functions deliberately shared across modules should have public names.
+  Do not prefix them with an underscore while relying on other modules to
+  import them as part of normal operation.
+- Keep implementation helpers private when they are only used within their
+  owning module. Frequency of use alone does not determine visibility.
+- Give private functions explanatory NumPy-style docstrings too. Describe their
+  purpose, parameters, return values, path rules, checks, and important failure
+  conditions as applicable. An underscore is not a reason to omit documentation.
+
 ## Type annotations
 
 - Follow modern Python type annotation conventions: PEP 484, PEP 526, PEP 585,
@@ -133,6 +247,16 @@ cannot train or evaluate an unpackaged bundle.
   `has_labels`, or `can_train`, where appropriate.
 - Maintain consistent terminology across related classes, functions,
   configuration fields, and documentation.
+- Prefer explicit relationships over compressed noun combinations: for example,
+  resolve_path_in_bundle, load_bundle_from_manifest, and
+  load_results_from_manifest. Add locality when it resolves a real ambiguity,
+  as in resolve_local_dataset_path.
+- Make copying and mutation semantics clear in names. For example,
+  copy_with_refreshed_dataset_hashes returns a new object; a plain refresh name
+  could misleadingly suggest an in-place operation.
+- Name files after what they actually contain. Use manifest_io for manifest
+  access and download_utils for download-related operations; avoid vague or
+  obsolete terms such as report or collection when they obscure the role.
 - Do not rename existing public APIs solely for stylistic consistency without
   considering backward compatibility and updating their references.
 
@@ -147,3 +271,12 @@ cannot train or evaluate an unpackaged bundle.
 - Confirm that explanations are useful to callers, preserve existing meaningful
   documentation, and define any necessary specialized terminology.
 - Check naming consistency and backward compatibility when changing public APIs.
+- Follow renames and moves through imports, callers, tests, docstrings, examples,
+  and documentation. Search for stale references and remove unused imports and
+  superseded files. Do not leave two implementations of the same responsibility.
+- Keep existing behavioral coverage when refactoring. Run relevant tests, and
+  run the full suite for broad changes to schemas or shared utilities. Verify
+  dependency and optional-import boundaries when moving shared code.
+- Report the concrete changes and the checks actually run, including failures
+  or skipped tests. Do not claim that a rename or passing unit tests establishes
+  successful execution on a real remote host or model backend.
