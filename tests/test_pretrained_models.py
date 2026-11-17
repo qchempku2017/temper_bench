@@ -13,7 +13,7 @@ from temper.mlff.spec_builders import (
     MACESpecBuilder,
     mlff_spec_builder_factory,
 )
-from temper.schemas.utils import validate_submit_relative_path
+from temper.utils.file_paths import validate_submit_relative_path
 
 CATALOG = json.loads(
     files("temper.mlff")

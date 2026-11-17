@@ -6,7 +6,7 @@ import pytest
 import sys
 from types import ModuleType, SimpleNamespace
 
-from temper.mlff.pipeline import cuda_utils as device
+from temper.utils import cuda as device
 from temper.mlff.pipeline import calculators as calculator_factory
 
 
@@ -16,7 +16,7 @@ def cuda_runtime(monkeypatch):
     runtime.torch_device = lambda: "cuda"
     runtime.require_cuda = lambda: None
     monkeypatch.setitem(
-        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime
+        sys.modules, "temper.utils.cuda", runtime
     )
 
 
@@ -98,7 +98,7 @@ def test_mace_resolves_device_on_runner(monkeypatch) -> None:
         lambda **kwargs: calls.append(kwargs) or "mace"
     )
     monkeypatch.setitem(
-        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device
+        sys.modules, "temper.utils.cuda", runtime_device
     )
     monkeypatch.setitem(sys.modules, "mace", package)
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
@@ -131,7 +131,7 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
         lambda *args, **kwargs: calls.append(("cpu", args, kwargs)) or "cpu"
     )
     monkeypatch.setitem(
-        sys.modules, "temper.mlff.pipeline.cuda_utils", runtime_device
+        sys.modules, "temper.utils.cuda", runtime_device
     )
     monkeypatch.setitem(sys.modules, "calorine", calorine)
     monkeypatch.setitem(sys.modules, "calorine.calculators", calculators)

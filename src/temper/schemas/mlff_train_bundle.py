@@ -11,7 +11,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from temper._version import __version__
 
 from temper.schemas.base import ManagedIdentityModel, MSONableModel
-from temper.schemas.utils import validate_submit_relative_path
+from temper.utils.file_paths import validate_submit_relative_path
 from temper.schemas.mlff_spec import MLFFSpec
 from temper.schemas.train_unit import TrainingUnit
 

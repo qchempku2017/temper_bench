@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import field_validator
 
 from temper.schemas.base import MSONableModel
-from temper.schemas.utils import validate_relative_extxyz_path
+from temper.utils.file_paths import validate_relative_extxyz_path
 
 
 class FrameReference(MSONableModel):

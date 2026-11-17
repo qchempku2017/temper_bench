@@ -20,7 +20,7 @@ from temper.splitting.quests_adapter import (
     QuestsAdapter,
     compute_information_gain_per_candidate_frame,
 )
-from temper.splitting.utils import get_requested_train_sizes_from_ratios
+from temper.utils.dataset_sizes import get_requested_train_sizes_from_ratios
 
 from temper.utils.defaults import DEFAULT_TRAIN_RATIOS, DEFAULT_MAX_N_TRAIN
 from temper.logging import PerformanceWarning, format_elapsed, progress_task

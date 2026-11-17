@@ -10,7 +10,7 @@ from pydantic import ConfigDict, Field, field_validator
 
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.base import MSONableModel, ManagedIdentityModel
-from temper.schemas.utils import validate_submit_relative_path
+from temper.utils.file_paths import validate_submit_relative_path
 
 _MLFF_SPEC_ID_NAMESPACE = UUID("4621b7bf-70f7-51bd-a3b3-7d5c46fa65a7")
 

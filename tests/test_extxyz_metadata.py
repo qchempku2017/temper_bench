@@ -7,7 +7,7 @@ from ase.io import read, write
 from conftest import make_frame
 from temper.schemas.info import InfoEntry
 from temper.schemas.train_unit import TrainingUnit
-from temper.schemas.utils import check_atoms_have_other_properties
+from atoms_helpers import check_atoms_have_other_properties
 from temper.utils.extxyz import check_extxyz_properties, iter_extxyz_metadata
 
 

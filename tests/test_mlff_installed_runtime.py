@@ -259,7 +259,13 @@ def test_runtime_uses_serialized_directories_and_checks_version(
         runner.prepare_bundle(path)
 
 
-def test_runtime_imports_without_preprocessing_or_model_backends():
+def test_runtime_imports_without_preprocessing_or_model_backends() -> None:
+    """Import shared utilities independently and keep optional backends lazy.
+
+    A fresh interpreter checks that utilities do not import schemas or workflow
+    modules, then verifies that runtime imports need no preprocessing or model
+    packages. A failed import or dependency assertion fails the subprocess.
+    """
     source = Path(__file__).resolve().parents[1] / "src"
     program = f"""
 import sys
@@ -273,6 +279,17 @@ class BlockPreprocessing:
         if fullname.split('.')[0] in blocked:
             raise AssertionError('Unexpected dependency: ' + fullname)
 sys.meta_path.insert(0, BlockPreprocessing())
+from temper.utils import (
+    cuda, dataset_sizes, defaults, extxyz, file_hashing,
+    file_paths, file_writing,
+)
+for prefix in (
+    'temper.schemas', 'temper.mlff', 'temper.splitting',
+    'temper.job_management', 'temper.results_loading',
+):
+    assert not any(
+        name == prefix or name.startswith(prefix + '.') for name in sys.modules
+    ), prefix
 from temper.mlff.pipeline.runner import prepare_bundle
 from temper.entrypoints.main import main_parser
 arguments = main_parser().parse_args(['run_pipeline', 'bundle.json'])

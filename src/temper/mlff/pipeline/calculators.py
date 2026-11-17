@@ -49,7 +49,7 @@ def build_calculator(config: dict[str, Any]) -> Calculator:
     CUDA_VISIBLE_DEVICES unchanged. DeepMD also receives the selected device
     through its DEVICE environment variable.
     """
-    from temper.mlff.pipeline.cuda_utils import torch_device, require_cuda
+    from temper.utils.cuda import torch_device, require_cuda
 
     family = config["calculator"]["identifier"]
     parameters = dict(config["calculator"].get("parameters", {}))

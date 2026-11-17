@@ -11,7 +11,7 @@ import warnings
 
 from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
 from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
-from temper.mlff.pipeline.cuda_utils import require_cuda
+from temper.utils.cuda import require_cuda
 from temper.mlff.pipeline.evaluate_mlff import run_test
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.input_utils import verify_dataset_and_model_hashes

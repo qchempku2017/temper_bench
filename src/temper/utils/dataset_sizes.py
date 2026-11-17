@@ -7,8 +7,6 @@ training size.
 
 from __future__ import annotations
 
-from typing import List
-
 import numpy as np
 
 from temper.utils.defaults import (
@@ -19,10 +17,10 @@ from temper.utils.defaults import (
 
 def get_requested_train_sizes_from_ratios(
     trainval_pool_size: int,
-    requested_train_ratios: List[float] | None = None,
+    requested_train_ratios: list[float] | None = None,
     max_train_size: int = DEFAULT_MAX_N_TRAIN,
-) -> List[int]:
-    """Get training set sizes from training set ratios.
+) -> list[int]:
+    """Convert sorted training ratios into positive integer frame counts.
 
     If requested training set size exceeds max_train_size, all requested
     training set sizes are scaled down proportionally so that the
@@ -31,17 +29,29 @@ def get_requested_train_sizes_from_ratios(
     Parameters
     ----------
     trainval_pool_size : int
-        Size of the trainval pool.
-    requested_train_ratios : list[float], optional
-        Requested training set ratios. Defaults to
-        "DEFAULT_REQUESTED_TRAIN_RATIOS".
+        Number of available training-plus-validation frames. Must be positive
+        and large enough for every requested count to round to at least one.
+    requested_train_ratios : list[float] or None, optional
+        Nonempty list of fractions strictly between zero and one. None uses
+        DEFAULT_TRAIN_RATIOS from temper.utils.defaults. The ratios are sorted
+        without modifying the supplied list.
     max_train_size : int, optional
-        Maximum training set size. Defaults to "DEFAULT_MAX_TRAIN_SIZE".
+        Positive upper limit on the number of training frames. Defaults to
+        DEFAULT_MAX_N_TRAIN, read from the environment at module import time.
+        Counts are scaled proportionally when their rounded maximum exceeds
+        this limit.
 
     Returns
     -------
     list[int]
-        Training set sizes in integers sizes.
+        Frame counts in nondecreasing order, rounded to the nearest integer
+        using NumPy's round-to-even rule for ties. Duplicate counts are kept.
+
+    Raises
+    ------
+    ValueError
+        If the ratio list is empty, a ratio is outside (0, 1), or a resulting
+        frame count is nonpositive after rounding and any rescaling.
     """
     if requested_train_ratios is None:
         requested_train_ratios = DEFAULT_TRAIN_RATIOS

@@ -10,7 +10,7 @@ import sys
 
 from temper.job_management.manager import JobManager
 from temper.job_management.paths import bundle_directory
-from temper.job_management.storage_utils import store_lock, write_json_atomically
+from temper.utils.file_writing import store_lock, write_json_atomically
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.schemas.resources import RemoteResource
 

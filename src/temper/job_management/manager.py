@@ -23,7 +23,7 @@ from temper.job_management.input_utils import (
     verify_dataset_and_model_hashes,
 )
 from temper.job_management.paths import bundle_directory, next_attempt
-from temper.job_management.storage_utils import write_json_atomically, store_lock
+from temper.utils.file_writing import write_json_atomically, store_lock
 from temper.job_management.store import JobStore
 from temper.job_management.schemas.records import (
     ComputationStatus,

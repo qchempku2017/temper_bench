@@ -24,7 +24,7 @@ from temper.splitting.split import (
     split_grouped_domain,
 )
 from temper.schemas.split import SplitConfig
-from temper.splitting.utils import get_requested_train_sizes_from_ratios
+from temper.utils.dataset_sizes import get_requested_train_sizes_from_ratios
 from conftest import make_frame
 
 

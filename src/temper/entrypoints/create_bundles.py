@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 from ruamel.yaml import YAML
 
 from temper.job_management.paths import bundle_directory, bundle_root
-from temper.job_management.storage_utils import write_json_atomically, store_lock
+from temper.utils.file_writing import write_json_atomically, store_lock
 from temper.mlff.spec_builders import mlff_spec_builder_factory
 from temper.mlff.spec_builders.base import pretrained_model_defaults
 from temper.schemas.mlff_spec import MLFFSpec

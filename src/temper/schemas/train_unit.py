@@ -5,7 +5,7 @@ from functools import cached_property
 import json
 
 from temper.utils.extxyz import check_extxyz_properties, iter_extxyz_metadata
-from temper.schemas.utils import validate_relative_extxyz_path
+from temper.utils.file_paths import validate_relative_extxyz_path
 
 from typing import Any, ClassVar, Literal
 from pathlib import Path

@@ -25,7 +25,7 @@ from temper.schemas.mlff_spec import (
     MLFFSpec,
     PretrainedMLFFSpec,
 )
-from temper.schemas.utils import validate_submit_relative_path
+from temper.utils.file_paths import validate_submit_relative_path
 
 FAMILIES = ("dpa4", "dpa4c", "mattersim", "mace", "sevennet", "nep89")
 

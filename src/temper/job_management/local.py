@@ -23,7 +23,7 @@ from temper.job_management.input_utils import (
 )
 from temper.job_management.schemas.records import ComputationStatus, JobRecord
 from temper.job_management.schemas.resources import RemoteResource
-from temper.job_management.storage_utils import write_json_atomically
+from temper.utils.file_writing import write_json_atomically
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.utils.file_hashing import file_sha256
 

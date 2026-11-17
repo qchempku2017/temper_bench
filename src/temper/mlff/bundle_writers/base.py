@@ -13,7 +13,7 @@ from temper.job_management.paths import (
     bundle_directory,
     next_attempt,
 )
-from temper.job_management.storage_utils import store_lock
+from temper.utils.file_writing import store_lock
 
 from temper.schemas.mlff_train_bundle import MLFFBundleFiles, MLFFTrainBundle
 from temper.utils.defaults import (

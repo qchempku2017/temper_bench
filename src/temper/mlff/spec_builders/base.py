@@ -17,7 +17,7 @@ from temper.schemas.mlff_spec import (
     MLFFSpec,
     PretrainedMLFFSpec,
 )
-from temper.schemas.utils import validate_submit_relative_path
+from temper.utils.file_paths import validate_submit_relative_path
 from temper.utils.defaults import DEFAULT_MLFF_PRETRAINED_MODELS_DIR
 
 _Builder = TypeVar("_Builder", bound="BaseSpecBuilder")

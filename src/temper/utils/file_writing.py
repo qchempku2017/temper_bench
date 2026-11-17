@@ -1,5 +1,4 @@
-"""Small, crash-recoverable JSON records and operating-system file
-locks."""
+"""Write JSON files atomically and coordinate writers with file locks."""
 
 from __future__ import annotations
 
