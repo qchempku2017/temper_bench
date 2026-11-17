@@ -18,13 +18,13 @@ def test_installation_selects_matching_variant(
     failure: str | None,
 ) -> None:
     """Select a second same-family entry and reject unmatched inputs."""
-    source = Path(__file__).parents[1] / "compatibility/check_installation.py"
+    source = Path(__file__).parents[1] / "tools/backend_setup/check_installation.py"
     spec = importlib.util.spec_from_file_location("installation_check", source)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    compatibility = tmp_path / "compatibility"
-    compatibility.mkdir()
+    backend_setup = tmp_path / "tools/backend_setup"
+    backend_setup.mkdir(parents=True)
     manifest_directory = tmp_path / "docs/deployment"
     manifest_directory.mkdir(parents=True)
     checkpoint = tmp_path / "second.pt"
@@ -45,13 +45,13 @@ def test_installation_selects_matching_variant(
     (manifest_directory / "pretrained-models.json").write_text(
         json.dumps(manifest)
     )
-    (compatibility / "patched-source-sha256.json").write_text("{}")
+    (backend_setup / "patched-source-sha256.json").write_text("{}")
     if failure == "checkpoint":
         checkpoint.write_bytes(b"unvalidated checkpoint")
     elif failure == "configuration":
         configuration.write_text("{}")
     output = tmp_path / "report.json"
-    monkeypatch.setattr(module, "__file__", str(compatibility / "check.py"))
+    monkeypatch.setattr(module, "__file__", str(backend_setup / "check.py"))
     monkeypatch.setattr(sys, "argv", [
         "check.py", "dpa4", str(checkpoint), str(output),
     ])

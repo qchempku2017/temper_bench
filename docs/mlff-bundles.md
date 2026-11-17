@@ -218,14 +218,14 @@ commands. Use portable `.pt` checkpoints for training, not compiled `.pt2` expor
 ### Fine-tuning prerequisites and exclusions
 
 The September 2026 AIS Square releases are excluded: their model cards
-require a development commit after 2026-10-01. The tested formal-release pairs
-are DPA4 Nano `v20260805` and DPA4C Air `v20260819`, with DeepMD 3.2.0 from
-the official GPU offline installer. Both need their matching explicit JSON
-files. See [the validation record](deployment/review-validation-20261027.md)
-for exact hashes, environment requirements and local/remote test status.
+require a development commit after 2026-10-01. The deployment recipe uses the
+official DeepMD 3.2.0 GPU offline installer with matching August checkpoint/JSON
+pairs. See [backend deployment](deployment/README.md) for the checkpoint catalog,
+environment requirements, and validation steps. Validate each new installation;
+catalog metadata does not establish GPU execution or support for every
+checkpoint in TEMPER's training workflow.
 
-The other August sizes have catalog metadata but have not been GPU-tested in
-this review. MatPES release notes specify the main branch; those entries are
+MatPES release notes specify the main branch; those entries are
 not certified for formal 3.2.0. Catalog availability alone does not establish
 backend compatibility or install dependencies.
 The catalog excludes entries with known unsupported TEMPER training workflows:
@@ -563,7 +563,7 @@ step size 10. As checked on 2026-10-27, 1.2.5 remains the latest
 [PyPI release](https://pypi.org/project/mattersim/), and its
 [CUDA device and batched-index issue](https://github.com/microsoft/mattersim/issues/163)
 requires the audited dependency fixes in
-[deployment compatibility](deployment-compatibility.md). Batch size still
+[backend deployment](deployment/README.md). Batch size still
 defaults to 1, but the runtime adapter does not force this value: patched
 installations can set `training_parameters={"batch_size": 4}`. Validation must
 use at least two frames per batch. Version 1.2.5 alone does not establish

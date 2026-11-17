@@ -188,5 +188,6 @@ The generated `run.sh` uses each package's native training workflow and a common
 - [Data splitting](docs/data-splitting.md) — split configuration, result schemas, Python API, QUESTS configuration, reference-based reconstruction, and export.
 - [Local MLFF bundles](docs/mlff-bundles.md) — specifications, identities, pinned integrations, bundle writing, and standardized ASE prediction files.
 - [Result loading](docs/results-loading.md) — retained labels and dataset names, training time, portable results, and local data loading.
+- [Backend deployment](docs/deployment/README.md) — deployment tools, backend recipes, checkpoint catalog, and validation instructions.
 - [Default variables](docs/default_variables.md) — every environment-configurable default and its import-time behavior.
 - [Roadmap](docs/roadmap.md) — clearly marked planned capabilities.

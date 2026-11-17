@@ -17,7 +17,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 480650,
         "parameter_count_notes": "Parameter count for the pretrained architecture; excludes optimizer state.",
-        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations."
+        "usage_notes": "Deployment recipe: official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/README.md for deployment and validation instructions."
       },
       "mini-omat24-v20260805": {
         "model_name": "DPA4-Mini-OMat24",
@@ -29,7 +29,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 655504,
         "parameter_count_notes": "Published count for this release in the linked model card.",
-        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "usage_notes": "Deployment recipe: official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/README.md for deployment and validation instructions.",
         "sha256": "13edeea63448c0f8a0b38e08fd8ba196fb1e2fad5f12486b1cd23320829da268",
         "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Mini-OMat24-v20260805.json",
         "configuration_sha256": "378b24017192e0f36ce0ad84a02ce679e59b61e739ef10fd7b9800623df77e8e"
@@ -44,7 +44,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 1125372,
         "parameter_count_notes": "Published count for this release in the linked model card.",
-        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "usage_notes": "Deployment recipe: official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/README.md for deployment and validation instructions.",
         "sha256": "fd7f34ae28f921201e4a0328ddf56179892752084f8363e7796038201471c989",
         "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Neo-OMat24-v20260805.json",
         "configuration_sha256": "3ca5ec05a3d3f626034e463f09ebf1673fe377aca40381062efb50825061409b"
@@ -59,7 +59,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 5148611,
         "parameter_count_notes": "Published count for this release in the linked model card.",
-        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations.",
+        "usage_notes": "Deployment recipe: official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/README.md for deployment and validation instructions.",
         "sha256": "7ac5fb696fc057229ceebc33f31f7a96b2f3616ac5b63a512acd1848f2d41a09",
         "configuration_url": "https://store.aissquare.com/models/9293690b-6758-425b-ac8c-74a6cb53235a/DPA4-Air-OMat24-v20260805.json",
         "configuration_sha256": "0e5317895549379bcc5442560a074b11f1a0bfd65fd18d9b739eda59704f8709"
@@ -74,7 +74,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 8849376,
         "parameter_count_notes": "Published count for this release in the linked model card.",
-        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Catalog metadata does not establish GPU execution; validate this checkpoint before use."
       },
       "mini-matpes-v20260628": {
         "model_name": "DPA4-Mini-MatPES",
@@ -86,7 +86,7 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 655504,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Catalog metadata does not establish GPU execution; validate this checkpoint before use."
       },
       "neo-matpes-v20260628": {
         "model_name": "DPA4-Neo-MatPES",
@@ -98,7 +98,7 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 1125372,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Catalog metadata does not establish GPU execution; validate this checkpoint before use."
       },
       "air-matpes-v20260628": {
         "model_name": "DPA4-Air-MatPES",
@@ -110,7 +110,7 @@
         "pretraining_data": "MatPES R2SCAN 2025.2",
         "estimated_num_parameters": 5148611,
         "parameter_count_notes": "Published parameter count in the AISSquare release description.",
-        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Only the pairs listed in docs/deployment/deepmd-release-validation.json have formal-release GPU validation; other catalog entries are metadata only."
+        "usage_notes": "Requires the matching explicit model JSON beside the checkpoint. Catalog metadata does not establish GPU execution; validate this checkpoint before use."
       }
     },
     "dpa4c": {
@@ -127,7 +127,7 @@
         "pretraining_data": "OMat24",
         "estimated_num_parameters": 433673,
         "parameter_count_notes": "Parameter count for the pretrained architecture; excludes optimizer state.",
-        "usage_notes": "Native fine-tuning, freeze and ASE inference passed with official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/august-validation-20261029.md for exact hashes, GPU jobs and test limitations."
+        "usage_notes": "Deployment recipe: official DeepMD 3.2.0 CUDA 12.9 offline installer, PyTorch 2.12.0, bundled vesin 0.6.1 and vesin-torch 0.6.1. Keep the matching explicit JSON beside the checkpoint with the same filename stem. See docs/deployment/README.md for deployment and validation instructions."
       }
     },
     "mattersim": {

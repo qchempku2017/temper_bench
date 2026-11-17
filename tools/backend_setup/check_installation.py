@@ -1,7 +1,7 @@
 """Check the tested backend/checkpoint recipe without executing GPU
 code.
 
-Usage: python compatibility/check_installation.py FAMILY CHECKPOINT
+Usage: python tools/backend_setup/check_installation.py FAMILY CHECKPOINT
 OUTPUT.json. Paths resolve against the current working directory. Only
 the checkpoint/JSON pairs recorded in docs/deployment/pretrained-models.json
 have measured backend requirements. Selection uses both the requested family
@@ -57,7 +57,7 @@ def main() -> None:
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     models = json.loads(
-        (here.parent / "docs/deployment/pretrained-models.json").read_text()
+        (here.parents[1] / "docs/deployment/pretrained-models.json").read_text()
     )
     with args.checkpoint.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()

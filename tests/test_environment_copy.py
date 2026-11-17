@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from compatibility.copy_environment import copy_environment
+from tools.backend_setup.copy_environment import copy_environment
 
 
 def test_environment_copy_preserves_inputs_and_empty_directories(

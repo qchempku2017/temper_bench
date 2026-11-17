@@ -757,10 +757,10 @@ configuration error or a failed download.
 
 ## Validation boundary
 
-For native Windows transfer, explicit Slurm task/CPU fields, confirmed rejection
-recovery through `job submit`, optional `sbatch --test-only`, and job-local
-cache configuration, see [deployment compatibility](deployment-compatibility.md).
-That guide distinguishes unit coverage from recorded GPU and JobManager tests.
+For backend installation recipes and deployment tools, see
+[backend deployment](deployment/README.md). Follow the deployment
+skill linked there to verify a new installation with scheduled GPU and
+JobManager tests.
 
 Offline tests exercise real dpdispatcher serialization/script interfaces with
 mocked remote connections and simulated interrupted operations. They do not

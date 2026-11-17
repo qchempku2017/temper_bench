@@ -343,7 +343,7 @@ def run_pipeline(bundle_path: str | Path) -> None:
                 logger.info(
                     "MatterSim device/batching fix status cannot be inferred from"
                     " its version. Use the audited dependency build and two-frame"
-                    " GPU validation in docs/deployment-compatibility.md."
+                    " GPU validation in docs/deployment/README.md."
                 )
             logger.info("Training bundle %s (%s)", bundle.mlff_train_bundle_id, adapter.spec.mlff_type)
             manifest.training_status = "running"

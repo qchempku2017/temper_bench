@@ -20,7 +20,7 @@ def test_release_validation_inputs_and_cleanup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, molecular: bool,
 ) -> None:
     """Check emitted labels and conditioning without invoking DeepMD."""
-    path = Path(__file__).parents[1] / "compatibility"
+    path = Path(__file__).parents[1] / "tools/backend_setup"
     spec = importlib.util.spec_from_file_location(
         "release_validation", path / "validate_deepmd_release.py"
     )
@@ -87,7 +87,7 @@ def test_resume_rejects_changed_molecular_mode(
     previous_molecular: bool,
 ) -> None:
     """Do not reuse training with a different toy-data conditioning mode."""
-    path = Path(__file__).parents[1] / "compatibility"
+    path = Path(__file__).parents[1] / "tools/backend_setup"
     spec = importlib.util.spec_from_file_location(
         "resume_validation", path / "validate_deepmd_release.py"
     )

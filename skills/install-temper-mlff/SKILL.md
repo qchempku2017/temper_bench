@@ -7,6 +7,10 @@ description: Deploy isolated TEMPER MLFF execution environments on an SSH-access
 
 Deploy the execution runtime required by the user's TEMPER checkout. Work through model families one at a time. Finish with reproducible environment records, actual GPU test results, a resource profile, and removal of deployment intermediates. Never describe an installed or importable package as a validated training environment.
 
+Use [the deployment guide](../../docs/deployment/README.md) for the active
+recipes, tools, checkpoint catalog, and resource template. Keep new deployment
+logs with that deployment's working files, outside the repository.
+
 ## Establish the deployment contract
 
 Read the selected TEMPER revision's `pyproject.toml`, `docs/mlff-bundles.md`, `docs/remote-jobs.md`, model catalog, spec builders, training adapters, calculators, and job-management resource schema. Record the commit and installed package version. Documentation may lag the implementation; inspect the commands that will actually run.
@@ -80,7 +84,7 @@ For MACE 0.3.16 with the referenced TEMPER revision, inspect the training-label 
 
 NEP training uses TorchNEP, not GPUMD's SNES training workflow. ASE inference uses calorine's `GPUNEP` and requires a working `gpumd` executable on PATH. Build the required GPUMD version for the target GPU, with suitable CUDA runtime libraries. Place the binary and any necessary reversible activation hooks in the NEP environment so a single activation suffices.
 
-Use calorine 4.1 with GPUMD 5.7: its upstream dump_xyz support replaces the old deployment-specific calorine patch, and its NumPy metadata no longer imposes the conflicting ceiling. Current TEMPER explicitly inherits scheduler GPU visibility unless overridden. Read ../../docs/deployment-compatibility.md and ../../compatibility/upstream-artifacts.json before selecting versions. Build remaining MACE and MatterSim patches with ../../compatibility/build_backend.py; never edit installed packages. Preserve wheel/source/patch hashes and inspect existing environment changes before reusing deployment results.
+Use calorine 4.1 with GPUMD 5.7: its upstream dump_xyz support replaces the old deployment-specific calorine patch, and its NumPy metadata no longer imposes the conflicting ceiling. Current TEMPER explicitly inherits scheduler GPU visibility unless overridden. Read ../../docs/deployment/README.md and ../../tools/backend_setup/upstream-artifacts.json before selecting versions. Build remaining MACE and MatterSim patches with ../../tools/backend_setup/build_backend.py; never edit installed packages. Preserve wheel/source/patch hashes and inspect existing environment changes before reusing deployment results.
 
 Check `pip check`, package metadata, executable paths, and resolved environment dependencies. These are installation checks, not substitutes for GPU execution. Do not disable dependency checks or force incompatible packages merely to make installation finish.
 
@@ -93,7 +97,7 @@ WSL export linking may require appending `/usr/lib/wsl/lib` to LIBRARY_PATH;
 check that libcuda.so exists there first. This is a local environment setting,
 not a TEMPER runtime default or a remote cluster CUDA path.
 
-Use `../../compatibility/validate_deepmd_release.py` to separate native
+Use `../../tools/backend_setup/validate_deepmd_release.py` to separate native
 checkpoint/backend failures from TEMPER failures. It requires a scheduler
 allocation, except for explicitly requested WSL tests using `--local-wsl`.
 It records training, freeze, ASE predictions, versions and cleanup in JSON.
@@ -114,7 +118,7 @@ JobManager resubmission retries the whole pipeline and records a new attempt.
 
 For storage with slow individual file operations, an already relocated
 conda-pack archive can be unpacked on local scratch, then copied with
-`../../compatibility/copy_environment.py SOURCE NEW_PERSISTENT_PREFIX`.
+`../../tools/backend_setup/copy_environment.py SOURCE NEW_PERSISTENT_PREFIX`.
 The archive's --dest-prefix must match that destination. The tool refuses
 existing destinations and copies independent files concurrently; it does not
 rewrite paths or certify the environment. Never merge into a prefix still
@@ -151,7 +155,7 @@ file lists before selecting models. A size range can include both materials
 (OMat24) and molecular (OMol25) checkpoints. Do not infer that every checkpoint
 with the same month is compatible from one successful size. Record the
 matching JSON and checkpoint hashes for every tested pair. For the native
-DeepMD validator in `../../compatibility/validate_deepmd_release.py`, use
+DeepMD validator in `../../tools/backend_setup/validate_deepmd_release.py`, use
 `--molecular` for the OMol25 neutral-singlet test: it supplies charge/spin
 values `[0, 1]` to training and ASE inference and uses isolated H2 geometries
 in a large periodic cell. This is a functional test, not an accuracy result.
