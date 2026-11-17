@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 from ruamel.yaml import YAML
 
 from temper.job_management.paths import bundle_directory, bundle_root
-from temper.utils.file_writing import write_json_atomically, store_lock
+from temper.utils.file_writing import store_lock
 from temper.mlff.spec_builders import mlff_spec_builder_factory
 from temper.mlff.spec_builders.base import pretrained_model_defaults
 from temper.schemas.mlff_spec import MLFFSpec
@@ -348,8 +348,8 @@ def create_bundles_cli(
     with store_lock(root):
         existing_ids = {
             str(
-                MLFFTrainBundle.model_validate_json(
-                    path.read_text(encoding="utf-8"),
+                MLFFTrainBundle.from_json_file(
+                    path,
                     context={"verify_files": False},
                 ).mlff_train_bundle_id
             ): path
@@ -361,7 +361,7 @@ def create_bundles_cli(
                 continue
             path = bundle_directory(root, bundle) / "bundle.json"
             path.parent.mkdir(parents=True, exist_ok=True)
-            write_json_atomically(path, bundle.model_dump(mode="json"))
+            bundle.to_json_file(path)
             paths.append(path)
             created += 1
     logger.info(

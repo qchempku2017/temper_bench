@@ -60,6 +60,8 @@ def _load_split_config(config_file: Path) -> SplitConfig:
         raise ValueError(
             f"Split configuration must be JSON or YAML, got {config_file}."
         )
+    if config_file.suffix.lower() == ".json":
+        return SplitConfig.from_json_file(config_file)
     loaded = loadfn(config_file)
     if isinstance(loaded, SplitConfig):
         return loaded
@@ -96,7 +98,7 @@ def split_cli(config_file: Path | str = DEFAULT_SPLIT_CONFIG_FILE) -> None:
     config_file = Path(config_file)
     split_config = _load_split_config(config_file).resolve_domains()
     reproduce_path = _reproduce_config_path(config_file)
-    dumpfn(split_config, reproduce_path, indent=2)
+    split_config.to_json_file(reproduce_path)
 
     root_path = split_config.root_path
     output_path = split_config.output_path

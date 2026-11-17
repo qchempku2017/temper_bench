@@ -257,7 +257,9 @@ def test_split_cli_loads_config_and_writes_exact_reproduction(
         output_root / "selected" / "training_units.json",
     ]
 
-    reproduced = loadfn(reproduce_path)
+    from temper.schemas.split import SplitConfig
+
+    reproduced = SplitConfig.from_json_file(reproduce_path)
     assert reproduced.domains == ["ignored", "selected"]
     assert (
         reproduced.trainval_test_split_seeds == requested_trainval_test_seeds

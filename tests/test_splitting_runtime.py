@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from ase.io import write
-from monty.serialization import dumpfn, loadfn
+
 
 from temper.schemas.group import GroupedDomain
 from temper.schemas.info import InfoEntry
@@ -334,8 +334,8 @@ def test_split_config_derives_and_round_trips_complete_reproducible_seed_lists(
         train_val_split_seeds=[789, 101112],
     )
     path = tmp_path / "split_config_reproduce.json"
-    dumpfn(exact, path, indent=2)
-    restored = loadfn(path)
+    exact.to_json_file(path)
+    restored = SplitConfig.from_json_file(path)
     assert restored == exact
     assert restored.trainval_test_split_seeds == [123, 456]
     assert restored.train_val_split_seeds == [789, 101112]

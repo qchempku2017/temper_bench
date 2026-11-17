@@ -103,9 +103,7 @@ def test_saved_layout_packages_without_builders_or_adapters(
         if finetune and layout.evaluation_model_filename is not None
         else None
     )
-    assert MLFFTrainBundle.model_validate_json(
-        (target / "bundle.json").read_text()
-    ) == packaged
+    assert MLFFTrainBundle.from_json_file(target / "bundle.json") == packaged
 
 
 def test_builder_layout_copies_and_scientific_identity(tmp_path: Path) -> None:

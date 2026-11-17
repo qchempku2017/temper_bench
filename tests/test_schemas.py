@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
-from monty.serialization import dumpfn, loadfn
+
 from pydantic import ValidationError, model_validator
 
 from temper.schemas.group import GroupedDomain
@@ -115,11 +115,50 @@ def test_json_models_round_trip_without_data_loss(tmp_path: Path) -> None:
 
     for model in (info, refs[0], trajectory, split, grouped):
         path = tmp_path / f"{type(model).__name__}.json"
-        dumpfn(model, path, indent=2)
-        assert loadfn(path) == model
+        model.to_json_file(path)
+        assert type(model).from_json_file(path) == model
+        assert json.loads(path.read_text(encoding="utf-8")) == model.to_dict()
+        assert type(model).from_dict(model.to_dict()) == model
         if isinstance(model, SplitGroup):
             serialized = json.loads(path.read_text(encoding="utf-8"))
             assert serialized["split_id"] == str(model.split_id)
+
+
+@pytest.mark.parametrize("failure", ["validation", "write"])
+def test_json_file_write_failure_preserves_previous_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str,
+) -> None:
+    """Keep the saved model intact when validation or writing fails.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Temporary directory for the JSON file and its parent directories.
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the final file replacement to simulate an interrupted write.
+    failure : {'validation', 'write'}
+        Failure to trigger after saving the initial model.
+    """
+    import temper.utils.file_writing as file_writing
+
+    model = FrameReference(domain="domain", filename="frames.extxyz", frame_index=0)
+    path = tmp_path / "nested" / "frame.json"
+    model.to_json_file(path)
+    original = path.read_bytes()
+    if failure == "validation":
+        model.frame_index = -1
+        expected_error = ValueError
+    else:
+        def fail_replace(source: str, destination: Path) -> None:
+            raise OSError("Interrupted replacement")
+
+        monkeypatch.setattr(file_writing.os, "replace", fail_replace)
+        expected_error = OSError
+    with pytest.raises(expected_error):
+        model.to_json_file(path)
+    assert path.read_bytes() == original
+    assert list(path.parent.iterdir()) == [path]
+    assert FrameReference.from_json_file(path).frame_index == 0
 
 
 def test_atom_property_helpers_validate_and_report_common_properties() -> None:
@@ -363,8 +402,8 @@ def test_split_schemas_provide_nested_sets_and_reject_invalid_partitions(
         == float("inf")
     )
     infinite_profile_path = tmp_path / "infinite-entropy-profile.json"
-    dumpfn(EntropyProfile(points=[infinite]), infinite_profile_path, indent=2)
-    restored_infinite_profile = loadfn(infinite_profile_path)
+    EntropyProfile(points=[infinite]).to_json_file(infinite_profile_path)
+    restored_infinite_profile = EntropyProfile.from_json_file(infinite_profile_path)
     assert restored_infinite_profile.points[0] == infinite
     with pytest.raises(ValidationError, match="must not be NaN"):
         EntropyProfilePoint(
@@ -563,22 +602,22 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     assert zeroshot_unit.training_unit_id == zeroshot_id
 
     manifest = tmp_path / "training_unit.json"
-    dumpfn(unit, manifest, indent=2)
+    unit.to_json_file(manifest)
     serialized = json.loads(manifest.read_text(encoding="utf-8"))
     assert serialized["split_id"] == str(split_id)
     assert serialized["training_unit_id"] == str(updated_training_unit_id)
     assert "unit_type" not in serialized
-    loaded = loadfn(manifest)
+    loaded = TrainingUnit.from_json_file(manifest)
     assert loaded.split_id == split_id
     assert loaded.training_unit_id == updated_training_unit_id
     assert loaded.unit_type == "finetune"
 
     zeroshot_manifest = tmp_path / "zeroshot_training_unit.json"
-    dumpfn(zeroshot_unit, zeroshot_manifest, indent=2)
+    zeroshot_unit.to_json_file(zeroshot_manifest)
     assert "unit_type" not in json.loads(
         zeroshot_manifest.read_text(encoding="utf-8")
     )
-    loaded_zeroshot = loadfn(zeroshot_manifest)
+    loaded_zeroshot = TrainingUnit.from_json_file(zeroshot_manifest)
     assert loaded_zeroshot.unit_type == "zeroshot"
     assert loaded_zeroshot.training_unit_id == zeroshot_id
 

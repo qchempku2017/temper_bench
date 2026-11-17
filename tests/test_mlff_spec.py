@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
-from monty.serialization import dumpfn, loadfn
+
 from pydantic import ValidationError
 
 import temper.mlff as mlff
@@ -302,8 +302,9 @@ def test_schema_and_monty_round_trip(
 ) -> None:
     spec = mlff_spec_factory("nep89")
     path = tmp_path / "spec.json"
-    dumpfn(spec, path, indent=2)
-    assert loadfn(path) == spec
+    spec.to_json_file(path)
+    assert MLFFSpec.from_json_file(path) == spec
+    assert MLFFSpec.from_dict(spec.to_dict()) == spec
     assert MLFFSpec.model_validate(spec.model_dump(mode="json")) == spec
 
 

@@ -8,6 +8,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     GetJsonSchemaHandler,
+    JsonValue,
     PrivateAttr,
     model_serializer,
     model_validator,
@@ -16,10 +17,88 @@ from monty.json import MSONable
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema
 
+from temper.utils.file_writing import write_json_atomically
+
 
 class MSONableModel(BaseModel, MSONable):
-    """Pydantic model subclass to allow saving and loading from `json`
-    files."""
+    """Validate model fields and share dictionary and JSON file conversion.
+
+    Parameters
+    ----------
+    **data : object
+        Fields defined by the concrete subclass, validated by Pydantic.
+
+    Notes
+    -----
+    from_json_file and to_json_file read and write one model per file.
+    Dataset paths stored in fields retain the subclass's resolution rules;
+    they are not automatically resolved against the JSON file's directory.
+    """
+
+    model_config = ConfigDict(ser_json_inf_nan="strings")
+
+    @classmethod
+    def from_json_file(
+        cls, path: str | Path, *, context: dict[str, Any] | None = None,
+    ) -> Self:
+        """Read one model from a JSON file and validate its fields.
+
+        Parameters
+        ----------
+        path : str or Path
+            Input JSON path. Expands ~ and resolves relative paths against the
+            working directory. The file must contain a dictionary of fields.
+        context : dict[str, Any] or None, optional
+            Passed to Pydantic validators, including nested models. None uses
+            their defaults. For training bundles and units,
+            context={"verify_files": False} permits reading settings when the
+            original datasets are unavailable.
+
+        Returns
+        -------
+        Self
+            Validated instance of the class on which this method was called.
+
+        Raises
+        ------
+        ValueError
+            If JSON is malformed or fields fail model validation.
+        OSError
+            If the file or a dataset required by validation cannot be read.
+        """
+        path = Path(path).expanduser().resolve()
+        return cls.from_dict(json.loads(path.read_text(encoding="utf-8")), context=context)
+
+    def to_json_file(
+        self, path: str | Path, *, context: dict[str, Any] | None = None,
+    ) -> None:
+        """Validate and atomically write this model's fields as JSON.
+
+        Parameters
+        ----------
+        path : str or Path
+            Destination JSON path. Expands ~ and resolves relative paths against
+            the working directory. Creates missing parents and replaces an
+            existing file. Stored file references are not rewritten.
+        context : dict[str, Any] or None, optional
+            Passed to Pydantic when revalidating the fields before saving.
+            None uses the validators' defaults. Use
+            context={"verify_files": False} for training settings whose original
+            datasets are unavailable.
+
+        Raises
+        ------
+        ValueError
+            If current fields fail model validation.
+        pydantic_core.PydanticSerializationError
+            If a field cannot be serialized as JSON.
+        OSError
+            If directories cannot be created or the file cannot be written.
+        """
+        validated = type(self).from_dict(self.as_dict(), context=context)
+        path = Path(path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_json_atomically(path, validated.to_dict())
 
     @classmethod
     def __get_pydantic_json_schema__(
@@ -40,14 +119,39 @@ class MSONableModel(BaseModel, MSONable):
         """
         return self.model_dump()
 
+    def to_dict(self) -> dict[str, JsonValue]:
+        """Return the model's fields as JSON-compatible values.
+
+        Returns
+        -------
+        dict[str, JsonValue]
+            Field values with paths and UUIDs converted to strings and nested
+            models converted to dictionaries. Infinite floats are represented
+            as "Infinity" or "-Infinity", preserving entropy values when read
+            back through from_dict; NaN is represented as "NaN" when allowed
+            by the model. No Monty class tags are added.
+
+        Raises
+        ------
+        pydantic_core.PydanticSerializationError
+            If a field cannot be represented as JSON.
+        """
+        return json.loads(self.model_dump_json())
+
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> Self:
+    def from_dict(
+        cls, d: dict[str, Any], *, context: dict[str, Any] | None = None,
+    ) -> Self:
         """Validate a dictionary and construct an instance of this class.
 
         Parameters
         ----------
         d : dict[str, Any]
             Field values to validate using this model's schema.
+        context : dict[str, Any] or None, optional
+            Passed to Pydantic validators, including nested models. None uses
+            their defaults. For training bundles and units,
+            context={"verify_files": False} skips checks on source datasets.
 
         Returns
         -------
@@ -59,7 +163,7 @@ class MSONableModel(BaseModel, MSONable):
         pydantic.ValidationError
             If required values are absent or violate the model's constraints.
         """
-        return cls.model_validate(d)
+        return cls.model_validate(d, context=context)
 
 
 def canonical_uuid(namespace: UUID, payload: Any) -> UUID:

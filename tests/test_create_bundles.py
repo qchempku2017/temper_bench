@@ -81,7 +81,7 @@ def test_create_pairs_and_reuses_ids(
     )
     assert len(paths) == 4
     for path in paths:
-        bundle = MLFFTrainBundle.model_validate_json(path.read_text())
+        bundle = MLFFTrainBundle.from_json_file(path)
         assert (
             path
             == bundle_directory(bundle_root(output), bundle) / "bundle.json"
@@ -117,11 +117,9 @@ def test_create_pairs_and_reuses_ids(
     # must keep these locations so existing attempts can still collect
     # results.
     shared = paths[0]
-    bundle = MLFFTrainBundle.model_validate_json(
-        shared.read_text(encoding="utf-8")
-    )
+    bundle = MLFFTrainBundle.from_json_file(shared)
     _, packaged = bundle.write_submit_folder(shared.parent / "attempt_001")
-    shared.write_text(packaged.model_dump_json(), encoding="utf-8")
+    packaged.to_json_file(shared)
     before = {
         path: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths
     }
@@ -138,9 +136,7 @@ def test_create_pairs_and_reuses_ids(
         path: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths
     }
     assert (
-        MLFFTrainBundle.model_validate_json(
-            shared.read_text(encoding="utf-8")
-        ).files
+        MLFFTrainBundle.from_json_file(shared).files
         == packaged.files
     )
 
@@ -185,7 +181,7 @@ def test_domain_and_atom_filters_keep_zeroshot(
         bundle_write_root=tmp_path / "bundles",
     )
     bundles = [
-        MLFFTrainBundle.model_validate_json(path.read_text()) for path in paths
+        MLFFTrainBundle.from_json_file(path) for path in paths
     ]
     assert len(bundles) == expected
     assert any(bundle.unit_type == "zeroshot" for bundle in bundles)
@@ -232,7 +228,7 @@ def test_overrides_and_relocated_split_root(
         model_override_config=config,
     )
     for path in paths:
-        bundle = MLFFTrainBundle.model_validate_json(path.read_text())
+        bundle = MLFFTrainBundle.from_json_file(path)
         assert bundle.training_unit.root_path == relocated.resolve()
         assert (
             bundle.mlff_spec.testing_parameters["default_dtype"] == "float64"

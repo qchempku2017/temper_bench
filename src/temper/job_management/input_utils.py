@@ -62,9 +62,7 @@ def load_bundle(
             "Source bundle must be relative to the attempt and inside its"
             " bundle directory."
         )
-    bundle = MLFFTrainBundle.model_validate_json(
-        path.read_text(encoding="utf-8"), context=context
-    )
+    bundle = MLFFTrainBundle.from_json_file(path, context=context)
     if str(bundle.mlff_train_bundle_id) != record.bundle_id:
         raise ValueError(
             "Referenced bundle ID differs from the attempt's bundle ID."
