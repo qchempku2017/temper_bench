@@ -94,7 +94,6 @@ spec = mlff_spec_builder_factory(family)(
     pretrained_model_dir=model.parent,
     training_parameters=overrides[family],
 ).build()
-unit = unit.with_dataset_hashes()
 bundle = MLFFTrainBundle(training_unit=unit, mlff_spec=spec)
 folder, packaged = bundle.write_submit_folder(root / "bundle")
 if family in ("dpa4", "dpa4c"):
@@ -105,7 +104,7 @@ if family in ("dpa4", "dpa4c"):
     config["training"]["optimizer"] = config.pop("optimizer")
     config_path.write_text(json.dumps(config))
 run_pipeline(folder / "bundle.json")
-pred = np.load(folder / "testing_outputs/test_000.npz")
+pred = np.load(folder / "testing_outputs/test.npz")
 for key in ("energies", "forces", "stresses"):
     assert np.isfinite(pred[key]).all(), key
 assert pred["energies"].shape == (1,)

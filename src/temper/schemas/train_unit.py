@@ -66,11 +66,12 @@ class TrainingUnit(ManagedIdentityModel):
     Parameters
     ----------
     **data : object
-        Values for the attributes below. Normal loading of a record
-        containing dataset_sha256 rereads and verifies the referenced
-        bytes. For historical inspection, use model_validate or
-        model_validate_json with context={"verify_files": False}; this
-        does not authorize execution.
+        Values for the attributes below. Normal construction reads the dataset
+        files, calculates missing hashes, and verifies supplied hashes before
+        finalizing training_unit_id. For remote loading or inspection without
+        source files, use model_validate or from_json_file with
+        context={"verify_files": False}. This preserves recorded hashes and
+        identities without reading datasets; it does not authorize execution.
 
     Attributes
     ----------
@@ -96,13 +97,11 @@ class TrainingUnit(ManagedIdentityModel):
         absence conventions as the frame counts.
     split_id : UUID or None
         Identity of the SplitGroup that produced this unit. None is
-        accepted for manifests written before split identities were
-        introduced.
+        means no parent split was supplied during construction.
     training_unit_id : UUID or None
         Stored, system-managed identity. None requests identity creation
         and is populated before a valid model is returned. Hashed units
-        use v3 identity rules; legacy metadata retains its v2 identity
-        until upgraded.
+        include dataset checksums in the version-1 identity definition.
     train_set : str or None
         Training filename, relative to root_path/domain; None for
         zero-shot.
@@ -119,16 +118,25 @@ class TrainingUnit(ManagedIdentityModel):
         root_path/domain/filename.
     dataset_sha256 : dict[str, str]
         Dataset filenames mapped to hashes of the complete file bytes.
-        Data splitting populates this before returning each unit. Empty
-        means legacy metadata: inspection and local packaging remain
-        supported, but remote submission requires explicit
-        copy_with_dataset_hashes() conversion.
+        Missing or empty hashes are populated during normal construction.
+        Supplied hashes must cover exactly the referenced files and match
+        their bytes. With verify_files=False, an empty mapping stays empty
+        and supplied hashes are checked only for their format and coverage.
+        Remote submission requires populated hashes.
+
+    Raises
+    ------
+    ValueError
+        If metadata or dataset paths are invalid, supplied hashes do not match
+        the files, or the saved identity does not match the complete record.
+    OSError
+        If a dataset needed for hashing or verification cannot be read.
 
     Notes
     -----
     Changing a source file does not mutate an already loaded Python
     object's identity. Loading or submitting its hashed record detects
-    the mismatch. copy_with_dataset_hashes() explicitly creates a new
+    the mismatch. copy_with_refreshed_dataset_hashes() explicitly creates a new
     identity from changed files. Hash caches live only for one creation,
     packaging or submission operation; file size and modification time
     are never used as proof of unchanged bytes.
@@ -149,7 +157,7 @@ class TrainingUnit(ManagedIdentityModel):
         "dataset_sha256",
     )
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _TRAINING_UNIT_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.training-unit.v2"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.training-unit.v1"
     _IDENTITY_LABEL: ClassVar[str] = "training-unit"
 
     domain: str
@@ -198,12 +206,16 @@ class TrainingUnit(ManagedIdentityModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _verify_dataset_bytes(cls, data: Any, info: ValidationInfo) -> Any:
+    def _populate_and_verify_dataset_hashes(
+        cls, data: Any, info: ValidationInfo
+    ) -> Any:
         if not isinstance(data, dict):
             return data
         hashes = data.get("dataset_sha256", {})
-        if not hashes:
-            # Legacy metadata remains inspectable, but cannot be submitted.
+        if not isinstance(hashes, dict):
+            raise ValueError("dataset_sha256 must be a filename-to-hash mapping.")
+        if not isinstance(data.get("test_sets"), (tuple, list)):
+            # Let field validation report missing or invalid test filenames.
             return data
         names = {
             name
@@ -214,7 +226,7 @@ class TrainingUnit(ManagedIdentityModel):
             )
             if name
         }
-        if set(hashes) != names:
+        if hashes and set(hashes) != names:
             raise ValueError(
                 "dataset_sha256 must cover exactly the training, validation"
                 " and test files."
@@ -230,41 +242,53 @@ class TrainingUnit(ManagedIdentityModel):
             )
         context = info.context or {}
         if context.get("verify_files", True):
+            domain = data.get("domain")
+            root_path = cls.load_monty_root_path(
+                data.get("root_path", DEFAULT_SPLIT_RESULTS_DIR)
+            )
+            if not isinstance(domain, str) or not isinstance(root_path, (str, Path)):
+                return data  # Field validation reports invalid path values.
+            domain_path = Path(domain)
+            if (
+                domain_path.is_absolute()
+                or domain_path.root
+                or len(domain_path.parts) != 1
+                or ".." in domain_path.parts
+            ):
+                raise ValueError("TrainingUnit domain must be one safe directory name.")
+            root = (Path(root_path) / domain).resolve()
             cache = context.get("hash_cache")
             if cache is None:
                 cache = _verification_cache.get()
             if cache is None:
                 cache = {}
-            for name, expected in hashes.items():
+            calculated: dict[str, str] = {}
+            for name in names:
                 validate_relative_extxyz_path(name)
-                root = (
-                    Path(data.get("root_path", DEFAULT_SPLIT_RESULTS_DIR))
-                    / data["domain"]
-                ).resolve()
                 path = (root / name).resolve()
                 if not path.is_relative_to(root):
                     raise ValueError("Dataset escapes its domain directory.")
                 if path not in cache:
                     cache[path] = file_sha256(path)
-                if cache[path] != expected:
+                if hashes and cache[path] != hashes[name]:
                     raise ValueError(
                         f"Dataset bytes changed: {path}. Rebuild the training"
                         " unit explicitly."
                     )
+                calculated[name] = cache[path]
+            if not hashes:
+                data = dict(data)
+                data["dataset_sha256"] = calculated
         return data
 
-    def _identity_payload(self) -> dict[str, Any]:
-        payload = super()._identity_payload()
-        payload.pop("dataset_sha256", None)
-        if self.dataset_sha256:
-            payload["identity_schema"] = "temper.training-unit.v3"
-            payload["dataset_sha256"] = self.dataset_sha256
-        return payload
-
-    def copy_with_dataset_hashes(
+    def copy_with_refreshed_dataset_hashes(
         self, cache: dict[Path, str] | None = None
     ) -> "TrainingUnit":
-        """Return a new training unit with dataset hashes and a recalculated ID.
+        """Explicitly accept current dataset bytes and return a refreshed unit.
+
+        Normal construction already calculates missing hashes. Use this method
+        only when deliberately accepting changed datasets or refreshing a
+        metadata-only record; it discards the previous hashes and identity.
 
         Parameters
         ----------
@@ -296,20 +320,38 @@ class TrainingUnit(ManagedIdentityModel):
             If a reference is invalid or missing.
         """
         cache = {} if cache is None else cache
-        hashes: dict[str, str] = {}
-        for name in (*self.test_sets, self.train_set, self.val_set):
-            if name is not None:
-                path = self.dataset_source(name)
-                if path not in cache:
-                    cache[path] = file_sha256(path)
-                hashes[name] = cache[path]
-        data = self.model_dump(exclude={"training_unit_id"})
-        data["dataset_sha256"] = hashes
+        data = self.model_dump(exclude={"training_unit_id", "dataset_sha256"})
         return type(self).model_validate(data, context={"hash_cache": cache})
 
-    def dataset_source(self, filename: str) -> Path:
-        """Return the existing dataset path within this unit\'s
-        domain."""
+    def resolve_local_dataset_path(self, filename: str) -> Path:
+        """Resolve an original local dataset file within this unit's domain.
+
+        Parameters
+        ----------
+        filename : str
+            Relative .extxyz filename within root_path/domain, including any
+            subdirectories. Absolute paths and parent traversal are rejected.
+            The filename need not appear in this unit's recorded datasets.
+
+        Returns
+        -------
+        pathlib.Path
+            Absolute path to an existing file, with symbolic links resolved.
+            A relative root_path is interpreted against the current working
+            directory. This locates the original local dataset, not the copied
+            input identified by a test manifest's execution_input_path.
+            No file contents are read or modified.
+
+        Raises
+        ------
+        ValueError
+            If the filename or domain is invalid, the resolved path leaves
+            the domain directory, or the target is not an existing file.
+        TypeError
+            If filename is not a string.
+        OSError
+            If filesystem path resolution fails.
+        """
         validate_relative_extxyz_path(filename)
         domain = Path(self.domain)
         if (
@@ -377,7 +419,7 @@ class TrainingUnit(ManagedIdentityModel):
         """
         filenames = (*self.test_sets, self.train_set, self.val_set)
         return {
-            name: self._dataset_has_stress(self.dataset_source(name))
+            name: self._dataset_has_stress(self.resolve_local_dataset_path(name))
             for name in dict.fromkeys(filenames)
             if name is not None
         }
@@ -438,8 +480,9 @@ class TrainingUnit(ManagedIdentityModel):
         """Validate dataset shape and names without accessing local
         source files.
 
-        Records also travel inside remote bundles. File existence is
-        checked by dataset_source when local inputs are actually used.
+        Normal validation hashes datasets before this hook. Records also
+        travel inside remote bundles, where verify_files=False permits these
+        metadata checks without accessing original source files.
         """
 
         if self.unit_type == "finetune":
@@ -504,11 +547,12 @@ def load_training_units(
         Dataset root_path values retain their own current-directory
         interpretation.
     verify_files : bool, default True
-        Reread and verify the bytes recorded in hashed units. False
-        permits historical inspection when source files are unavailable;
-        remote submission still verifies those files separately. Legacy
-        units remain metadata-only until explicitly converted with
-        copy_with_dataset_hashes().
+        True reads datasets to calculate missing hashes or verify supplied
+        hashes before checking identities. False preserves recorded hashes
+        without reading datasets, permitting inspection when source files are
+        unavailable. Remote submission still verifies those files separately.
+        A saved identity based on empty hashes cannot be reused after adding
+        hashes; load it with False and explicitly refresh that unit instead.
 
     Returns
     -------

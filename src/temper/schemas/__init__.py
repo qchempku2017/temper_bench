@@ -1,7 +1,6 @@
 """Public persisted schemas for TEMPER data and local MLFF
 experiments."""
 
-from temper.schemas.mlff_test_result import MLFFTestResult
 from temper.schemas.artifact import LocalArtifactRef
 from temper.schemas.mlff_spec import (
     MLFFFileLayout,
@@ -10,6 +9,9 @@ from temper.schemas.mlff_spec import (
     PretrainedMLFFSpec,
 )
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle, MLFFBundleFiles
+from temper.schemas.mlff_experiment_result import (
+    MLFFExperimentResult, MLFFTestResult, MLFFTestManifest, MLFFExperimentManifest,
+)
 from temper.schemas.train_unit import TrainingUnit, load_training_units
 
 __all__ = [
@@ -18,10 +20,13 @@ __all__ = [
     "MLFFFileLayout",
     "MLFFImplementation",
     "MLFFSpec",
-    "MLFFTestResult",
+    "MLFFTestManifest",
     "MLFFTrainBundle",
     "MLFFBundleFiles",
     "PretrainedMLFFSpec",
+    "MLFFExperimentManifest",
+    "MLFFExperimentResult",
+    "MLFFTestResult",
     "SplitGroup",
     "TrainingUnit",
     "load_training_units",

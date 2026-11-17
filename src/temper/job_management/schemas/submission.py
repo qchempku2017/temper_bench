@@ -19,9 +19,11 @@ class SubmissionDecision(BaseModel):
         Full scientific bundle identity, or the input path if loading failed.
     action : str
         ``new``, ``retry``, or ``resume`` describes a preview. ``submitted``
-        and ``resumed`` mean a launch was confirmed. ``monitor``, ``succeeded``,
+        and ``resumed`` mean a launch was confirmed. ``monitor``, ``completed``,
         and ``cancelled`` need no new launch. ``blocked`` means evidence or
-        inputs are insufficient; ``error`` means an operation failed.
+        inputs are insufficient; ``operation_failed`` means a submission,
+        collection or cleanup operation failed. The calculation itself may
+        already be completed.
     reason : str
         Explanation of the decision and, when needed, what to check next.
     attempt : str or None
@@ -35,7 +37,7 @@ class SubmissionDecision(BaseModel):
     bundle_id: str
     action: Literal[
         "new", "retry", "resume", "submitted", "resumed", "monitor",
-        "succeeded", "cancelled", "blocked", "error",
+        "completed", "cancelled", "blocked", "operation_failed",
     ]
     reason: str
     attempt: str | None = None

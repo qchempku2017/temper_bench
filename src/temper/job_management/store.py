@@ -113,7 +113,7 @@ class JobStore:
             backend exception bodies or credential values should be
             passed here.
         update_markers : bool, default True
-            Update the convenient success, failed, or cancelled marker files.
+            Update the convenient completed, failed, or cancelled marker files.
             False preserves these files while saving observations for an
             abandonment review. Abandoned records always keep their markers.
 
@@ -143,7 +143,7 @@ class JobStore:
         Parameters
         ----------
         record : JobRecord
-            Confirmed computation and collection status. Success
+            Confirmed computation and collection status. The completed marker
             requires verified results; failed and cancelled can precede
             collection. Abandoned records are left untouched, including any
             marker files preserved with their history.
@@ -156,11 +156,11 @@ class JobStore:
             else None
         )
         if (
-            record.computation_status == "success"
+            record.computation_status == "completed"
             and record.collection_status == "verified"
         ):
-            expected = "success"
-        for name in ("success", "failed", "cancelled"):
+            expected = "completed"
+        for name in ("completed", "failed", "cancelled"):
             marker = self.path(record) / name
             if name == expected:
                 marker.touch(exist_ok=True)

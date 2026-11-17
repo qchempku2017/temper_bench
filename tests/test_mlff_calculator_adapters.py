@@ -12,7 +12,7 @@ from temper.mlff.pipeline import calculators as calculator_factory
 
 @pytest.fixture(autouse=True)
 def cuda_runtime(monkeypatch):
-    runtime = ModuleType("cuda_utils")
+    runtime = ModuleType("temper.utils.cuda")
     runtime.torch_device = lambda: "cuda"
     runtime.require_cuda = lambda: None
     monkeypatch.setitem(
@@ -20,10 +20,11 @@ def cuda_runtime(monkeypatch):
     )
 
 
-def _config(family, **parameters):
+def _config(family: str, **parameters: object) -> dict[str, object]:
     return {
         "model": "pretrained_models/model",
-        "calculator": {"identifier": family, "parameters": parameters},
+        "identifier": family,
+        "parameters": parameters,
     }
 
 
@@ -36,7 +37,7 @@ def test_deepmd_uses_cuda(family, monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "deepmd", package)
     monkeypatch.setitem(sys.modules, "deepmd.calculator", calculator)
     assert (
-        calculator_factory.build_calculator(_config(family, head="Energy"))
+        calculator_factory.build_calculator(**_config(family, head="Energy"))
         == "dp"
     )
     assert calls == [{"model": "pretrained_models/model", "head": "Energy"}]
@@ -44,7 +45,7 @@ def test_deepmd_uses_cuda(family, monkeypatch) -> None:
 
 def test_unknown_calculator_has_a_clear_error():
     with pytest.raises(ValueError, match="Unsupported MLFF type 'unknown'"):
-        calculator_factory.build_calculator(_config("unknown"))
+        calculator_factory.build_calculator(**_config("unknown"))
 
 
 def test_mattersim_uses_cuda(monkeypatch) -> None:
@@ -57,7 +58,7 @@ def test_mattersim_uses_cuda(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "mattersim", package)
     monkeypatch.setitem(sys.modules, "mattersim.forcefield", forcefield)
     assert (
-        calculator_factory.build_calculator(_config("mattersim", custom=True))
+        calculator_factory.build_calculator(**_config("mattersim", custom=True))
         == "mattersim"
     )
     assert calls == [
@@ -79,7 +80,7 @@ def test_sevennet_uses_cuda(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "sevenn", package)
     monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
     assert (
-        calculator_factory.build_calculator(_config("sevennet", modal="mpa"))
+        calculator_factory.build_calculator(**_config("sevennet", modal="mpa"))
         == "sevennet"
     )
     assert calls == [
@@ -89,7 +90,7 @@ def test_sevennet_uses_cuda(monkeypatch) -> None:
 
 def test_mace_resolves_device_on_runner(monkeypatch) -> None:
     calls = []
-    runtime_device = ModuleType("cuda_utils")
+    runtime_device = ModuleType("temper.utils.cuda")
     runtime_device.torch_device = lambda: "cuda"
     runtime_device.require_cuda = lambda: None
     package = ModuleType("mace")
@@ -104,7 +105,7 @@ def test_mace_resolves_device_on_runner(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
     assert (
         calculator_factory.build_calculator(
-            _config("mace", default_dtype="float64")
+            **_config("mace", default_dtype="float64")
         )
         == "mace"
     )
@@ -119,7 +120,7 @@ def test_mace_resolves_device_on_runner(monkeypatch) -> None:
 
 def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
     calls = []
-    runtime_device = ModuleType("cuda_utils")
+    runtime_device = ModuleType("temper.utils.cuda")
     runtime_device.require_cuda = lambda: None
     runtime_device.torch_device = lambda: "cuda"
     calorine = ModuleType("calorine")
@@ -139,7 +140,7 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
         calculator_factory.shutil, "which", lambda name: "/bin/gpumd"
     )
     assert (
-        calculator_factory.build_calculator(_config("nep89", timestep=1))
+        calculator_factory.build_calculator(**_config("nep89", timestep=1))
         == "gpu"
     )
     assert calls[0] == (
@@ -151,7 +152,7 @@ def test_nep_prefers_gpu_only_with_cuda_and_gpumd(monkeypatch) -> None:
     calls.clear()
     monkeypatch.setattr(calculator_factory.shutil, "which", lambda name: None)
     with pytest.raises(RuntimeError, match="gpumd"):
-        calculator_factory.build_calculator(_config("nep89"))
+        calculator_factory.build_calculator(**_config("nep89"))
     assert not calls
 
 

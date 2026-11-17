@@ -18,7 +18,7 @@ from temper.mlff.pipeline.training_adapters import mlff_adapter_factory
 from temper.mlff.bundle_writers.base import MLFFBundleWriter
 from temper.mlff.pipeline.training_adapters.base import BaseMLFFAdapter
 from temper.mlff.spec_builders.base import BaseSpecBuilder
-from temper.schemas import MLFFTestResult
+
 
 
 def test_registered_family_accepts_instance_model_identity(
@@ -119,7 +119,7 @@ def test_parameter_fields_and_independent_defaults(mlff_spec_factory):
         "testing_parameters",
     } <= first.model_dump().keys()
     assert not {"training", "testing"} & first.model_dump().keys()
-    assert first._IDENTITY_SCHEMA == "temper.mlff-spec.v3"
+    assert first._IDENTITY_SCHEMA == "temper.mlff-spec.v1"
     assert first.training_parameters["numb_epoch"] == 60
     assert first.training_parameters["training_data"] == {
         "batch_size": "auto:128"
@@ -272,25 +272,7 @@ def test_written_bundle_uses_installed_runtime_and_result_schema(
         "temper_bench run_pipeline bundle.json"
         in (target / "run.sh").read_text()
     )
-    result = MLFFTestResult(
-        schema_version=1,
-        calculator_identifier="mace",
-        model="pretrained_models/mace.model",
-        package_versions={"mace-torch": None},
-        dataset_id="test_000",
-        source_domain="example",
-        source_filename="test.extxyz",
-        submit_path="testing_inputs/test_000.extxyz",
-        number_of_frames=2,
-        total_atoms=3,
-        requested_properties=["energy", "forces"],
-        units={"energy": "eV", "forces": "eV/Angstrom", "stress": None},
-        wall_time_seconds=0.1,
-    )
-    assert (
-        MLFFTestResult.from_dict(json.loads(json.dumps(result.as_dict())))
-        == result
-    )
+
 
 
 def write_prepared(target):

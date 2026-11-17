@@ -8,23 +8,32 @@ from __future__ import annotations
 
 import os
 import shutil
+from copy import deepcopy
+from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
 
-def build_calculator(config: dict[str, Any]) -> Calculator:
+def build_calculator(
+    identifier: str, model: str | Path, parameters: dict[str, Any],
+) -> Calculator:
     """Construct the selected ASE calculator without importing other
     backends.
 
     Parameters
     ----------
-    config : dict[str, Any]
-        Evaluation configuration. ``model`` is the absolute checkpoint or
-        exported-model path. ``calculator`` contains the family identifier
-        and optional backend-specific ``parameters``. The mapping is not
-        modified; arbitrary calculator keyword values are passed through.
+    identifier : str
+        Model family: dpa4, dpa4c, mace, mattersim, sevennet or nep89.
+    model : str or pathlib.Path
+        Checkpoint or exported-model path. Relative paths use the current
+        working directory; the bundle runner supplies an absolute path.
+    parameters : dict[str, Any]
+        Backend-specific calculator keyword arguments from MLFFSpec.
+        Values may include nested backend settings. A deep copy is passed
+        to the backend so constructing a calculator cannot modify the
+        stored specification. Device selection follows the rules below.
 
     Returns
     -------
@@ -51,9 +60,9 @@ def build_calculator(config: dict[str, Any]) -> Calculator:
     """
     from temper.utils.cuda import torch_device, require_cuda
 
-    family = config["calculator"]["identifier"]
-    parameters = dict(config["calculator"].get("parameters", {}))
-    model = config["model"]
+    family = identifier
+    parameters = deepcopy(parameters)
+    model = str(model)
     if family in {"dpa4", "dpa4c"}:
         os.environ["DEVICE"] = torch_device()
         from deepmd.calculator import DP

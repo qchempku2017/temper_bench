@@ -261,7 +261,7 @@ class MLFFSpec(ManagedIdentityModel):
         "pretrained_model": _model_identity,
     }
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _MLFF_SPEC_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-spec.v3"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-spec.v1"
     _IDENTITY_LABEL: ClassVar[str] = "MLFF specification"
 
     mlff_type: str = Field(min_length=1)

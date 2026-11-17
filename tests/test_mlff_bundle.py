@@ -8,9 +8,11 @@ import json
 import shutil
 from pathlib import Path
 
+from temper.mlff.pipeline.runner import make_test_manifests
+
 import pytest
 from ase.io import write
-from monty.serialization import dumpfn, loadfn
+
 from ruamel.yaml import YAML
 
 from temper.mlff.spec_builders import DPA4SpecBuilder
@@ -92,8 +94,9 @@ def test_bundle_identity_and_monty_round_trip(
     assert first.mlff_train_bundle_id == repeated.mlff_train_bundle_id
 
     path = tmp_path / "bundle.json"
-    dumpfn(first, path, indent=2)
-    assert loadfn(path) == first
+    first.to_json_file(path)
+    assert MLFFTrainBundle.from_json_file(path) == first
+    assert json.loads(path.read_text(encoding="utf-8")) == first.to_dict()
 
 
 def test_finetune_requires_training_parameters(
@@ -111,9 +114,22 @@ def test_finetune_requires_training_parameters(
 def test_zeroshot_writes_fixed_copied_inputs(
     family: str,
     tmp_path: Path,
-    zeroshot_training_unit,
-    mlff_spec_factory,
+    zeroshot_training_unit: TrainingUnit,
+    mlff_spec_factory: Callable[..., MLFFSpec],
 ) -> None:
+    """Write portable test-only inputs and derive pending test manifests.
+
+    Parameters
+    ----------
+    family : str
+        Backend family whose portable layout is checked.
+    tmp_path : Path
+        Destination for the copied bundle inputs.
+    zeroshot_training_unit : TrainingUnit
+        Test-only dataset descriptions.
+    mlff_spec_factory : Callable
+        Creates model specifications without importing backend packages.
+    """
     bundle = MLFFTrainBundle(
         training_unit=zeroshot_training_unit,
         mlff_spec=mlff_spec_factory(family, with_training=False),
@@ -122,7 +138,7 @@ def test_zeroshot_writes_fixed_copied_inputs(
     result = write_prepared(bundle.write_submit_folder(target)[0])
     assert result == target.absolute()
     assert (target / "run.sh").is_file()
-    assert (target / "testing_inputs/test_config.json").is_file()
+    assert not (target / "testing_inputs/test_config.json").exists()
     assert (target / "bundle.json").is_file()
     assert not (target / "runtime").exists()
     assert not (target / "bundle_manifest.json").exists()
@@ -132,20 +148,24 @@ def test_zeroshot_writes_fixed_copied_inputs(
         assert copied.is_file()
         assert not copied.is_symlink()
 
-    config = json.loads(
-        (target / "testing_inputs/test_config.json").read_text()
+    packaged = MLFFTrainBundle.from_json_file(target / "bundle.json")
+    tests = make_test_manifests(packaged, bundle_root=target)
+    assert packaged.mlff_train_bundle_id == bundle.mlff_train_bundle_id
+    assert [entry.source_filename for entry in tests] == list(
+        zeroshot_training_unit.test_sets
     )
-    assert config["schema_version"] == 2
-    assert config["calculator"]["parameters"] == {}
-    assert config["test_datasets"][0]["properties"] == [
+    assert packaged.mlff_spec.testing_parameters == {}
+    assert tests[0].requested_properties == (
         "energy",
         "forces",
         "stress",
-    ]
-    assert "device" not in json.dumps(config)
+    )
+    assert all(test.status == "pending" for test in tests)
+    assert "device" not in packaged.mlff_spec.testing_parameters
     assert "training" not in training_script(target).lower()
     if family == "nep89":
-        assert {item["name"] for item in config["package_requirements"]} == {
+        assert {item.name for item in packaged.mlff_spec.implementations
+                if item.kind == "python_distribution"} == {
             "calorine"
         }
 
@@ -169,16 +189,12 @@ def test_finetune_writes_native_training_and_automatic_stress(
     assert (target / "training_inputs" / "train.extxyz").is_file()
     assert (target / "training_inputs" / "validation.extxyz").is_file()
     if family in {"mace", "mattersim", "sevennet", "nep89"}:
-        testing = json.loads(
-            (target / "testing_inputs/test_config.json").read_text()
-        )
-        assert Path(testing["model"]).name.startswith("finetuned_")
+        packaged = MLFFTrainBundle.from_json_file(target / "bundle.json")
+        assert Path(packaged.files.training_output_files["trained_model"]).name.startswith("finetuned_")
     if family == "nep89":
-        test_config = json.loads(
-            (target / "testing_inputs/test_config.json").read_text()
-        )
         assert {
-            item["name"] for item in test_config["package_requirements"]
+            item.name for item in packaged.mlff_spec.implementations
+            if item.kind == "python_distribution"
         } == {"torchnep", "calorine"}
 
     if family in {"dpa4", "dpa4c"}:
@@ -256,20 +272,19 @@ def test_no_stress_is_omitted_from_training_and_each_test(
 
     target = write_prepared(
         MLFFTrainBundle(
-            training_unit=finetune_training_unit,
+            training_unit=finetune_training_unit.copy_with_refreshed_dataset_hashes(),
             mlff_spec=mlff_spec_factory("mace"),
         ).write_submit_folder(tmp_path / "no-stress")[0]
     )
     training = YAML(typ="safe").load(
         (target / "training_inputs" / "mace.yaml").read_text()
     )
-    testing = json.loads(
-        (target / "testing_inputs/test_config.json").read_text()
-    )
+    packaged = MLFFTrainBundle.from_json_file(target / "bundle.json")
+    testing = make_test_manifests(packaged, bundle_root=target)
     assert training["stress_weight"] == 0.0
     assert all(
-        dataset["properties"] == ["energy", "forces"]
-        for dataset in testing["test_datasets"]
+        dataset.requested_properties == ("energy", "forces")
+        for dataset in testing
     )
 
 
@@ -302,7 +317,7 @@ def test_deepmd_embeds_matching_json_and_full_element_type_map(
 
     target = write_prepared(
         MLFFTrainBundle(
-            training_unit=finetune_training_unit,
+            training_unit=finetune_training_unit.copy_with_refreshed_dataset_hashes(),
             mlff_spec=spec,
         ).write_submit_folder(tmp_path / "deepmd-template")[0]
     )
@@ -355,7 +370,7 @@ def test_nep_without_stress_disables_virial_losses(
 
     target = write_prepared(
         MLFFTrainBundle(
-            training_unit=finetune_training_unit,
+            training_unit=finetune_training_unit.copy_with_refreshed_dataset_hashes(),
             mlff_spec=mlff_spec_factory("nep89"),
         ).write_submit_folder(tmp_path / "nep-no-stress")[0]
     )
@@ -499,7 +514,7 @@ def test_mixed_stress_within_dataset_is_rejected(
     )
     target = tmp_path / "mixed"
     bundle = MLFFTrainBundle(
-        training_unit=zeroshot_training_unit,
+        training_unit=zeroshot_training_unit.copy_with_refreshed_dataset_hashes(),
         mlff_spec=mlff_spec_factory("mace", with_training=False),
     )
     with pytest.raises(ValueError, match="mixes frames"):
@@ -524,7 +539,7 @@ def test_train_validation_stress_disagreement_is_rejected(
     with pytest.raises(ValueError, match="disagree"):
         write_prepared(
             MLFFTrainBundle(
-                training_unit=finetune_training_unit,
+                training_unit=finetune_training_unit.copy_with_refreshed_dataset_hashes(),
                 mlff_spec=mlff_spec_factory("mace"),
             ).write_submit_folder(tmp_path / "mismatch")[0]
         )
@@ -565,13 +580,14 @@ def test_writer_uses_configured_submit_directories(
         ).write_submit_folder(tmp_path / "custom-layout")[0]
     )
 
-    assert (target / "inputs" / "datasets" / "test_000.extxyz").is_file()
+    assert (target / "inputs" / "datasets" / "test_own.extxyz").is_file()
     assert (target / "inputs" / "models" / "mace.model").is_file()
     assert not (target / "runtime").exists()
-    config = json.loads(
-        (target / "inputs/datasets/test_config.json").read_text()
-    )
-    assert config["summary_output"] == "testing_outputs/summary.json"
+    packaged = MLFFTrainBundle.from_json_file(target / "bundle.json")
+    assert packaged.files.result_manifest == "results.json"
+    tests = make_test_manifests(packaged, bundle_root=target)
+    assert tests[0].execution_input_path == "inputs/datasets/test_own.extxyz"
+    assert "config" not in packaged.files.test_input_files
 
 
 def test_temporary_submit_folder_is_caller_owned(
@@ -653,7 +669,7 @@ def test_writer_uses_spec_filenames_without_rendering(
     )
     assert (target / "pretrained_models/custom.model").is_file()
     assert packaged.files.pretrained_model == "pretrained_models/custom.model"
-    assert not (target / packaged.files.test_input_files["config"]).exists()
+    assert "config" not in packaged.files.test_input_files
     assert not (
         target / packaged.files.training_input_files["config"]
     ).exists()

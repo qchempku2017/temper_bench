@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 
-from temper.job_management.collection import (
+from temper.job_management.download_utils import (
     get_download_files,
     validate_result_path,
 )
@@ -38,9 +38,8 @@ class LocalBackend:
         Mutable attempt record. Submission stores a durable launch
         intent.
     root : Path
-        Absolute attempt directory containing run.sh. During execution
-        it also contains bundle.json; completion cleanup removes that
-        temporary bundle.
+        Absolute attempt directory containing run.sh and bundle.json.
+        Completion cleanup retains bundle.json for result loading.
     checkpoint : Callable[[], None]
         Persist record changes before starting the supervisor.
 
@@ -205,7 +204,7 @@ class LocalBackend:
             result = json.loads(exit_path.read_text(encoding="utf-8"))
             if result.get("cancelled"):
                 return "cancelled"
-            return "success" if result["returncode"] == 0 else "failed"
+            return "completed" if result["returncode"] == 0 else "failed"
         heartbeat = self.root / ".local-heartbeat"
         if heartbeat.exists() and time.time() - heartbeat.stat().st_mtime < 30:
             return "running"

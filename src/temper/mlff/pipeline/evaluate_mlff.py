@@ -4,31 +4,24 @@ Calculator."""
 from __future__ import annotations
 
 from temper.mlff.pipeline.calculators import build_calculator
-from temper.schemas.mlff_test_result import MLFFTestResult
+from temper.schemas.mlff_experiment_result import MLFFExperimentManifest, MLFFTestManifest
+from temper.results_loading.manifest_io import load_bundle_from_manifest
+from temper.utils.file_paths import resolve_path_in_bundle
 from temper._version import __version__
+from temper.utils.file_hashing import file_sha256
 
-import json
+from collections.abc import Iterable
 import logging
 import os
 import time
 from importlib import metadata
-from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from pathlib import Path
 
 import numpy as np
+from ase.calculators.calculator import Calculator
 from ase.io import iread
 
 logger = logging.getLogger(__name__)
-
-
-def _write_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_text(
-        json.dumps(value, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    os.replace(temporary, path)
 
 
 def _write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
@@ -40,11 +33,10 @@ def _write_npz(path: Path, arrays: dict[str, np.ndarray]) -> None:
 
 
 def _installed_versions(
-    requirements: list[dict[str, str]],
+    package_names: Iterable[str],
 ) -> dict[str, str | None]:
     versions: dict[str, str | None] = {"temper-bench": __version__}
-    for requirement in requirements:
-        name = requirement["name"]
+    for name in package_names:
         try:
             versions[name] = metadata.version(name)
         except metadata.PackageNotFoundError:
@@ -57,45 +49,24 @@ def _installed_versions(
     return versions
 
 
-def _bundle_path(bundle_root: Path, value: str, *, label: str) -> Path:
-    """Resolve a portable lexical path below the submit-directory
-    root."""
-    if not isinstance(value, str) or not value or "\\" in value:
-        raise ValueError(f"Invalid {label}: {value!r}.")
-    posix = PurePosixPath(value)
-    windows = PureWindowsPath(value)
-    if (
-        posix.is_absolute()
-        or windows.is_absolute()
-        or windows.drive
-        or any(part in {"", ".", ".."} for part in posix.parts)
-        or str(posix) != value
-    ):
-        raise ValueError(
-            f"{label.capitalize()} escapes bundle root: {value!r}."
-        )
-    return bundle_root.joinpath(*posix.parts)
-
-
 def _evaluate_dataset(
     *,
     bundle_root: Path,
-    dataset: dict[str, Any],
-    calculator: Any,
-    common_metadata: dict[str, Any],
-) -> dict[str, Any]:
-    logger.info("Evaluating dataset %s", dataset["id"])
+    calculator: Calculator,
+    manifest: MLFFTestManifest,
+) -> None:
+    """Write predictions and fill one test's result fields after success."""
+    logger.info("Evaluating dataset %s", manifest.dataset_id)
     started = time.perf_counter()
-    properties = list(dataset["properties"])
+    properties = manifest.requested_properties
     if "energy" not in properties or "forces" not in properties:
         raise ValueError(
-            f"Dataset {dataset['id']} requires energy and forces."
+            f"Dataset {manifest.dataset_id} requires energy and forces."
         )
-    source = _bundle_path(
-        bundle_root,
-        dataset["path"],
-        label="test dataset",
-    )
+    source = resolve_path_in_bundle(bundle_root, manifest.execution_input_path)
+    dataset_hash = file_sha256(source)
+    if manifest.reference_sha256 != dataset_hash:
+        raise ValueError(f"Test dataset bytes changed: {manifest.dataset_id}")
 
     energies: list[float] = []
     forces: list[np.ndarray] = []
@@ -131,7 +102,7 @@ def _evaluate_dataset(
                 stresses.append(stress)
         except Exception as error:
             raise RuntimeError(
-                f"Evaluation failed for {dataset['id']} frame {frame_index}:"
+                f"Evaluation failed for {manifest.dataset_id} frame {frame_index}:"
                 f" {error}"
             ) from error
         offsets.append(offsets[-1] + len(atoms))
@@ -155,110 +126,98 @@ def _evaluate_dataset(
     if any(array.dtype == object for array in arrays.values()):
         raise RuntimeError("Prediction output must not contain object arrays.")
 
-    prediction_path = _bundle_path(
-        bundle_root,
-        dataset["output"],
-        label="prediction output",
-    )
-    metadata_path = _bundle_path(
-        bundle_root,
-        dataset["metadata_output"],
-        label="prediction metadata output",
-    )
+    prediction_path = resolve_path_in_bundle(bundle_root, manifest.prediction_path)
+    wall_time = time.perf_counter() - started
     _write_npz(prediction_path, arrays)
     logger.debug("Wrote predictions to %s", prediction_path)
-    wall_time = time.perf_counter() - started
-    result_metadata = MLFFTestResult.from_dict(
-        {
-            **common_metadata,
-            "dataset_id": dataset["id"],
-            "source_domain": dataset["source_domain"],
-            "source_filename": dataset["source_filename"],
-            "submit_path": dataset["path"],
-            "number_of_frames": len(energies),
-            "total_atoms": offsets[-1],
-            "requested_properties": properties,
-            "units": {
-                "energy": "eV",
-                "forces": "eV/Angstrom",
-                "stress": "eV/Angstrom^3" if "stress" in properties else None,
-            },
-            "wall_time_seconds": wall_time,
-        }
-    )
-    _write_json(metadata_path, result_metadata.as_dict())
-    return {
-        "dataset_id": dataset["id"],
-        "prediction_file": dataset["output"],
-        "metadata_file": dataset["metadata_output"],
-        "number_of_frames": len(energies),
-        "total_atoms": offsets[-1],
-        "wall_time_seconds": wall_time,
-    }
+    manifest.prediction_sha256 = file_sha256(prediction_path)
+    manifest.wall_time_seconds = wall_time
+    manifest.status = "completed"
 
 
-def run_test(config_path: str | Path, *, bundle_root: str | Path) -> None:
-    """Evaluate every configured dataset and write standardized
-    predictions.
+def run_test(
+    manifest: MLFFExperimentManifest, *, bundle_root: str | Path,
+) -> None:
+    """Evaluate the manifest's datasets using its referenced bundle settings.
 
     Parameters
     ----------
-    config_path : str or pathlib.Path
-        Test configuration file, normally
-        testing_inputs/test_config.json.
+    manifest : MLFFExperimentManifest
+        Running experiment manifest created by the pipeline runner. This
+        function updates its test entries and execution status in place and
+        saves progress to bundle_root/results.json after each dataset. Training
+        status and duration are preserved. Test descriptions, units and measured
+        evaluation durations are stored here; installed package versions are
+        recorded once for all tests. No manifest is loaded or created here.
+        Each call evaluates all entries again, clearing a test's previous
+        checksum and duration when that test starts. The referenced bundle
+        supplies shared calculator settings, package requirements, and model
+        selection: pretrained weights for zero-shot, or the trained model
+        (including any temporary evaluation export) for fine-tuning.
     bundle_root : str or pathlib.Path
-        Directory containing bundle.json. Every path recorded in the
-        test configuration is resolved from here, regardless of where
-        the configuration itself is stored or the process's working
-        directory.
+        Directory containing the manifest's referenced bundle, model files,
+        and prediction outputs. Expands ~ and resolves relative paths against
+        the current working directory. Copied test inputs are read relative
+        to bundle_root using each test's execution_input_path. Their checksums
+        are verified before prediction; original workstation paths are never used.
 
     Raises
     ------
     ValueError
-        If the configuration or any submit-relative path is invalid.
+        If a path is invalid, the bundle or reference bytes have changed,
+        or test descriptions do not match the referenced bundle.
     RuntimeError
         If a Calculator fails on a requested dataset property.
+    ImportError
+        If the selected calculator backend is not installed.
+    OSError
+        If required input files cannot be read or predictions and manifest
+        updates cannot be written.
+
+    Notes
+    -----
+    Schema version 1 writes numerical arrays only to NPZ files and records
+    their descriptions in the single root results.json.
+    Exact exported filenames are preserved in test manifests;
+    dataset identifiers are the original test filenames.
+    Fine-tuning callers must finish training and prepare any required
+    evaluation export first; run_pipeline performs both steps and cleans
+    up the temporary export afterward.
     """
-    config_file = Path(config_path).expanduser().resolve()
-    config = json.loads(config_file.read_text(encoding="utf-8"))
-    if config.get("schema_version") != 2:
-        raise ValueError("Unsupported test_config schema_version.")
     bundle_root = Path(bundle_root).expanduser().resolve()
-    calculator_config = {
-        **config,
-        "model": str(
-            _bundle_path(bundle_root, config["model"], label="model")
-        ),
-    }
-    calculator = build_calculator(calculator_config)
-    package_versions = _installed_versions(
-        config.get("package_requirements", [])
+    bundle = load_bundle_from_manifest(manifest, bundle_root)
+    files = bundle.files
+    assert files is not None
+    model_path = (
+        files.evaluation_model or files.training_output_files["trained_model"]
+        if bundle.unit_type == "finetune"
+        else files.pretrained_model
     )
-    common_metadata = {
-        "schema_version": 1,
-        "calculator_identifier": config["calculator"]["identifier"],
-        "model": config["model"],
-        "package_versions": package_versions,
-    }
-    started = time.perf_counter()
-    results = [
-        _evaluate_dataset(
-            bundle_root=bundle_root,
-            dataset=dataset,
-            calculator=calculator,
-            common_metadata=common_metadata,
-        )
-        for dataset in config["test_datasets"]
-    ]
-    _write_json(
-        _bundle_path(
-            bundle_root,
-            config["summary_output"],
-            label="summary output",
-        ),
-        {
-            **common_metadata,
-            "datasets": results,
-            "wall_time_seconds": time.perf_counter() - started,
-        },
+    calculator = build_calculator(
+        identifier=bundle.mlff_spec.mlff_type,
+        model=resolve_path_in_bundle(bundle_root, model_path),
+        parameters=bundle.mlff_spec.testing_parameters,
     )
+    manifest.package_versions = _installed_versions(
+        item.name for item in bundle.mlff_spec.implementations
+        if item.kind == "python_distribution"
+    )
+    manifest.status = "running"
+    for test in manifest.test_manifests:
+        test.status = "pending"
+        test.prediction_sha256 = None
+        test.wall_time_seconds = None
+        try:
+            _evaluate_dataset(
+                bundle_root=bundle_root,
+                calculator=calculator, manifest=test,
+            )
+            # Save each completed test in case execution stops abruptly later.
+            manifest.to_json_file(bundle_root / "results.json")
+        except BaseException:
+            test.status = "failed"
+            manifest.status = "failed"
+            manifest.to_json_file(bundle_root / "results.json")
+            raise
+    manifest.status = "completed"
+    manifest.to_json_file(bundle_root / "results.json")

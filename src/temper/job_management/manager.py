@@ -15,7 +15,9 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
-from temper.job_management.collection import get_download_files, verify_results
+from temper.job_management.download_utils import (
+    required_result_files, verify_results, verify_result_manifest,
+)
 from temper.job_management.errors import SubmissionRejected
 from temper.job_management.input_utils import (
     get_dataset_and_model_hashes,
@@ -23,7 +25,7 @@ from temper.job_management.input_utils import (
     verify_dataset_and_model_hashes,
 )
 from temper.job_management.paths import bundle_directory, next_attempt
-from temper.utils.file_writing import write_json_atomically, store_lock
+from temper.utils.file_writing import store_lock
 from temper.job_management.store import JobStore
 from temper.job_management.schemas.records import (
     ComputationStatus,
@@ -377,8 +379,8 @@ class JobManager:
             ):
                 identity = str(path)
                 try:
-                    bundle = MLFFTrainBundle.model_validate_json(
-                        path.read_text(encoding="utf-8"),
+                    bundle = MLFFTrainBundle.from_json_file(
+                        path,
                         context={"verify_files": False},
                     )
                     identity = str(bundle.mlff_train_bundle_id)
@@ -413,7 +415,7 @@ class JobManager:
                     outcomes.append(
                         SubmissionDecision(
                             bundle_id=identity,
-                            action="error",
+                            action="operation_failed",
                             reason=(
                                 f"{type(error).__name__}: check bundle inputs"
                                 " and saved history."
@@ -437,7 +439,7 @@ class JobManager:
             "submitted", "submitting", "uncertain"
         } and not cloud_draft:
             return
-        if record.computation_status in {"success", "failed", "cancelled"}:
+        if record.computation_status in {"completed", "failed", "cancelled"}:
             return
         backend = None
         try:
@@ -533,11 +535,11 @@ class JobManager:
             ):
                 self._cancel_unsubmitted(record)
             self._observe_submission(record)
-        if any(r.computation_status == "success" for r in history):
+        if any(r.computation_status == "completed" for r in history):
             if any(
                 r.submission_status != "rejected"
                 and r.computation_status not in {
-                    "success", "failed", "cancelled"
+                    "completed", "failed", "cancelled"
                 }
                 for r in history
             ):
@@ -546,17 +548,17 @@ class JobManager:
                     " inspect the other attempts. No new launch."
                 )
                 return decision
-            decision.action = "succeeded"
+            decision.action = "completed"
             decision.reason = "Already succeeded; no new calculation."
             if not preview:
                 for record in history:
                     if (
-                        record.computation_status == "success"
-                        and record.cleanup_status != "complete"
+                        record.computation_status == "completed"
+                        and record.cleanup_status != "completed"
                     ):
                         self._synchronize_one(record, False, False)
                         if record.error:
-                            decision.action = "error"
+                            decision.action = "operation_failed"
                             decision.reason = (
                                 "Calculation succeeded; collection or cleanup"
                                 " needs another synchronization."
@@ -638,7 +640,7 @@ class JobManager:
                         record.submission_status == "submitted"
                         and not record.error
                     )
-                    else "error"
+                    else "operation_failed"
                 )
                 if record.error:
                     decision.reason = record.error
@@ -681,7 +683,7 @@ class JobManager:
         # Check inputs before deleting any previous diagnostics or remote work.
         MLFFTrainBundle.model_validate(bundle.model_dump())
         for record in history:
-            if record.cleanup_status == "complete":
+            if record.cleanup_status == "completed":
                 continue
             if record.submission_status == "rejected":
                 backend = self._connect(record)
@@ -690,12 +692,12 @@ class JobManager:
                 finally:
                     backend.close()
                 record.collection_status = "verified"
-                record.cleanup_status = "complete"
+                record.cleanup_status = "completed"
                 record.error = None
                 self.store.save(record, "rejected_submission_retired")
             else:
                 self._synchronize_one(record, False, False)
-            if record.error or record.cleanup_status != "complete":
+            if record.error or record.cleanup_status != "completed":
                 decision.action = "blocked"
                 decision.reason = (
                     "Previous results could not be collected or cleaned;"
@@ -708,7 +710,7 @@ class JobManager:
         decision.action = (
             "submitted"
             if attempt.submission_status == "submitted" and not attempt.error
-            else "error"
+            else "operation_failed"
         )
         decision.reason = (
             "New attempt submitted."
@@ -824,7 +826,7 @@ class JobManager:
             raise ValueError("Watch interval must be positive.")
         identities = {
             d.bundle_id for d in decisions
-            if d.action in {"submitted", "resumed", "monitor", "succeeded"}
+            if d.action in {"submitted", "resumed", "monitor", "completed"}
         }
         # Freeze the attempts being watched. Later launches and unresolved
         # historical submissions must not keep this invocation alive forever.
@@ -834,7 +836,7 @@ class JobManager:
                 if r.bundle_id in identities
                 and r.abandoned_at is None
                 and r.submission_status == "submitted"
-                and r.cleanup_status != "complete"
+                and r.cleanup_status != "completed"
             }
         while pending:
             with store_lock(self.store.root):
@@ -845,7 +847,7 @@ class JobManager:
                         pending.remove(record.attempt_folder_name)
                         continue
                     self._synchronize_one(record, False, False)
-                    if record.cleanup_status == "complete":
+                    if record.cleanup_status == "completed":
                         pending.remove(record.attempt_folder_name)
             if pending:
                 time.sleep(interval)
@@ -872,13 +874,12 @@ class JobManager:
         JobRecord
             Submitted attempt, or a recoverable attempt containing an
             operation error. Calculation failures are never retried
-            automatically. After confirmed remote submission, the local
-            attempt's bundle.json is removed; its file locations remain
-            in the shared bundle. Local execution retains bundle.json
-            until completion cleanup. A single bundle is kept in the
-            parent bundle directory and referenced by relative path from
-            each job record. It must remain available and keep the same
-            bundle identity while those attempts are retained.
+            automatically. Each attempt retains its packaged bundle.json
+            for result loading. The parent bundle is referenced by relative
+            path from each job record. It must remain available and keep the
+            same bundle identity while those attempts are retained. Copied
+            input datasets and weights are removed after confirmed remote
+            upload, or after completion for local execution.
 
         Raises
         ------
@@ -898,7 +899,7 @@ class JobManager:
         bundle = MLFFTrainBundle.model_validate(bundle.model_dump())
         if not bundle.training_unit.dataset_sha256:
             raise ValueError(
-                "Legacy dataset identity: run job refresh_bundle_identity"
+                "Dataset checksums missing: run job refresh_bundle_identity"
                 " before submission."
             )
         bundle.training_unit.root_path = (
@@ -943,9 +944,7 @@ class JobManager:
         directory.mkdir(parents=True, exist_ok=True)
         shared = directory / "bundle.json"
         if shared.exists():
-            saved = MLFFTrainBundle.model_validate_json(
-                shared.read_text(encoding="utf-8")
-            )
+            saved = MLFFTrainBundle.from_json_file(shared)
             if str(saved.mlff_train_bundle_id) != identity:
                 raise ValueError(
                     "Existing shared bundle has a different bundle ID."
@@ -953,11 +952,11 @@ class JobManager:
             bundle = saved
         else:
             bundle.files = None
-            write_json_atomically(shared, bundle.model_dump(mode="json"))
+            bundle.to_json_file(shared)
         target = next_attempt(directory)
         root, packaged = bundle.write_submit_folder(target)
         if bundle.files is None:
-            write_json_atomically(shared, packaged.model_dump(mode="json"))
+            packaged.to_json_file(shared)
         record = JobRecord(
             bundle_id=identity,
             attempt_folder_name=root.relative_to(self.store.root).as_posix(),
@@ -975,7 +974,7 @@ class JobManager:
             record for record in records
             if record.bundle_id == identity and record.abandoned_at is None
         ]
-        if any(record.computation_status == "success" for record in previous):
+        if any(record.computation_status == "completed" for record in previous):
             return (
                 "Bundle already succeeded; only changed scientific content"
                 " permits a new submission."
@@ -985,7 +984,7 @@ class JobManager:
                 record.submission_status != "rejected"
                 and record.computation_status not in {"failed", "cancelled"}
             )
-            or record.cleanup_status != "complete"
+            or record.cleanup_status != "completed"
             for record in previous
         ):
             return (
@@ -1029,8 +1028,6 @@ class JobManager:
             record.computation_status = "waiting"
             record.error = None
             self.store.save(record, "submitted")
-            if record.resource["backend"] != "Local":
-                self._remove_bundle_copy(record)
         except Exception as error:
             if record.submission_status == "submitting":
                 record.submission_status = (
@@ -1062,15 +1059,6 @@ class JobManager:
                 ):
                     path.unlink()
 
-    def _remove_bundle_copy(self, record: JobRecord) -> None:
-        """Remove the temporary copy once the shared bundle can serve
-        the attempt."""
-        if record.abandoned_at is not None:
-            return
-        root = self.store.path(record)
-        load_bundle(record, root, require_packaged=True)
-        (root / "bundle.json").unlink(missing_ok=True)
-
     def _error(
         self, record: JobRecord, error: Exception, *,
         update_markers: bool = True,
@@ -1084,7 +1072,7 @@ class JobManager:
             " retry synchronization or inspect the remote resource."
         )
         self.store.save(
-            record, "operation_error", update_markers=update_markers,
+            record, "operation_failed", update_markers=update_markers,
         )
 
     def synchronize(
@@ -1121,9 +1109,17 @@ class JobManager:
 
         Notes
         -----
-        Confirmed remote submissions no longer need a local bundle.json;
-        it is removed even when only refreshing status. For local
-        execution, that file is retained until completion cleanup.
+        Each attempt retains bundle.json for later result loading.
+        Collection downloads the runner's results.json, preserving each original
+        test filename, measured results and available training time. Collection
+        verifies the settings and predictions without rewriting results.json
+        or copying reference datasets. Users must retain the original split
+        datasets for local analysis. Failed calculations retain
+        their manifest and diagnostics without requiring models or predictions.
+        A missing downloaded results.json records a collection error for any
+        computation state and prevents cleanup. A preexisting local manifest
+        does not substitute for a missing download. The computation state is
+        preserved because a missing file does not establish why it is absent.
         """
         with store_lock(self.store.root):
             records = self.list_attempts(
@@ -1133,11 +1129,7 @@ class JobManager:
                 if record.abandoned_at is not None:
                     continue
                 self.store.repair_markers(record)
-                if record.cleanup_status == "complete":
-                    try:
-                        self._remove_bundle_copy(record)
-                    except Exception as error:
-                        self._error(record, error)
+                if record.cleanup_status == "completed":
                     continue
                 self._synchronize_one(record, refresh_only, download_only)
             return records
@@ -1163,10 +1155,8 @@ class JobManager:
         backend = None
         try:
             backend = self._connect(record)
-            if record.resource["backend"] != "Local":
-                self._remove_bundle_copy(record)
             if record.computation_status not in {
-                "success",
+                "completed",
                 "failed",
                 "cancelled",
             }:
@@ -1185,7 +1175,7 @@ class JobManager:
             if refresh_only:
                 return
             if record.cancel_requested and record.computation_status not in {
-                "success",
+                "completed",
                 "failed",
                 "cancelled",
             }:
@@ -1193,30 +1183,48 @@ class JobManager:
                 self.store.save(record, "cancellation_requested")
                 return
             if record.computation_status not in {
-                "success",
+                "completed",
                 "failed",
                 "cancelled",
             }:
                 return
             root = self.store.path(record)
             bundle = load_bundle(record, root, require_packaged=True)
-            _, required = get_download_files(bundle)
-            required = (
-                required if record.computation_status == "success" else []
-            )
             if record.collection_status != "verified":
                 record.downloaded_file_hashes = backend.collect()
+                if "results.json" not in record.downloaded_file_hashes:
+                    record.error = (
+                        "Required results.json was not downloaded. Collection "
+                        "remains unverified; remote files and logs were retained."
+                    )
+                    self.store.save(record, "operation_failed")
+                    return
+                required = required_result_files(
+                    bundle,
+                    successful=record.computation_status == "completed",
+                )
                 verify_results(root, record.downloaded_file_hashes, required)
+                verify_result_manifest(
+                    root / "results.json",
+                    successful=record.computation_status == "completed",
+                )
                 record.collection_status = "verified"
                 record.error = None
                 self.store.save(record, "collected_and_verified")
             if not download_only:
+                required = required_result_files(
+                    bundle,
+                    successful=record.computation_status == "completed",
+                )
                 verify_results(root, record.downloaded_file_hashes, required)
+                verify_result_manifest(
+                    root / "results.json",
+                    successful=record.computation_status == "completed",
+                )
                 backend.cleanup()
-                self._remove_bundle_copy(record)
-                record.cleanup_status = "complete"
+                record.cleanup_status = "completed"
                 record.error = None
-                self.store.save(record, "remote_cleanup_complete")
+                self.store.save(record, "remote_cleanup_completed")
         except Exception as error:
             self._error(record, error)
         finally:
@@ -1372,14 +1380,14 @@ class JobManager:
                         replacement_resource
                         or RemoteResource.model_validate(record.resource)
                     )
-                    if rejected and record.cleanup_status != "complete":
+                    if rejected and record.cleanup_status != "completed":
                         backend = self._connect(record)
                         try:
                             backend.cleanup()
                         finally:
                             backend.close()
                         record.collection_status = "verified"
-                        record.cleanup_status = "complete"
+                        record.cleanup_status = "completed"
                         self.store.save(record, "rejected_submission_retired")
                     attempt = self._submit(bundle, profile)
                     outcomes.append(
@@ -1395,7 +1403,7 @@ class JobManager:
                     outcomes.append(
                         {
                             "bundle_id": identity,
-                            "action": "error",
+                            "action": "operation_failed",
                             "reason": (
                                 type(error).__name__
                                 + ": input validation, cleanup or submission"
@@ -1428,7 +1436,7 @@ class JobManager:
                 if record.abandoned_at is not None:
                     continue
                 if record.computation_status in {
-                    "success",
+                    "completed",
                     "failed",
                     "cancelled",
                 }:
@@ -1463,14 +1471,13 @@ class JobManager:
                 backend.cleanup()
             record.computation_status = "cancelled"
             record.collection_status = "verified"
-            record.cleanup_status = "complete"
+            record.cleanup_status = "completed"
             record.error = None
             self.store.save(record, "cancelled_before_launch")
             bundle = load_bundle(
                 record, self.store.path(record), require_packaged=True
             )
             self._remove_copies(record, bundle)
-            self._remove_bundle_copy(record)
         except Exception as error:
             self._error(record, error)
         finally:
@@ -1510,7 +1517,7 @@ class JobManager:
                     "submitted",
                     "rejected",
                 } or record.computation_status in {
-                    "success",
+                    "completed",
                     "failed",
                     "cancelled",
                 }:
@@ -1553,8 +1560,6 @@ class JobManager:
                         record.submission_status = "submitted"
                         record.error = None
                         self.store.save(record, "recovered_existing_job")
-                        if record.resource["backend"] != "Local":
-                            self._remove_bundle_copy(record)
                     else:
                         record.error = (
                             "No confirmed launch receipt; inspect the remote"
@@ -1621,13 +1626,13 @@ class JobManager:
                 " %d operational errors",
                 len(records),
                 sum(r.collection_status == "verified" for r in records),
-                sum(r.cleanup_status == "complete" for r in records),
+                sum(r.cleanup_status == "completed" for r in records),
                 sum(r.error is not None for r in records),
             )
             if all(
                 record.collection_status == "verified"
                 if keep_remote_files
-                else record.cleanup_status == "complete"
+                else record.cleanup_status == "completed"
                 for record in records
             ):
                 return

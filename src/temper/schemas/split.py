@@ -406,7 +406,7 @@ class SplitGroup(ManagedIdentityModel):
     never stored.
 
     ``split_id`` is a stored, system-managed UUIDv5 identity for the
-    complete persisted split definition. It is computed for legacy
+    complete persisted split definition. It is computed for newly constructed
     objects without an ID, verified once when an ID is loaded, and
     regenerated after validated reassignment of an identity-defining
     field.
@@ -442,12 +442,10 @@ class SplitGroup(ManagedIdentityModel):
             descriptor/entropy/device configuration used to generate the
             ``"quests"`` trajectory and to evaluate the entropy profile
             of every trajectory (including ``"random"``). ``None`` when
-            the schema was produced without any QUESTS evaluation (kept
-            for backward compatibility with schemas persisted before
-            this field was added).
+            the schema was produced without any QUESTS evaluation.
         split_id (UUID | None): Stored, system-managed identity.
         ``None`` is
-            accepted only as construction input for legacy records and
+            accepted as input when constructing a new split and
             is populated before a valid model is returned.
     """
 
@@ -472,7 +470,7 @@ class SplitGroup(ManagedIdentityModel):
         "extra_tested_groups": lambda groups: sorted(set(groups)),
     }
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _SPLIT_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.split-group.v2"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.split-group.v1"
     _IDENTITY_LABEL: ClassVar[str] = "split"
 
     domain: str

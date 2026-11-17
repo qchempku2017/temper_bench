@@ -2,8 +2,11 @@
 
 import json
 import logging
+from pathlib import Path
 from types import ModuleType
 import sys
+
+from temper.mlff.pipeline.runner import make_test_manifests
 
 import pytest
 from pydantic import ValidationError
@@ -17,6 +20,8 @@ from temper.mlff.pipeline.training_adapters import (
 )
 from temper.mlff.spec_builders.base import BaseSpecBuilder
 from temper.schemas.mlff_train_bundle import MLFFBundleFiles
+from temper.schemas.mlff_experiment_result import MLFFExperimentManifest
+from temper.utils.file_hashing import file_sha256
 
 
 @pytest.mark.parametrize("entrypoint", ["bundle", "writer", "function"])
@@ -39,9 +44,7 @@ def test_packaging_returns_independent_serialized_record(
         )
     else:
         target, packaged = write_submit_folder(bundle, tmp_path / "job")
-    assert packaged == MLFFTrainBundle.model_validate_json(
-        (target / "bundle.json").read_text()
-    )
+    assert packaged == MLFFTrainBundle.from_json_file(target / "bundle.json")
     assert packaged.mlff_train_bundle_id == bundle.mlff_train_bundle_id
     assert bundle.model_dump() == before
     packaged.mlff_spec.training_parameters["seed"] = 17
@@ -79,17 +82,10 @@ def test_manifest_matches_results_and_native_inputs(
     target, packaged = bundle.write_submit_folder(tmp_path / "job")
     files = packaged.files
     adapter = runner.prepare_bundle(target / "bundle.json")
-    config = packaged.make_test_config()
-    assert config["summary_output"] == files.test_output_files["summary"]
-    for dataset in config["test_datasets"]:
-        for suffix, key in (
-            ("predictions", "output"),
-            ("metadata", "metadata_output"),
-        ):
-            assert (
-                dataset[key]
-                == files.test_output_files[dataset["id"] + "_" + suffix]
-            )
+    tests = make_test_manifests(packaged, bundle_root=target)
+    assert files.result_manifest == "results.json"
+    for test in tests:
+        assert test.prediction_path == files.test_output_files[test.dataset_id]
     if finetune:
         assert (
             files.training_output_files["training_log"]
@@ -102,7 +98,7 @@ def test_manifest_matches_results_and_native_inputs(
             assert (
                 adapter.trained_model_path == "training_outputs/model.ckpt.pt"
             )
-            assert config["model"] == "training_outputs/evaluation.pt2"
+            assert files.evaluation_model == "training_outputs/evaluation.pt2"
             assert (
                 files.evaluation_model
                 not in files.training_output_files.values()
@@ -118,7 +114,7 @@ def test_manifest_matches_results_and_native_inputs(
         assert files.training_input_files == {}
         assert files.training_output_files == {}
         assert files.evaluation_model is None
-        assert config["model"] == files.pretrained_model
+        assert (target / files.pretrained_model).is_file()
         assert not (target / "training_inputs").exists()
         assert not (target / "training_outputs").exists()
 
@@ -201,13 +197,18 @@ def test_deepmd_freezes_for_evaluation_and_cleans_up(
         if failure == "freeze":
             raise RuntimeError("freeze failed")
 
-    def evaluate(path, *, bundle_root):
+    def evaluate(manifest: MLFFExperimentManifest, *, bundle_root: Path) -> None:
         assert bundle_root == target
         events.append("evaluate")
-        assert (target / json.loads(path.read_text())["model"]) == temporary
+        assert (target / packaged.files.evaluation_model) == temporary
         assert temporary.is_file()
         if failure == "evaluate":
             raise RuntimeError("evaluate failed")
+        for entry in manifest.test_manifests:
+            output = target / entry.prediction_path
+            output.write_bytes(b"predictions")
+            entry.status = "completed"
+            entry.prediction_sha256 = file_sha256(output)
 
     monkeypatch.setattr(adapter_type, "train", train)
     monkeypatch.setattr(deepmd.subprocess, "run", freeze)
@@ -244,9 +245,7 @@ def test_packaging_and_preparation_log_levels(
         for r in caplog.records
     )
     bundle_id = str(
-        MLFFTrainBundle.model_validate_json(
-            (target / "bundle.json").read_text()
-        ).mlff_train_bundle_id
+        MLFFTrainBundle.from_json_file(target / "bundle.json").mlff_train_bundle_id
     )
     assert all(
         bundle_id in r.message

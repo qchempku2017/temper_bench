@@ -11,6 +11,7 @@ from conftest import make_frame
 from temper.schemas.split import SplitGroup, TrainValSplitTrajectory
 from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
 from temper.schemas.frame_refrence import FrameReference
+from temper.utils.file_hashing import file_sha256
 from temper.splitting.io import (
     FrameReferenceResolver,
     build_export_filename,
@@ -140,7 +141,24 @@ def test_resolver_cache_preserves_reference_order_and_rejects_escapes(
 
 def test_export_writes_exact_named_train_validation_and_test_sets(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Export named datasets and hash shared files once during unit creation.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Isolated source and export directories.
+    monkeypatch : pytest.MonkeyPatch
+        Counts file hashes while the exporter constructs training units.
+    """
+    hashed_paths: list[Path] = []
+
+    def counted_hash(path: str | Path) -> str:
+        hashed_paths.append(Path(path))
+        return file_sha256(path)
+
+    monkeypatch.setattr("temper.schemas.train_unit.file_sha256", counted_hash)
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
     symbols = ["H", "He2", "Li3", "Be4", "B5", "C6", "N7", "O8", "F9", "Ne10"]
@@ -162,6 +180,20 @@ def test_export_writes_exact_named_train_validation_and_test_sets(
         write_extra_tests=False,
     )
     assert len(units) == 3
+    expected_paths = {
+        unit.resolve_local_dataset_path(name)
+        for unit in units
+        for name in (*unit.test_sets, unit.train_set, unit.val_set)
+        if name is not None
+    }
+    assert set(hashed_paths) == expected_paths
+    assert len(hashed_paths) == len(expected_paths)
+    for unit in units:
+        assert unit.dataset_sha256 == {
+            name: file_sha256(unit.resolve_local_dataset_path(name))
+            for name in (*unit.test_sets, unit.train_set, unit.val_set)
+            if name is not None
+        }
     assert [unit.unit_type for unit in units] == [
         "finetune",
         "finetune",
@@ -221,6 +253,15 @@ def test_export_includes_cross_tests_only_when_requested(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    """Export cross-group test files only when requested.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Records source reads and exports without changing their results.
+    tmp_path : Path
+        Temporary source and split-output directories.
+    """
     source = tmp_path / "source" / "demo"
     source.mkdir(parents=True)
     for filename, symbols in (("frames.extxyz", "H"), ("other.extxyz", "He2")):

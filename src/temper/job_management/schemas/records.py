@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Literal
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 def utc_now() -> str:
@@ -20,7 +20,7 @@ def utc_now() -> str:
 
 
 ComputationStatus = Literal[
-    "unknown", "waiting", "running", "success", "failed", "cancelled"
+    "unknown", "waiting", "running", "completed", "failed", "cancelled"
 ]
 
 
@@ -40,7 +40,7 @@ class JobRecord(BaseModel):
     Attributes
     ----------
     schema_version : int
-        Record format version, currently 3. Bundles and their file
+        Record format version, currently 1. Bundles and their file
         locations are stored in the shared bundle.json, not in this
         record.
     bundle_id : str
@@ -66,12 +66,13 @@ class JobRecord(BaseModel):
         submissions must be reconciled before another launch unless the user
         explicitly abandons the attempt and accepts possible duplication.
     computation_status : str
-        unknown, waiting, running, success, failed or cancelled.
+        unknown, waiting, running, completed, failed or cancelled. Completed
+        means the calculation succeeded; collection may still be pending.
     collection_status : str
         pending or verified. Verified means selected files passed hash
         checks.
     cleanup_status : str
-        pending or complete; remote deletion follows verified
+        pending or completed; remote deletion follows verified
         collection.
     dispatcher : dict[str, JsonValue]
         Saved DPDispatcher connection and scheduler state, with secrets
@@ -89,7 +90,6 @@ class JobRecord(BaseModel):
         attempt. None means it is still managed. An abandoned attempt remains
         in history but no longer prevents another submission. Abandonment
         does not cancel its remote job or prove that its files were cleaned.
-        Older records without this field are treated as still managed.
     abandoned_reason : str or None
         Explanation recorded when abandoning the attempt; absent until then.
         Original submission, calculation, collection, and cleanup statuses
@@ -108,7 +108,7 @@ class JobRecord(BaseModel):
 
     # Model is not frozen so that store can update status.
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
-    schema_version: Literal[3] = 3
+    schema_version: Literal[1] = 1
     bundle_id: str
     attempt_folder_name: str
     resource: dict[str, JsonValue]
@@ -124,12 +124,9 @@ class JobRecord(BaseModel):
     ] = "prepared"
     computation_status: ComputationStatus = "unknown"
     collection_status: Literal["pending", "verified"] = "pending"
-    cleanup_status: Literal["pending", "complete"] = "pending"
+    cleanup_status: Literal["pending", "completed"] = "pending"
     dispatcher: dict[str, JsonValue] = Field(default_factory=dict)
-    downloaded_file_hashes: dict[str, str] = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("downloaded_file_hashes", "manifest"),
-    )
+    downloaded_file_hashes: dict[str, str] = Field(default_factory=dict)
     cancel_requested: bool = False
     abandoned_at: str | None = None
     abandoned_reason: str | None = None

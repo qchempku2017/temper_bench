@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 import pytest
 
-from temper.job_management.collection import get_download_files, selected_file
+from temper.job_management.download_utils import get_download_files, is_selected_for_download
 from temper.job_management.input_utils import (
     get_dataset_and_model_hashes,
     load_bundle,
@@ -24,6 +24,8 @@ from temper.job_management.paths import bundle_root
 from temper.utils.file_writing import store_lock
 from temper.job_management.records import JobRecord
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
+from temper.mlff.pipeline.runner import create_result_manifest
+from copy import deepcopy
 from temper.job_management.resources import RemoteResource
 from temper.schemas.train_unit import TrainingUnit
 from temper.utils.file_hashing import copy_verified, file_sha256
@@ -34,7 +36,7 @@ def source_bundle(
     finetune_training_unit: TrainingUnit, mlff_spec_factory: Callable
 ) -> MLFFTrainBundle:
     return MLFFTrainBundle(
-        training_unit=finetune_training_unit.copy_with_dataset_hashes(),
+        training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("mace"),
     )
 
@@ -73,6 +75,9 @@ class FakeBackend:
         if self.control.get("upload_error"):
             raise ConnectionError("secret-password")
         self.record.dispatcher["uploaded"] = True
+        result = create_result_manifest(self.bundle, self.root)
+        self.control.setdefault("remote_results", {})[self.record.attempt_folder_name] = result
+        self.control.setdefault("remote_bundles", {})[self.record.attempt_folder_name] = (self.root / "bundle.json").read_bytes()
 
     def submit(self) -> None:
         self.control["submits"] += 1
@@ -98,21 +103,61 @@ class FakeBackend:
         return self.control["status"]
 
     def collect(self) -> dict[str, str]:
+        """Simulate downloaded diagnostics and runner-produced results.
+
+        Returns
+        -------
+        dict[str, str]
+            Written relative file paths mapped to SHA-256 checksums. Failed
+            and cancelled calculations include a failed manifest without
+            predictions; completed calculations include the required outputs
+            unless the missing_output control flag is set.
+
+        Raises
+        ------
+        ConnectionError
+            If the download_error control flag requests a transfer failure.
+        """
         self.control["downloads"] += 1
         if self.control.get("download_error"):
             raise ConnectionError("secret-signed-url")
         _, required = get_download_files(self.bundle)
         names = ["stderr.log"]
-        if self.control["status"] == "success" and not self.control.get(
+        if self.control["status"] == "completed" and not self.control.get(
             "missing_output"
         ):
             names += required
+        elif self.control["status"] in {"failed", "cancelled"}:
+            names += ["results.json", "bundle.json"]
         manifest = {}
         for name in names:
+            if name == "results.json":
+                continue
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(b"diagnostics or output")
+            path.write_bytes(
+                self.control["remote_bundles"][self.record.attempt_folder_name]
+                if name == "bundle.json" else b"diagnostics or output"
+            )
             manifest[name] = file_sha256(path)
+        if "results.json" in names:
+            result = deepcopy(
+                self.control["remote_results"][self.record.attempt_folder_name]
+            )
+            if self.control["status"] == "completed":
+                for entry in result.test_manifests:
+                    entry.status = "completed"
+                    entry.prediction_sha256 = manifest[entry.prediction_path]
+                result.status = "completed"
+                if self.bundle.unit_type == "finetune":
+                    result.training_status = "completed"
+                    result.training_wall_time_seconds = 1.5
+            else:
+                result.status = "failed"
+                if self.bundle.unit_type == "finetune":
+                    result.training_status = "failed"
+            result.to_json_file(self.root / "results.json")
+            manifest["results.json"] = file_sha256(self.root / "results.json")
         return manifest
 
     def cleanup(self) -> None:
@@ -174,7 +219,7 @@ def test_rejected_submission_can_retry_with_new_resources(
     assert new.submission_status == "submitted"
     assert new.attempt_folder_name != record.attempt_folder_name
     old = manager.list_attempts(bundle_id=record.bundle_id)[0]
-    assert old.cleanup_status == "complete"
+    assert old.cleanup_status == "completed"
     assert old.computation_status == "unknown"
     assert old.dispatcher["submit_result"]["stderr"] == "invalid resources"
     assert control["submits"] == 2
@@ -205,14 +250,14 @@ def test_rejection_cleanup_failure_does_not_launch(
     control["rejected"] = True
     first = manager.submit(source_bundle, resource)
     control.update(rejected=False, cleanup_error=True)
-    assert manager.resubmit()[0]["action"] == "error"
+    assert manager.resubmit()[0]["action"] == "operation_failed"
     assert control["submits"] == 1
     saved = manager.list_attempts()[0]
     assert saved.submission_status == "rejected"
     assert saved.cleanup_status == "pending"
     assert saved.error is not None
     events = (manager.store.path(saved) / "events.jsonl").read_text()
-    assert json.loads(events.splitlines()[-1])["event"] == "operation_error"
+    assert json.loads(events.splitlines()[-1])["event"] == "operation_failed"
     control["cleanup_error"] = False
     assert manager.resubmit()[0]["action"] == "submitted"
     assert manager.list_attempts()[0].dispatcher == first.dispatcher
@@ -258,7 +303,7 @@ def test_hash_load_detects_same_size_same_timestamp_edit(
 ) -> None:
     unit = source_bundle.training_unit
     data = unit.model_dump_json()
-    path = unit.dataset_source(unit.train_set)
+    path = unit.resolve_local_dataset_path(unit.train_set)
     previous = path.stat()
     content = path.read_bytes()
     path.write_bytes(content.replace(b"H", b"C", 1))
@@ -269,7 +314,7 @@ def test_hash_load_detects_same_size_same_timestamp_edit(
         data, context={"verify_files": False}
     )
     assert historical.training_unit_id == unit.training_unit_id
-    rebuilt = historical.copy_with_dataset_hashes()
+    rebuilt = historical.copy_with_refreshed_dataset_hashes()
     assert rebuilt.training_unit_id != unit.training_unit_id
 
 
@@ -285,8 +330,8 @@ def test_hash_cache_shared_only_within_creation(
         lambda path: calls.append(path) or file_sha256(path),
     )
     cache = {}
-    source_bundle.training_unit.copy_with_dataset_hashes(cache)
-    source_bundle.training_unit.copy_with_dataset_hashes(cache)
+    source_bundle.training_unit.copy_with_refreshed_dataset_hashes(cache)
+    source_bundle.training_unit.copy_with_refreshed_dataset_hashes(cache)
     assert len(calls) == len(source_bundle.training_unit.dataset_sha256)
     TrainingUnit.model_validate_json(
         source_bundle.training_unit.model_dump_json()
@@ -310,9 +355,7 @@ def test_load_bundle_packaging_and_dataset_checks_are_independent(
     """
     root = tmp_path / "attempt"
     root.mkdir()
-    (tmp_path / "bundle.json").write_text(
-        source_bundle.model_dump_json(), encoding="utf-8"
-    )
+    source_bundle.to_json_file(tmp_path / "bundle.json")
     record = JobRecord(
         bundle_id=str(source_bundle.mlff_train_bundle_id),
         attempt_folder_name="attempt",
@@ -323,7 +366,7 @@ def test_load_bundle_packaging_and_dataset_checks_are_independent(
     with pytest.raises(ValueError, match="not packaged"):
         load_bundle(record, root, require_packaged=True)
     for name in source_bundle.training_unit.dataset_sha256:
-        source_bundle.training_unit.dataset_source(name).unlink()
+        source_bundle.training_unit.resolve_local_dataset_path(name).unlink()
     assert (
         load_bundle(record, root).mlff_train_bundle_id
         == source_bundle.mlff_train_bundle_id
@@ -349,12 +392,10 @@ def test_remote_input_validation_ignores_original_paths(
 ) -> None:
     root, packaged = source_bundle.write_submit_folder(tmp_path / "attempt")
     for name in source_bundle.training_unit.dataset_sha256:
-        source_bundle.training_unit.dataset_source(name).unlink()
-    loaded = MLFFTrainBundle.model_validate_json(
-        (root / "bundle.json").read_text(), context={"verify_files": False}
-    )
+        source_bundle.training_unit.resolve_local_dataset_path(name).unlink()
+    loaded = MLFFTrainBundle.from_json_file((root / "bundle.json"), context={"verify_files": False})
     verify_dataset_and_model_hashes(loaded, root)
-    (root / packaged.files.test_input_files["test_000"]).write_bytes(
+    (root / packaged.files.test_input_files["test_own.extxyz"]).write_bytes(
         b"changed"
     )
     with pytest.raises(ValueError, match="Packaged input changed"):
@@ -399,21 +440,21 @@ def test_success_collection_cleanup_and_duplicate_guard(
     record = manager.submit(source_bundle, resource)
     root = manager.store.path(record)
     packaged = load_bundle(record, root, require_packaged=True)
-    assert not (root / "bundle.json").exists()
+    assert (root / "bundle.json").is_file()
     assert all(
         not (root / name).exists()
         for name in get_dataset_and_model_hashes(packaged)
     )
-    assert source_bundle.training_unit.dataset_source(
+    assert source_bundle.training_unit.resolve_local_dataset_path(
         source_bundle.training_unit.train_set
     ).exists()
-    control["status"] = "success"
+    control["status"] = "completed"
     result = manager.synchronize()[0]
     assert (
         result.collection_status == "verified"
-        and result.cleanup_status == "complete"
+        and result.cleanup_status == "completed"
     )
-    assert (root / "success").exists()
+    assert (root / "completed").exists()
     with pytest.raises(ValueError, match="already succeeded"):
         manager.submit(source_bundle, resource)
     assert control["submits"] == 1
@@ -451,7 +492,7 @@ def test_shared_bundle_is_packaged_before_upload(
         bundle_directory(manager.store.root, source_bundle) / "bundle.json"
     )
     shared.parent.mkdir(parents=True)
-    shared.write_text(source_bundle.model_dump_json(), encoding="utf-8")
+    source_bundle.to_json_file(shared)
     observed: list[tuple[dict[str, object], dict[str, object]]] = []
     original_upload = FakeBackend.upload
 
@@ -477,18 +518,18 @@ def test_shared_bundle_is_packaged_before_upload(
     assert source_bundle.files is None
     assert (
         manager.store.path(record) / "bundle.json"
-    ).exists() is upload_fails
+    ).is_file()
     assert record.submission_status == (
         "uploading" if upload_fails else "submitted"
     )
     assert control["submits"] == (0 if upload_fails else 1)
 
 
-def test_local_bundle_remains_until_completion_cleanup(
+def test_local_bundle_remains_after_completion_cleanup(
     managed: tuple[JobManager, dict[str, object]],
     source_bundle: MLFFTrainBundle,
 ) -> None:
-    """Keep the local runner's bundle until its results have been collected.
+    """Keep the local runner's bundle after its results have been collected.
 
     Parameters
     ----------
@@ -506,11 +547,11 @@ def test_local_bundle_remains_until_completion_cleanup(
     assert path.is_file()
     manager.synchronize(refresh_only=True)
     assert path.is_file()
-    control["status"] = "success"
+    control["status"] = "completed"
     manager.synchronize(download_only=True)
     assert path.is_file()
-    assert manager.synchronize()[0].cleanup_status == "complete"
-    assert not path.exists()
+    assert manager.synchronize()[0].cleanup_status == "completed"
+    assert path.is_file()
     assert manager.synchronize()[0].error is None
 
 
@@ -535,7 +576,7 @@ def test_collection_uses_shared_file_locations_without_source_datasets(
     record = manager.submit(source_bundle, resource)
     path = manager.store.path(record) / "bundle.json"
     manager.synchronize(refresh_only=True)
-    assert not path.exists()
+    assert path.is_file()
     assert (
         load_bundle(record, path.parent, require_packaged=True).files
         is not None
@@ -545,9 +586,9 @@ def test_collection_uses_shared_file_locations_without_source_datasets(
     assert "packaged_files" not in saved
     assert saved["relative_source_bundle_path"] == "../bundle.json"
     for name in source_bundle.training_unit.dataset_sha256:
-        source_bundle.training_unit.dataset_source(name).unlink()
-    control["status"] = "success"
-    assert manager.synchronize()[0].cleanup_status == "complete"
+        source_bundle.training_unit.resolve_local_dataset_path(name).unlink()
+    control["status"] = "completed"
+    assert manager.synchronize()[0].cleanup_status == "completed"
 
 
 def test_attempt_bundle_reference_survives_store_move(
@@ -577,7 +618,7 @@ def test_attempt_bundle_reference_survives_store_move(
     assert "source_bundle" not in saved
     assert saved["relative_source_bundle_path"] == "../bundle.json"
     assert (root.parent / "bundle.json").exists()
-    assert not (root / "bundle.json").exists()
+    assert (root / "bundle.json").is_file()
     moved = bundle_root(tmp_path / "moved")
     shutil.copytree(manager.store.root, moved)
     moved_root = moved / record.attempt_folder_name
@@ -625,7 +666,7 @@ def test_referenced_bundle_is_required_and_cannot_change_identity(
             ),
         }
     )
-    shared.write_text(changed.model_dump_json(), encoding="utf-8")
+    changed.to_json_file(shared)
     with pytest.raises(ValueError, match="bundle ID"):
         load_bundle(record, root, require_packaged=True)
     shared.unlink()
@@ -642,7 +683,7 @@ def test_failed_jobs_no_automatic_retry_and_bulk_retry_once(
     result = manager.synchronize()[0]
     assert (
         result.computation_status == "failed"
-        and result.cleanup_status == "complete"
+        and result.cleanup_status == "completed"
     )
     assert (manager.store.path(first) / "failed").exists()
     manager.synchronize()
@@ -651,7 +692,7 @@ def test_failed_jobs_no_automatic_retry_and_bulk_retry_once(
     assert control["submits"] == 1
     assert manager.resubmit()[0]["attempt"].endswith("attempt_002")
     assert control["submits"] == 2
-    control["status"] = "success"
+    control["status"] = "completed"
     manager.synchronize()
     assert manager.resubmit()[0]["action"] == "skipped"
     assert control["submits"] == 2
@@ -666,11 +707,11 @@ def test_incomplete_success_never_cleanup(
 ) -> None:
     manager, control = managed
     record = manager.submit(source_bundle, resource)
-    control.update(status="success", **{flag: True})
+    control.update(status="completed", **{flag: True})
     result = manager.synchronize()[0]
     assert result.collection_status == "pending"
     assert control["cleanups"] == 0
-    assert not (manager.store.path(record) / "success").exists()
+    assert not (manager.store.path(record) / "completed").exists()
     control[flag] = False
     manager.synchronize()
     assert control["cleanups"] == 1
@@ -681,18 +722,18 @@ def test_cleanup_restart_does_not_redownload(
 ) -> None:
     manager, control = managed
     record = manager.submit(source_bundle, resource)
-    control.update(status="success", cleanup_error=True)
+    control.update(status="completed", cleanup_error=True)
     result = manager.synchronize()[0]
     assert (
         result.collection_status == "verified"
         and result.cleanup_status == "pending"
     )
-    assert (manager.store.path(record) / "success").exists()
+    assert (manager.store.path(record) / "completed").exists()
     control["cleanup_error"] = False
     restarted = JobManager(
         manager.store.root, backend_factory=manager._factory
     )
-    assert restarted.synchronize()[0].cleanup_status == "complete"
+    assert restarted.synchronize()[0].cleanup_status == "completed"
     assert control["downloads"] == 1 and control["submits"] == 1
 
 
@@ -701,7 +742,7 @@ def test_refresh_only_has_no_transfer_or_cleanup(
 ) -> None:
     manager, control = managed
     manager.submit(source_bundle, resource)
-    control["status"] = "success"
+    control["status"] = "completed"
     manager.synchronize(refresh_only=True)
     assert control["uploads"] == 1 and control["submits"] == 1
     assert control["downloads"] == control["cleanups"] == 0
@@ -736,7 +777,7 @@ def test_uncertain_submit_requires_recovery_not_resubmission(
         manager.submit(source_bundle, resource)
     result = manager.recover(record.bundle_id)[0]
     assert result.submission_status == "submitted"
-    assert not (manager.store.path(record) / "bundle.json").exists()
+    assert (manager.store.path(record) / "bundle.json").is_file()
     assert control["submits"] == 1
 
 
@@ -784,7 +825,7 @@ def test_cancel_persisted_before_remote_request(
     result = manager.synchronize()[0]
     assert (
         result.computation_status == "cancelled"
-        and result.cleanup_status == "complete"
+        and result.cleanup_status == "completed"
     )
 
 
@@ -794,10 +835,10 @@ def test_markers_repaired_from_record(
     manager, control = managed
     record = manager.submit(source_bundle, resource)
     root = manager.store.path(record)
-    (root / "success").touch()
+    (root / "completed").touch()
     control["status"] = "failed"
     manager.synchronize()
-    assert not (root / "success").exists()
+    assert not (root / "completed").exists()
     assert (root / "failed").exists()
 
 
@@ -814,13 +855,13 @@ def test_get_download_files_excludes_checkpoints_and_inputs(
     _, packaged = source_bundle.write_submit_folder(tmp_path / "bundle")
     patterns, required = get_download_files(packaged)
     assert packaged.files.training_output_files["trained_model"] in required
-    assert not selected_file(
+    assert not is_selected_for_download(
         "training_outputs/mace/checkpoints/large.pt", patterns
     )
-    assert not selected_file("training_inputs/data/train/coord.npy", patterns)
-    assert not selected_file("pretrained_models/mace.model", patterns)
+    assert not is_selected_for_download("training_inputs/data/train/coord.npy", patterns)
+    assert not is_selected_for_download("pretrained_models/mace.model", patterns)
     with pytest.raises(ValueError):
-        selected_file("../outside", patterns)
+        is_selected_for_download("../outside", patterns)
 
 
 def test_profile_relative_key_and_family_environment(tmp_path: Path) -> None:
@@ -884,7 +925,7 @@ def test_cli_synchronize_retains_remote_files(
 
     manager, control = managed
     manager.submit(source_bundle, resource)
-    control["status"] = "running" if watch else "success"
+    control["status"] = "running" if watch else "completed"
 
     def existing_manager(root: str | Path | None) -> JobManager:
         return manager
@@ -895,7 +936,7 @@ def test_cli_synchronize_retains_remote_files(
         nonlocal sleeps
         sleeps += 1
         assert sleeps == 1, "Watch failed to stop after successful collection"
-        control["status"] = "success"
+        control["status"] = "completed"
 
     monkeypatch.setattr(cli, "JobManager", existing_manager)
     monkeypatch.setattr(manager_module.time, "sleep", finish_job)
@@ -909,10 +950,10 @@ def test_cli_synchronize_retains_remote_files(
     assert record.collection_status == "verified"
     assert control["downloads"] == 1
     assert control["cleanups"] == (0 if keep_remote_files else 1)
-    assert (record.cleanup_status == "complete") is not keep_remote_files
+    assert (record.cleanup_status == "completed") is not keep_remote_files
     assert sleeps == int(watch)
     if keep_remote_files:
-        assert manager.synchronize()[0].cleanup_status == "complete"
+        assert manager.synchronize()[0].cleanup_status == "completed"
         assert control["downloads"] == 1
         assert control["cleanups"] == 1
 
@@ -931,7 +972,7 @@ def test_bohrium_status_has_no_download_side_effect() -> None:
     backend.submission = SimpleNamespace(
         machine=SimpleNamespace(job=SimpleNamespace(detail=lambda _: detail))
     )
-    assert backend.status() == "success"
+    assert backend.status() == "completed"
     detail["exitCode"] = 1
     assert backend.status() == "failed"
     detail.pop("exitCode")
@@ -1199,7 +1240,7 @@ def test_tampered_local_result_prevents_pending_cleanup(
 ) -> None:
     manager, control = managed
     record = manager.submit(source_bundle, resource)
-    control.update(status="success", cleanup_error=True)
+    control.update(status="completed", cleanup_error=True)
     result = manager.synchronize()[0]
     root = manager.store.path(record)
     (root / next(iter(result.downloaded_file_hashes))).write_bytes(b"edited")
@@ -1263,11 +1304,11 @@ def test_cli_refresh_managed_bundle_directory(
         data.pop("mlff_train_bundle_id")
         data["training_unit"].pop("training_unit_id")
         data["training_unit"].pop("dataset_sha256")
-    original_bundle = MLFFTrainBundle.model_validate(data)
+    original_bundle = MLFFTrainBundle.model_validate(data, context={"verify_files": False})
     source = bundle_directory(tmp_path, original_bundle) / "bundle.json"
     source.parent.mkdir(parents=True)
-    original = original_bundle.model_dump_json()
-    source.write_text(original, encoding="utf-8")
+    original_bundle.to_json_file(source, context={"verify_files": False})
+    original = source.read_text(encoding="utf-8")
     companion = source.parent / "notes.txt"
     companion.write_text("Preserve this file", encoding="utf-8")
     destination = bundle_directory(tmp_path, source_bundle) / "bundle.json"
@@ -1302,7 +1343,7 @@ def test_cli_refresh_managed_bundle_directory(
             assert not destination.parent.exists()
     else:
         assert job_cli(args) == 0
-        refreshed = MLFFTrainBundle.model_validate_json(destination.read_text())
+        refreshed = MLFFTrainBundle.from_json_file(destination)
         assert refreshed.mlff_train_bundle_id == source_bundle.mlff_train_bundle_id
         assert refreshed.files is None
         assert (destination.parent / companion.name).read_text() == "Preserve this file"
@@ -1331,13 +1372,13 @@ def test_cli_refresh_bundle_identity_replaces_bundle(
     data.pop("mlff_train_bundle_id")
     data["training_unit"].pop("training_unit_id")
     data["training_unit"].pop("dataset_sha256")
-    legacy = MLFFTrainBundle.model_validate(data)
-    original = legacy.model_dump_json()
-    source.write_text(original)
+    legacy = MLFFTrainBundle.model_validate(data, context={"verify_files": False})
+    legacy.to_json_file(source, context={"verify_files": False})
+    original = source.read_text(encoding="utf-8")
     with pytest.raises(SystemExit) as result:
         main(["job", "refresh_bundle_identity", str(source)])
     assert result.value.code == 0
-    refreshed = MLFFTrainBundle.model_validate_json(source.read_text())
+    refreshed = MLFFTrainBundle.from_json_file(source)
     assert source.read_text() != original
     assert (
         refreshed.training_unit.dataset_sha256
@@ -1375,7 +1416,7 @@ def test_cli_refresh_preserves_bundle_on_failure(
     from temper.entrypoints.job import add_job_parser, job_cli
 
     source = tmp_path / "bundle.json"
-    source.write_text(source_bundle.model_dump_json(), encoding="utf-8")
+    source_bundle.to_json_file(source)
     original = source.read_bytes()
     parser = argparse.ArgumentParser()
     add_job_parser(parser.add_subparsers())
@@ -1383,7 +1424,7 @@ def test_cli_refresh_preserves_bundle_on_failure(
     assert not hasattr(args, "bundle_write_root")
     assert not hasattr(args, "output")
     if failure == "missing_dataset":
-        source_bundle.training_unit.dataset_source(
+        source_bundle.training_unit.resolve_local_dataset_path(
             source_bundle.training_unit.test_sets[0]
         ).unlink()
     else:
@@ -1428,14 +1469,14 @@ def test_submit_discovers_bundles_but_not_attempts(
     manager, control = managed
     directory = bundle_directory(manager.store.root, source_bundle)
     directory.mkdir(parents=True)
-    (directory / "bundle.json").write_text(source_bundle.model_dump_json())
+    source_bundle.to_json_file((directory / "bundle.json"))
     # An invalid attempt bundle must never be read as an input bundle.
     attempt = directory / "attempt_001"
     attempt.mkdir()
     (attempt / "bundle.json").write_text("not JSON")
     duplicate = directory.with_name("bundle__duplicate")
     duplicate.mkdir()
-    (duplicate / "bundle.json").write_text(source_bundle.model_dump_json())
+    source_bundle.to_json_file((duplicate / "bundle.json"))
     profile = tmp_path / "profile.json"
     profile.write_text(
         resource.model_dump_json(exclude={"resolved_environment"}),
@@ -1603,14 +1644,13 @@ def test_zip_collection_rejects_traversal_without_writing(
     assert not (tmp_path / "stderr.log").exists()
 
 
-def test_saved_record_legacy_names_are_read_but_new_names_are_written() -> (
-    None
-):
+def test_saved_record_uses_only_current_names() -> None:
+    """Persist version-1 fields and reject an undeclared download-hash alias."""
     record = JobRecord(
         bundle_id="id",
         attempt_folder_name="attempt",
         resource={},
-        manifest={"stderr.log": "hash"},
+        downloaded_file_hashes={"stderr.log": "hash"},
     )
     assert record.downloaded_file_hashes == {"stderr.log": "hash"}
     saved = record.model_dump()
@@ -1620,6 +1660,9 @@ def test_saved_record_legacy_names_are_read_but_new_names_are_written() -> (
     assert "source_bundle" not in JobRecord.model_fields
     assert "packaged_files" not in JobRecord.model_fields
     assert JobRecord.model_validate(saved) == record
+    assert saved["schema_version"] == 1
+    with pytest.raises(ValueError, match="Extra inputs"):
+        JobRecord(bundle_id="id", attempt_folder_name="attempt", resource={}, manifest={})
 
 
 @pytest.mark.parametrize("field", ["source_bundle", "packaged_files"])
@@ -1673,7 +1716,7 @@ def test_retry_preserves_shared_file_layout(
     monkeypatch.setattr(
         writers, "DEFAULT_MLFF_TRAINING_INPUTS_DIR", "changed_inputs"
     )
-    assert manager.resubmit()[0]["action"] == "error"
+    assert manager.resubmit()[0]["action"] == "operation_failed"
     assert (root.parent / "bundle.json").read_bytes() == original
     assert not (root.parent / "attempt_002").exists()
 
@@ -1743,13 +1786,13 @@ def test_password_requires_explicit_source_and_keys_are_not_packaged(
 def test_download_selection_is_exact_and_diagnostics_can_be_empty(
     source_bundle: MLFFTrainBundle, tmp_path: Path
 ) -> None:
-    from temper.job_management.collection import verify_results
+    from temper.job_management.download_utils import verify_results
 
     root, bundle = source_bundle.write_submit_folder(tmp_path / "bundle")
     names, required = get_download_files(bundle)
     assert all(not any(char in name for char in "*?[") for name in names)
-    assert not selected_file("training_outputs/unexpected.json", names)
-    assert not selected_file("training_outputs/nep_best.txt", names)
+    assert not is_selected_for_download("training_outputs/unexpected.json", names)
+    assert not is_selected_for_download("training_outputs/nep_best.txt", names)
     (root / "stderr.log").touch()
     hashes = {"stderr.log": file_sha256(root / "stderr.log")}
     verify_results(root, hashes, [])
@@ -1821,7 +1864,7 @@ def test_local_collection_cleanup_and_uncertain_recovery(
     (root / ".local-exit.json").write_text(
         '{"returncode": 0, "cancelled": false}'
     )
-    assert backend.status() == "success"
+    assert backend.status() == "completed"
     names, required = get_download_files(bundle)
     for name in required:
         path = root / name
@@ -1902,7 +1945,7 @@ def _save_unsubmitted_bundle(
 
     path = bundle_directory(manager.store.root, bundle) / "bundle.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(bundle.model_dump_json(), encoding="utf-8")
+    bundle.to_json_file(path)
     return path
 
 
@@ -2012,7 +2055,7 @@ def test_submit_bundles_uncertainty_prevents_duplicate(
     else:
         control["status_error"] = True
     decisions = manager.submit_bundles()
-    assert decisions[0].action in {"blocked", "error"}
+    assert decisions[0].action in {"blocked", "operation_failed"}
     assert decisions[0].reason
     assert len(manager.list_attempts()) == 1
     assert control["submits"] == 1
@@ -2099,7 +2142,7 @@ def test_submit_bundles_retries_once_per_invocation(
     records = manager.list_attempts()
     assert len(records) == 2
     assert records[0].attempt_folder_name == first.attempt_folder_name
-    assert records[0].cleanup_status == "complete"
+    assert records[0].cleanup_status == "completed"
     assert records[1].attempt_folder_name != records[0].attempt_folder_name
     assert control["submits"] == 2
 
@@ -2129,7 +2172,7 @@ def test_submit_bundles_collection_failure_blocks_retry(
     control["status"] = "failed"
     control[error] = True
     decisions = manager.submit_bundles()
-    assert decisions[0].action in {"blocked", "error"}
+    assert decisions[0].action in {"blocked", "operation_failed"}
     assert len(manager.list_attempts()) == 1
     assert control["submits"] == 1
 
@@ -2156,7 +2199,7 @@ def test_submit_bundles_success_never_relaunches(
     """
     manager, control = managed
     manager.submit(source_bundle, resource)
-    control["status"] = "success"
+    control["status"] = "completed"
     control["download_error"] = collection_error
     manager.submit_bundles()
     manager.submit_bundles()
@@ -2291,7 +2334,7 @@ def test_submit_bundles_missing_resource_is_reported(
     manager, control = managed
     _save_unsubmitted_bundle(manager, source_bundle)
     decisions = manager.submit_bundles()
-    assert decisions[0].action in {"blocked", "error"}
+    assert decisions[0].action in {"blocked", "operation_failed"}
     assert "resource" in decisions[0].reason.lower()
     assert control["submits"] == 0
 
@@ -2349,6 +2392,46 @@ def test_unified_submit_cli_options() -> None:
         parser.parse_args(["job", "attach", "--bundle-id", "bundle", "--job-id", "123"])
 
 
+@pytest.mark.parametrize("action,expected_exit", [
+    ("new", 0), ("retry", 0), ("resume", 0), ("submitted", 0),
+    ("resumed", 0), ("monitor", 0), ("completed", 0), ("cancelled", 0),
+    ("blocked", 1), ("operation_failed", 1),
+])
+def test_submit_cli_exit_code_uses_decision_actions(
+    action: str, expected_exit: int, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Report unsuccessful operations using the decision's action value.
+
+    Parameters
+    ----------
+    action : str
+        Submission decision returned by the simulated manager.
+    expected_exit : int
+        Zero for normal outcomes, one for blocked or failed operations.
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the job manager without contacting an execution resource.
+    capsys : pytest.CaptureFixture[str]
+        Captures the JSON decision printed by the CLI.
+    """
+    from temper.entrypoints import job
+    from temper.entrypoints.main import main_parser
+    from temper.job_management.schemas.submission import SubmissionDecision
+
+    decision = SubmissionDecision(bundle_id="test", action=action, reason="Test outcome")
+
+    def submit_bundles(**kwargs: object) -> list[SubmissionDecision]:
+        return [decision]
+
+    def make_manager(root: str | Path | None) -> SimpleNamespace:
+        return SimpleNamespace(submit_bundles=submit_bundles)
+
+    monkeypatch.setattr(job, "JobManager", make_manager)
+    args = main_parser().parse_args(["job", "submit", "--json"])
+    assert job.job_cli(args) == expected_exit
+    assert json.loads(capsys.readouterr().out)[0]["action"] == action
+
+
 def test_submit_watch_does_not_retry_again(
     managed: tuple[JobManager, dict[str, object]],
     source_bundle: MLFFTrainBundle,
@@ -2384,7 +2467,7 @@ def test_submit_watch_does_not_retry_again(
     assert control["submits"] == 2
     records = manager.list_attempts()
     assert len(records) == 2
-    assert all(record.cleanup_status == "complete" for record in records)
+    assert all(record.cleanup_status == "completed" for record in records)
 
 
 def test_cli_submit_preview_does_not_create_attempt(
@@ -2456,7 +2539,7 @@ def test_submit_bundles_success_with_unfinished_history_is_blocked(
     """
     manager, control = managed
     manager.submit(source_bundle, resource)
-    control["status"] = "success"
+    control["status"] = "completed"
     completed = manager.synchronize()[0]
     duplicate_path = Path(completed.attempt_folder_name).with_name("attempt_002")
     unfinished = completed.model_copy(deep=True, update={
@@ -2503,14 +2586,14 @@ def test_submit_watch_ignores_unresolved_historical_cleanup(
     historical = manager.list_attempts()[0]
     historical.cleanup_status = "pending"
     manager.store.save(historical, "historical_cleanup_pending")
-    control["status"] = "success"
+    control["status"] = "completed"
 
     def unexpected_wait(interval: float) -> None:
         pytest.fail("Rejected historical attempts must not keep watching alive")
 
     monkeypatch.setattr(manager_module.time, "sleep", unexpected_wait)
     manager.watch_submissions(decisions, interval=1)
-    assert manager.list_attempts()[-1].cleanup_status == "complete"
+    assert manager.list_attempts()[-1].cleanup_status == "completed"
     assert control["submits"] == 2
 
 
@@ -2541,7 +2624,7 @@ def test_submit_bundles_finishes_interrupted_prelaunch_cancellation(
     assert decisions[0].action == "cancelled"
     saved = manager.list_attempts()[0]
     assert saved.computation_status == "cancelled"
-    assert saved.cleanup_status == "complete"
+    assert saved.cleanup_status == "completed"
     assert control["submits"] == 0
 
 
@@ -2631,7 +2714,7 @@ def test_abandon_preserves_attempt_and_allows_new_submission(
     directory = manager.store.path(original)
     retained = directory / "unknown-job-notes.txt"
     retained.write_text("Keep diagnostics and remote references", encoding="utf-8")
-    (directory / "success").write_text(
+    (directory / "completed").write_text(
         "Preserve an existing marker even when status is unknown", encoding="utf-8"
     )
     files_before = {
@@ -2695,7 +2778,7 @@ def test_abandon_preserves_attempt_and_allows_new_submission(
         ("uploaded", "unknown", False, False),
         ("submitted", "waiting", False, False),
         ("submitted", "running", False, False),
-        ("submitted", "success", False, False),
+        ("submitted", "completed", False, False),
         ("submitted", "failed", False, False),
         ("submitted", "cancelled", False, False),
     ],
@@ -2866,7 +2949,7 @@ def test_abandoned_attempts_are_excluded_from_automatic_operations(
     manager, control = managed
     record = _unknown_attempt(manager, control, source_bundle, resource)
     abandoned = manager.abandon_attempts(manager.plan_abandonment())[0]
-    marker = manager.store.path(abandoned) / "success"
+    marker = manager.store.path(abandoned) / "completed"
     marker.write_text("Retain this historical marker", encoding="utf-8")
 
     def forbidden_connection(record: JobRecord) -> FakeBackend:

@@ -25,7 +25,7 @@ def _write_units(root: Path, units: list[TrainingUnit]) -> None:
         path.write_text(
             json.dumps(
                 [
-                    unit.copy_with_dataset_hashes().model_dump(mode="json")
+                    unit.model_dump(mode="json")
                     for unit in units
                     if unit.domain == domain
                 ]
@@ -366,7 +366,7 @@ def test_invalid_creation_does_not_write_bundles(
         models = [("mace", "does-not-exist")]
     if problem == "changed_data":
         assert unit.train_set is not None
-        unit.dataset_source(unit.train_set).write_bytes(b"changed")
+        unit.resolve_local_dataset_path(unit.train_set).write_bytes(b"changed")
     invalid_overrides = {
         "bad_override": {"mace": {"mpa-0-medium": {"training_parameter": {}}}},
         "null_parameters": {

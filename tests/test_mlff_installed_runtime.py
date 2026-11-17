@@ -7,7 +7,10 @@ import shutil
 import subprocess
 import sys
 
+from temper.mlff.pipeline.runner import make_test_manifests
+
 import pytest
+import numpy as np
 
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.schemas.mlff_spec import MLFFSpec
@@ -55,12 +58,11 @@ def test_prepare_after_relocation_without_original_inputs(
         == finetune_training_unit.training_unit_id
     )
     assert (remote / "training_inputs/run.sh").is_file() == (family != "nep89")
-    config = json.loads(
-        (remote / "testing_inputs/test_config.json").read_text()
-    )
+    tests = make_test_manifests(adapter.bundle, bundle_root=remote)
     assert all(
-        (remote / item["path"]).is_file() for item in config["test_datasets"]
+        (remote / test.execution_input_path).is_file() for test in tests
     )
+    assert not (remote / "testing_inputs/test_config.json").exists()
     assert not (remote / "runtime").exists()
 
 
@@ -81,10 +83,6 @@ def test_preparation_preserves_configs_and_restores_missing_files(
     )
     target, packaged = bundle.write_submit_folder(tmp_path / "job")
     runner.prepare_bundle(target / "bundle.json")
-    test_config = target / packaged.files.test_input_files["config"]
-    edited = json.loads(test_config.read_text())
-    edited["calculator"]["parameters"]["default_dtype"] = "float32"
-    test_config.write_text(json.dumps(edited))
     if finetune:
         config = target / packaged.files.training_input_files["config"]
         config.write_text(config.read_text() + "# caller edit\n")
@@ -111,19 +109,10 @@ def test_preparation_preserves_configs_and_restores_missing_files(
         runner.prepare_bundle(target / "bundle.json")
         assert script.read_bytes() == before[script]
         assert config.read_bytes() == before[config]
-        assert test_config.read_bytes() == before[test_config]
-
-    test_config.unlink()
     adapter = runner.prepare_bundle(target / "bundle.json")
-    assert json.loads(test_config.read_text()) == packaged.make_test_config()
-    adapter.spec.testing_parameters["default_dtype"] = "float64"
     runner.write_configuration_files(adapter)
-    assert (
-        json.loads(test_config.read_text())["calculator"]["parameters"][
-            "default_dtype"
-        ]
-        == "float64"
-    )
+    assert "config" not in packaged.files.test_input_files
+    assert not (target / "testing_inputs/test_config.json").exists()
     if finetune:
         assert "# caller edit" not in config.read_text()
 
@@ -142,7 +131,7 @@ def test_older_bundle_restores_configs_from_copied_inputs(
         training_unit=finetune_training_unit,
         mlff_spec=spec,
     ).write_submit_folder(tmp_path / "old")
-    paths = [packaged.files.test_input_files["config"]] + [
+    paths = [
         path
         for key, path in packaged.files.training_input_files.items()
         if key in {"config", "script"}
@@ -165,13 +154,28 @@ def test_older_bundle_restores_configs_from_copied_inputs(
 
 @pytest.mark.parametrize("finetune", [False, True])
 def test_runner_trains_then_evaluates_from_another_directory(
-    finetune,
-    tmp_path,
-    finetune_training_unit,
-    zeroshot_training_unit,
-    mlff_spec_factory,
-    monkeypatch,
-):
+    finetune: bool,
+    tmp_path: Path,
+    finetune_training_unit: TrainingUnit,
+    zeroshot_training_unit: TrainingUnit,
+    mlff_spec_factory: Callable[..., MLFFSpec],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Run from another directory and separate arrays from manifest metadata.
+
+    Parameters
+    ----------
+    finetune : bool
+        Whether training should run before evaluation.
+    tmp_path : Path
+        Isolated directory containing the packaged calculation.
+    finetune_training_unit, zeroshot_training_unit : TrainingUnit
+        Labeled datasets for the two execution modes.
+    mlff_spec_factory : Callable[..., MLFFSpec]
+        Creates a MACE specification without installing MACE.
+    monkeypatch : pytest.MonkeyPatch
+        Replaces training, CUDA checks and calculator construction.
+    """
     unit = finetune_training_unit if finetune else zeroshot_training_unit
     bundle = MLFFTrainBundle(
         training_unit=unit,
@@ -204,8 +208,7 @@ def test_runner_trains_then_evaluates_from_another_directory(
         checkpoint.parent.mkdir(parents=True, exist_ok=True)
         checkpoint.write_bytes(b"last epoch")
 
-    def calculator(config):
-        model = Path(config["model"])
+    def calculator(*, identifier: str, model: Path, parameters: dict[str, object]) -> FakeCalculator:
         assert model.is_absolute() and model.is_file()
         assert model.name == (
             "finetuned_mace.model" if finetune else "mace.model"
@@ -222,9 +225,17 @@ def test_runner_trains_then_evaluates_from_another_directory(
         if finetune
         else ["cuda", "evaluate"]
     )
-    summary = json.loads((target / "testing_outputs/summary.json").read_text())
-    assert len(summary["datasets"]) == len(unit.test_sets)
+    summary = json.loads((target / "results.json").read_text())
+    assert summary["status"] == "completed"
+    assert len(summary["test_manifests"]) == len(unit.test_sets)
+    with np.load(target / summary["test_manifests"][0]["prediction_path"], allow_pickle=False) as saved:
+        assert "_metadata" not in saved.files
     assert "temper-bench" in summary["package_versions"]
+    assert summary["training_wall_time_seconds"] is not None if finetune else (
+        summary["training_wall_time_seconds"] is None
+    )
+    assert not list((target / "testing_outputs").glob("*.json"))
+    assert not (target / "training_outputs/training_result.json").exists()
 
 
 def test_runtime_uses_serialized_directories_and_checks_version(
@@ -239,22 +250,22 @@ def test_runtime_uses_serialized_directories_and_checks_version(
         ).write_submit_folder(tmp_path / "job")[0]
         / "bundle.json"
     )
-    bundle = MLFFTrainBundle.model_validate_json(path.read_text())
+    bundle = MLFFTrainBundle.from_json_file(path)
     bundle.files.training_input_files["config"] = "work/native/mace.yaml"
     bundle.files.training_output_files["trained_model"] = (
         "results/models/finetuned_mace.model"
     )
     # Configs have not been generated yet, so preparation uses the new
     # mapping.
-    path.write_text(bundle.model_dump_json())
-    runner.prepare_bundle(path)
+    bundle.to_json_file(path)
+    adapter = runner.prepare_bundle(path)
     assert (path.parent / "work/native/mace.yaml").exists()
     assert (
-        "results/models/finetuned_mace.model"
-        in (path.parent / "testing_inputs/test_config.json").read_text()
+        adapter.files.training_output_files["trained_model"]
+        == "results/models/finetuned_mace.model"
     )
     bundle.temper_version = "0.0.0"
-    path.write_text(bundle.model_dump_json())
+    bundle.to_json_file(path)
     with pytest.warns(RuntimeWarning, match="written by temper-bench 0.0.0"):
         runner.prepare_bundle(path)
 
@@ -434,10 +445,8 @@ def test_bundle_owns_test_configuration_after_serialization(
         training_unit=finetune_training_unit,
         mlff_spec=mlff_spec_factory("mace"),
     ).write_submit_folder(tmp_path / "job")[0]
-    bundle = MLFFTrainBundle.model_validate_json(
-        (target / "bundle.json").read_text()
-    )
-    config = bundle.make_test_config()
+    bundle = MLFFTrainBundle.from_json_file(target / "bundle.json")
+    tests = make_test_manifests(bundle, bundle_root=target)
     # Changing an installed builder's default cannot change a packaged
     # model path.
     monkeypatch.setattr(
@@ -452,13 +461,11 @@ def test_bundle_owns_test_configuration_after_serialization(
     )
     adapter = runner.prepare_bundle(target / "bundle.json")
     assert (
-        config["model"]
+        bundle.files.training_output_files["trained_model"]
         == adapter.trained_model_path
         == "training_outputs/finetuned_mace.model"
     )
-    assert config == json.loads(
-        (target / "testing_inputs/test_config.json").read_text()
-    )
+    assert tests == make_test_manifests(adapter.bundle, bundle_root=target)
 
 
 @pytest.mark.parametrize("run_seed", [42, 23])
@@ -506,9 +513,9 @@ def test_nep_training_is_a_function_call_before_evaluation(
         (output / "loss.out").write_text("# epoch loss\n100 0.1\n")
         print("training completed")
 
-    def calculator(config):
+    def calculator(*, identifier: str, model: Path, parameters: dict[str, object]) -> FakeCalculator:
         events.append("evaluate")
-        assert Path(config["model"]).read_bytes() == b"trained"
+        assert model.read_bytes() == b"trained"
         return FakeCalculator()
 
     monkeypatch.setattr(native, "train_nep", train, raising=False)

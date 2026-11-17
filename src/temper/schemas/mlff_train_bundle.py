@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 from uuid import UUID
@@ -45,6 +44,12 @@ class MLFFBundleFiles(MSONableModel):
     converted datasets, resolved backend configs and results. A recorded
     output therefore need not exist yet.
 
+    Parameters
+    ----------
+    **data : object
+        Values for the attributes below. Paths are portable relative paths;
+        constructing this record does not create any files.
+
     Attributes
     ----------
     pretrained_model : str
@@ -61,12 +66,11 @@ class MLFFBundleFiles(MSONableModel):
         checkpoints, metrics, or directories containing them. Empty for
         zero-shot.
     test_input_files : dict[str, str]
-        Test datasets keyed as test_000, test_001, and so on in
-        TrainingUnit order, plus config for the generated
-        test_config.json.
+        Copied test datasets keyed by their original TrainingUnit.test_sets
+        filenames. Paths preserve those filenames below testing_inputs/.
     test_output_files : dict[str, str]
-        Prediction arrays and metadata keyed as test_000_predictions and
-        test_000_metadata, plus summary for the combined test summary.
+        Prediction NPZ files keyed by the same original test filenames.
+        Paths preserve the source names with the .npz extension.
     evaluation_model : str or None
         Temporary export made for evaluation, such as a frozen DeepMD
         model. The runner removes it after evaluation. None means
@@ -76,6 +80,9 @@ class MLFFBundleFiles(MSONableModel):
         for zero-shot.
     test_stress : list[bool]
         Stress availability in the same order as TrainingUnit.test_sets.
+    result_manifest : {'results.json'}
+        Serialized MLFFExperimentManifest at the bundle root, including training status
+        and training-call duration.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -88,6 +95,7 @@ class MLFFBundleFiles(MSONableModel):
     evaluation_model: str | None = None
     training_stress: bool | None
     test_stress: list[bool]
+    result_manifest: Literal["results.json"] = "results.json"
 
     @field_validator(
         "training_input_files",
@@ -104,14 +112,42 @@ class MLFFBundleFiles(MSONableModel):
     @field_validator("pretrained_model", "evaluation_model")
     @classmethod
     def validate_model_path(cls, value: str | None) -> str | None:
+        """Validate a model path inside the bundle.
+
+        Parameters
+        ----------
+        value : str or None
+            Portable relative path; None denotes an absent optional file.
+
+        Returns
+        -------
+        str or None
+            Unchanged valid value.
+
+        Raises
+        ------
+        ValueError
+            If the path is absolute or contains invalid path components.
+        """
         if value is not None:
             validate_submit_relative_path(value, label="bundle model")
         return value
 
     @model_validator(mode="after")
     def separate_temporary_model(self) -> MLFFBundleFiles:
-        """Prevent evaluation cleanup from deleting an input or training
-        result."""
+        """Prevent temporary-model cleanup from deleting a permanent file.
+
+        Returns
+        -------
+        MLFFBundleFiles
+            This validated file mapping.
+
+        Raises
+        ------
+        ValueError
+            If temporary-model or result-manifest paths
+            collide with permanent inputs or outputs.
+        """
         permanent_paths = {
             self.pretrained_model,
             *self.training_input_files.values(),
@@ -119,6 +155,9 @@ class MLFFBundleFiles(MSONableModel):
             *self.test_input_files.values(),
             *self.test_output_files.values(),
         }
+        if self.result_manifest in permanent_paths:
+            raise ValueError("Result manifest must have its own path.")
+        permanent_paths.add(self.result_manifest)
         if self.evaluation_model in permanent_paths:
             raise ValueError(
                 "The temporary evaluation model must have its own path."
@@ -146,14 +185,16 @@ class MLFFTrainBundle(ManagedIdentityModel):
     Attributes
     ----------
     training_unit : TrainingUnit
-        Exported train/validation/test dataset references.
+        Exported train/validation/test dataset references. Packaging records
+        the absolute original split-data root for later local analysis.
+        Users must keep those original datasets unchanged.
     mlff_spec : MLFFSpec
         Specification of the model, software implementation, training,
         and testing settings.
     mlff_train_bundle_id : UUID or None
         Stored deterministic identity derived from the two nested
         identities.
-    schema_version : Literal[2]
+    schema_version : Literal[1]
         Bundle format version used when loading the serialized record.
     temper_version : str
         TEMPER release that wrote the bundle, retained for provenance.
@@ -180,13 +221,13 @@ class MLFFTrainBundle(ManagedIdentityModel):
         "mlff_spec": _nested_identity,
     }
     _IDENTITY_NAMESPACE: ClassVar[UUID] = _MLFF_TRAIN_BUNDLE_ID_NAMESPACE
-    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-train-bundle.v2"
+    _IDENTITY_SCHEMA: ClassVar[str] = "temper.mlff-train-bundle.v1"
     _IDENTITY_LABEL: ClassVar[str] = "MLFF train bundle"
 
     training_unit: TrainingUnit
     mlff_spec: MLFFSpec
     mlff_train_bundle_id: UUID | None = None
-    schema_version: Literal[2] = 2
+    schema_version: Literal[1] = 1
     temper_version: str = __version__
     files: MLFFBundleFiles | None = None
 
@@ -207,82 +248,6 @@ class MLFFTrainBundle(ManagedIdentityModel):
                 " parameters."
             )
 
-    def make_test_config(self) -> dict[str, Any]:
-        """Describe evaluation using the bundle and packaged file
-        mapping.
-
-        Called when remote runner prepares the test_config.json.
-        These configs cannot be prepared on the local submission machine,
-             because the paths must be resolved relative to the bundle.json location at remote,
-             as training and testing happen at remote. The remote directory may
-             differ from the local working directory.
-
-        Returns
-        -------
-        dict[str, Any]
-            Calculator settings, selected model, per-dataset properties
-            and output paths, and package requirements. Fine-tuning
-            evaluates the trained model (or its temporary host-specific
-            export); zero-shot evaluates the pretrained model.
-
-        Raises
-        ------
-        ValueError
-            If the bundle has not been packaged yet.
-        """
-        if self.files is None:
-            raise ValueError(
-                "Bundle has not been packaged; call write_submit_folder first."
-            )
-        model_path = (
-            self.files.evaluation_model
-            or self.files.training_output_files["trained_model"]
-            if self.unit_type == "finetune"
-            else self.files.pretrained_model
-        )
-        datasets = []
-        for index, (filename, has_stress) in enumerate(
-            zip(
-                self.training_unit.test_sets,
-                self.files.test_stress,
-                strict=True,
-            )
-        ):
-            stem = f"test_{index:03d}"
-            properties = ["energy", "forces"]
-            if has_stress:
-                properties.append("stress")
-            datasets.append(
-                {
-                    "id": stem,
-                    "path": self.files.test_input_files[stem],
-                    "source_domain": self.training_unit.domain,
-                    "source_filename": filename,
-                    "properties": properties,
-                    "output": self.files.test_output_files[
-                        stem + "_predictions"
-                    ],
-                    "metadata_output": self.files.test_output_files[
-                        stem + "_metadata"
-                    ],
-                }
-            )
-        return {
-            "schema_version": 2,
-            "calculator": {
-                "identifier": self.mlff_spec.mlff_type,
-                "parameters": deepcopy(self.mlff_spec.testing_parameters),
-            },
-            "model": model_path,
-            "test_datasets": datasets,
-            "summary_output": self.files.test_output_files["summary"],
-            "package_requirements": [
-                {"name": item.name, "version": item.version}
-                for item in self.mlff_spec.implementations
-                if item.kind == "python_distribution"
-            ],
-        }
-
     def write_submit_folder(
         self,
         target_dir: str | Path | None = None,
@@ -292,14 +257,18 @@ class MLFFTrainBundle(ManagedIdentityModel):
         """Copy inputs and write bundle.json and a launcher to a new
         directory.
 
-        Runtime preparation creates native configs, training scripts,
-        and the test configuration at their recorded paths; packaging
-        does not write them.
+        Runtime preparation creates native training configs and scripts at
+        their recorded paths. Execution writes results.json with pending
+        test manifests, then fills their result fields as tests finish.
+        Test copies preserve original filenames and relative subdirectories.
+        The packaged training unit records an absolute source root. Users must
+        keep the original split datasets unchanged there for later analysis.
 
         Parameters
         ----------
         target_dir : str, pathlib.Path, or None, optional
-            New directory to create. It must not already exist. When
+            New directory to create, relative to the working directory when
+            not absolute. It must not already exist. When
             omitted, a readable model/domain/bundle/attempt directory is
             allocated.
         bundle_write_root : str, pathlib.Path or None, optional

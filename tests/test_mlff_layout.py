@@ -11,6 +11,7 @@ from ruamel.yaml import YAML
 
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle, MLFFBundleFiles
 from temper.mlff.pipeline import runner, evaluate_mlff
+from temper.mlff.pipeline.runner import create_result_manifest, make_test_manifests
 from test_mlff_runtime import FakeCalculator
 
 
@@ -54,18 +55,16 @@ def test_adapters_use_recorded_paths_instead_of_rebuilding_defaults(
             mapping[key] = new
     if files.evaluation_model:
         files.evaluation_model = "custom evaluation/model.pt2"
-    (target / "bundle.json").write_text(bundle.model_dump_json())
+    bundle.to_json_file((target / "bundle.json"))
     remote = tmp_path / "remote"
     target.rename(remote)
     monkeypatch.chdir(tmp_path)
     adapter = runner.prepare_bundle(remote / "bundle.json")
     inputs, outputs = files.training_input_files, files.training_output_files
-    test_config = json.loads(
-        (remote / files.test_input_files["config"]).read_text()
-    )
-    assert test_config == bundle.make_test_config()
+    tests = make_test_manifests(adapter.bundle, bundle_root=remote)
+    assert tests == make_test_manifests(bundle, bundle_root=remote)
     assert all(
-        (remote / d["path"]).is_file() for d in test_config["test_datasets"]
+        (remote / test.execution_input_path).is_file() for test in tests
     )
     if family != "nep89":
         script = (remote / inputs["script"]).read_text()
@@ -181,24 +180,24 @@ def test_evaluation_resolves_paths_from_explicit_root(
         mlff_spec=mlff_spec_factory("mace", with_training=False),
     ).write_submit_folder(tmp_path / "job")
     runner.prepare_bundle(target / "bundle.json")
-    config_path = target / bundle.files.test_input_files["config"]
-    # Even moving the configuration outside the bundle cannot change its
-    # base path.
-    relocated = tmp_path / "elsewhere.json"
-    config_path.rename(relocated)
-
-    def calculator(config):
-        assert Path(config["model"]) == target / bundle.files.pretrained_model
+    def calculator(*, identifier: str, model: Path, parameters: dict[str, object]) -> FakeCalculator:
+        assert model == target / bundle.files.pretrained_model
         return FakeCalculator()
 
     monkeypatch.setattr(evaluate_mlff, "build_calculator", calculator)
     monkeypatch.chdir(tmp_path)
-    evaluate_mlff.run_test(relocated, bundle_root=target)
+    manifest = create_result_manifest(bundle, target)
+    manifest.status = "running"
+    # Loading a manifest from elsewhere does not change its explicit base.
+    relocated = tmp_path / "elsewhere.json"
+    manifest.to_json_file(relocated)
+    manifest = type(manifest).from_json_file(relocated)
+    evaluate_mlff.run_test(manifest, bundle_root=target)
     for path in bundle.files.test_output_files.values():
         assert (target / path).is_file()
 
 
-def test_old_bundle_format_is_rejected(
+def test_unknown_bundle_format_is_rejected(
     zeroshot_training_unit, mlff_spec_factory
 ):
     bundle = MLFFTrainBundle(
@@ -206,7 +205,7 @@ def test_old_bundle_format_is_rejected(
         mlff_spec=mlff_spec_factory("mace", with_training=False),
     )
     payload = bundle.model_dump()
-    payload["schema_version"] = 1
+    payload["schema_version"] = 2
     with pytest.raises(ValidationError, match="schema_version"):
         MLFFTrainBundle.model_validate(payload)
 

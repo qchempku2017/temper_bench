@@ -10,7 +10,7 @@ import sys
 
 from temper.job_management.manager import JobManager
 from temper.job_management.paths import bundle_directory
-from temper.utils.file_writing import store_lock, write_json_atomically
+from temper.utils.file_writing import store_lock
 from temper.schemas.mlff_train_bundle import MLFFTrainBundle
 from temper.job_management.schemas.resources import RemoteResource
 
@@ -486,11 +486,11 @@ def _refresh_bundle_identity(path: Path) -> tuple[MLFFTrainBundle, Path]:
                 "Create a separate bundle for the changed experiment."
             )
         original = path.read_bytes()
-        bundle = MLFFTrainBundle.model_validate_json(
-            original, context={"verify_files": False}
+        bundle = MLFFTrainBundle.from_json_file(
+            path, context={"verify_files": False}
         )
         # This will recompute data set hashes and the training-unit and bundle IDs.
-        unit = bundle.training_unit.copy_with_dataset_hashes()
+        unit = bundle.training_unit.copy_with_refreshed_dataset_hashes()
         refreshed = bundle.model_copy(
             update={"training_unit": unit, "files": None}
         )
@@ -499,7 +499,6 @@ def _refresh_bundle_identity(path: Path) -> tuple[MLFFTrainBundle, Path]:
             destination = path.parent.with_name(
                 bundle_directory(root, refreshed).name
             ) / path.name
-        payload = refreshed.model_dump(mode="json")
         if destination != path:
             if destination.parent.exists() or destination.parent.is_symlink():
                 raise ValueError(
@@ -507,7 +506,7 @@ def _refresh_bundle_identity(path: Path) -> tuple[MLFFTrainBundle, Path]:
                 )
             path.parent.rename(destination.parent)
         try:
-            write_json_atomically(destination, payload)
+            refreshed.to_json_file(destination)
         except BaseException:
             # A directory fsync can fail after the JSON replacement succeeds.
             # In that case keep the new directory name with the new contents.
@@ -743,7 +742,7 @@ def job_cli(args: argparse.Namespace) -> int:
         return int(
             any(
                 decision.action
-                in {"blocked", "error", "rejected", "uncertain", "uploading", "prepared"}
+                in {"blocked", "operation_failed"}
                 for decision in decisions
             )
         )

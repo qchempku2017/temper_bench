@@ -82,7 +82,7 @@ def get_dataset_and_model_hashes(bundle: MLFFTrainBundle) -> dict[str, str]:
     Parameters
     ----------
     bundle : MLFFTrainBundle
-        Packaged bundle. Legacy datasets without hashes are omitted.
+        Packaged bundle. Datasets whose hashes have not been calculated are omitted.
 
     Returns
     -------
@@ -108,9 +108,9 @@ def get_dataset_and_model_hashes(bundle: MLFFTrainBundle) -> dict[str, str]:
     for key, name in (("train", unit.train_set), ("validation", unit.val_set)):
         if name in unit.dataset_sha256:
             result[files.training_input_files[key]] = unit.dataset_sha256[name]
-    for index, name in enumerate(unit.test_sets):
+    for name in unit.test_sets:
         if name in unit.dataset_sha256:
-            result[files.test_input_files[f"test_{index:03d}"]] = (
+            result[files.test_input_files[name]] = (
                 unit.dataset_sha256[name]
             )
     return result

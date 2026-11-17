@@ -16,6 +16,7 @@ from ase.io import read, write
 from temper.schemas.split import SplitGroup
 from temper.schemas.frame_refrence import FrameReference
 from temper.schemas.train_unit import TrainingUnit
+from temper.utils.file_hashing import cache_dataset_hashes
 from temper.utils.defaults import (
     DEFAULT_SPLIT_RESULTS_DIR,
     DEFAULT_DATA_DIR,
@@ -720,9 +721,9 @@ def write_all_sets_in_split_group_to_extxyz(
         The fine-tuning units in checkpoint order, followed by the
         optional zero-shot unit, and the resolver used to load the
         frames. The resolver's internal cache may be reused to avoid
-        repeated loading. Every returned unit contains SHA-256 hashes of
-        its actual dataset bytes; shared files are hashed once within
-        this export operation.
+        repeated loading. Unit construction calculates SHA-256 hashes of
+        the exported dataset bytes before finalizing each unit's identity.
+        Shared files are hashed once within this export operation.
 
     Raises
     ------
@@ -863,35 +864,11 @@ def write_all_sets_in_split_group_to_extxyz(
     # share
     # the same immutable test-set references and aggregate counts.
     shared_test_sets = tuple(test_files)
-    training_units: list[TrainingUnit] = [
-        TrainingUnit(
-            train_set=train_files[i],
-            val_set=val_files[i],
-            test_sets=shared_test_sets,
-            root_path=output_path,
-            domain=split_group.domain,
-            group_name=split_group.group_name,
-            grouping_strategy=split_group.grouping_strategy,
-            method=split_group.train_val_split_trajectory.method,
-            repeat_id=split_group.repeat_id,
-            train_n_frames=train_frame_counts[i],
-            val_n_frames=val_frame_counts[i],
-            test_n_frames=test_n_frames,
-            train_n_atoms=train_atom_counts[i],
-            val_n_atoms=val_atom_counts[i],
-            test_n_atoms=test_n_atoms,
-            split_id=split_group.split_id,
-        )
-        for i in range(len(train_files))
-    ]
-
-    # Phase 4: append a schema-only zero-shot unit. No dataset is
-    # written here.
-    if create_zeroshot_unit:
-        training_units.append(
+    with cache_dataset_hashes():
+        training_units: list[TrainingUnit] = [
             TrainingUnit(
-                train_set=None,
-                val_set=None,
+                train_set=train_files[i],
+                val_set=val_files[i],
                 test_sets=shared_test_sets,
                 root_path=output_path,
                 domain=split_group.domain,
@@ -899,22 +876,40 @@ def write_all_sets_in_split_group_to_extxyz(
                 grouping_strategy=split_group.grouping_strategy,
                 method=split_group.train_val_split_trajectory.method,
                 repeat_id=split_group.repeat_id,
-                train_n_frames=0,
-                val_n_frames=0,
+                train_n_frames=train_frame_counts[i],
+                val_n_frames=val_frame_counts[i],
                 test_n_frames=test_n_frames,
-                train_n_atoms=0,
-                val_n_atoms=0,
+                train_n_atoms=train_atom_counts[i],
+                val_n_atoms=val_atom_counts[i],
                 test_n_atoms=test_n_atoms,
                 split_id=split_group.split_id,
             )
-        )
+            for i in range(len(train_files))
+        ]
 
-    # Share digests within this export only; later loads read the bytes
-    # again.
-    hash_cache: dict[Path, str] = {}
-    training_units = [
-        unit.copy_with_dataset_hashes(hash_cache) for unit in training_units
-    ]
+        # Phase 4: append a schema-only zero-shot unit. No dataset is
+        # written here.
+        if create_zeroshot_unit:
+            training_units.append(
+                TrainingUnit(
+                    train_set=None,
+                    val_set=None,
+                    test_sets=shared_test_sets,
+                    root_path=output_path,
+                    domain=split_group.domain,
+                    group_name=split_group.group_name,
+                    grouping_strategy=split_group.grouping_strategy,
+                    method=split_group.train_val_split_trajectory.method,
+                    repeat_id=split_group.repeat_id,
+                    train_n_frames=0,
+                    val_n_frames=0,
+                    test_n_frames=test_n_frames,
+                    train_n_atoms=0,
+                    val_n_atoms=0,
+                    test_n_atoms=test_n_atoms,
+                    split_id=split_group.split_id,
+                )
+            )
     return training_units, resolver
 
 

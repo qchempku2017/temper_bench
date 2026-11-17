@@ -23,11 +23,11 @@ from temper.schemas.split import (
 from temper.schemas.entropy import EntropyProfilePoint, EntropyProfile
 from temper.schemas.frame_refrence import FrameReference
 from temper.schemas.train_unit import TrainingUnit
-from temper.utils.file_paths import validate_relative_extxyz_path
 from atoms_helpers import (
     check_atoms_has_stress,
     check_atoms_have_other_properties,
 )
+from temper.utils.file_paths import validate_relative_extxyz_path
 
 
 def required_info(filename: str = "sample.extxyz") -> dict:
@@ -443,7 +443,7 @@ def test_split_identity_is_deterministic_and_tracks_split_provenance(
 
     assert "split_id" in SplitGroup.model_fields
     assert split.split_id.version == 5
-    assert split.split_id == UUID("19400556-c9e7-57f4-aed3-b16101ff3840")
+    assert split.split_id == UUID("fd4abd13-6d6c-5013-af25-9ba8fb61ef1f")
     assert reconstructed.split_id == split.split_id
     assert reordered_cross_tests.split_id == split.split_id
     assert different_seed.split_id != split.split_id
@@ -555,13 +555,13 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
     original_training_unit_id = unit.training_unit_id
     assert "training_unit_id" in TrainingUnit.model_fields
     assert "unit_type" not in TrainingUnit.model_fields
-    assert TrainingUnit._IDENTITY_SCHEMA == "temper.training-unit.v2"
+    assert TrainingUnit._IDENTITY_SCHEMA == "temper.training-unit.v1"
     assert unit.unit_type == "finetune"
     assert zeroshot_unit.unit_type == "zeroshot"
     assert "unit_type" not in unit.model_dump()
     assert unit.training_unit_id.version == 5
     assert unit.training_unit_id == UUID(
-        "ac8aab5e-4679-5bc8-a91e-99167ed36cd9"
+        "467faf22-53ac-5605-a128-ea55a5a548cf"
     )
     assert zeroshot_unit.training_unit_id != unit.training_unit_id
     unit.train_n_frames = 2
@@ -672,7 +672,7 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
         ValidationError, match="does not match training-unit contents"
     ):
         TrainingUnit.model_validate(tampered_payload)
-    with pytest.raises(ValueError, match="does not exist"):
+    with pytest.raises(FileNotFoundError, match="missing.extxyz"):
         TrainingUnit(
             domain="domain",
             grouping_strategy="all",
@@ -688,10 +688,11 @@ def test_training_unit_validates_files_identity_updates_and_movable_root(
             train_set="missing.extxyz",
             test_sets=[],
             root_path=root,
-        ).dataset_source("missing.extxyz")
+        ).resolve_local_dataset_path("missing.extxyz")
 
     converted = unit.model_copy(
         update={
+            "dataset_sha256": {},
             "train_set": None,
             "val_set": None,
             "train_n_frames": 0,
@@ -793,10 +794,10 @@ def test_training_unit_checks_every_referenced_dataset_file(
     }
 
     assert TrainingUnit(**base).unit_type == "zeroshot"
-    with pytest.raises(ValueError, match="does not exist"):
+    with pytest.raises(FileNotFoundError, match="missing.extxyz"):
         TrainingUnit(
             **(base | {"test_sets": ["test.extxyz", "missing.extxyz"]})
-        ).dataset_source("missing.extxyz")
+        ).resolve_local_dataset_path("missing.extxyz")
     with pytest.raises(ValidationError, match="extension"):
         TrainingUnit(**(base | {"test_sets": ["test.xyz"]}))
     with pytest.raises(ValidationError, match="extension"):

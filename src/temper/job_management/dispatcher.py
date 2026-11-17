@@ -47,7 +47,10 @@ for _handler in list(_dispatcher_log.handlers):
     _dispatcher_log.removeHandler(_handler)
     _handler.close()
 
-from temper.job_management.collection import get_download_files, selected_file
+from temper.job_management.download_utils import (
+    get_download_files,
+    is_selected_for_download,
+)
 from temper.job_management.errors import SubmissionRejected
 from temper.job_management.input_utils import (
     get_dataset_and_model_hashes,
@@ -940,8 +943,8 @@ class DispatcherBackend:
 
         Returns
         -------
-        str
-            unknown, waiting, running, success or failed. Unknown
+        ComputationStatus
+            unknown, waiting, running, completed or failed. Unknown
             remains inconclusive and must never trigger resubmission or
             deletion.
         """
@@ -961,7 +964,7 @@ class DispatcherBackend:
                 return (
                     "unknown"
                     if exit_code is None
-                    else ("success" if exit_code == 0 else "failed")
+                    else ("completed" if exit_code == 0 else "failed")
                 )
             states: dict[int, ComputationStatus] = {
                 -1: "failed",
@@ -1007,7 +1010,7 @@ class DispatcherBackend:
                 if states & {"PENDING", "SUSPENDED", "REQUEUED", "RESIZING"}:
                     return "waiting"
             if self.submission.machine.check_finish_tag(self._job):
-                return "success"
+                return "completed"
             code, _, stdout, _ = context.block_call(
                 f"sacct -n -X -P -j {shlex.quote(job_id)}"
                 " --format=JobIDRaw,State,ExitCode"
@@ -1059,7 +1062,7 @@ class DispatcherBackend:
             ):
                 raise RuntimeError("PBS status query failed.")
             return (
-                "success"
+                "completed"
                 if self.submission.machine.check_finish_tag(self._job)
                 else "unknown"
             )
@@ -1074,7 +1077,7 @@ class DispatcherBackend:
             return "waiting"
         if state in {"C", "F"}:
             return (
-                "success"
+                "completed"
                 if self.submission.machine.check_finish_tag(self._job)
                 else "failed"
             )
@@ -1129,7 +1132,7 @@ class DispatcherBackend:
             with ZipFile(archive) as zipped:
                 for entry in zipped.infolist():
                     name = PurePosixPath(entry.filename).as_posix()
-                    if entry.is_dir() or not selected_file(name, patterns):
+                    if entry.is_dir() or not is_selected_for_download(name, patterns):
                         continue
                     if stat.S_ISLNK(entry.external_attr >> 16):
                         raise ValueError(
@@ -1155,7 +1158,7 @@ class DispatcherBackend:
                 remote = str(PurePosixPath(context.remote_root) / relative)
                 for entry in context.sftp.listdir_attr(remote):
                     name = str(PurePosixPath(relative) / entry.filename)
-                    selected = selected_file(name, patterns)
+                    selected = is_selected_for_download(name, patterns)
                     if stat.S_ISDIR(entry.st_mode):
                         if any(
                             pattern.startswith(name + "/")

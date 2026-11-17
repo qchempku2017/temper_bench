@@ -84,7 +84,7 @@ if action == "submit":
         val_set="val.extxyz",
         test_sets=("test.extxyz",),
         root_path=root / "data",
-    ).with_dataset_hashes()
+    )
     checkpoint = Path(model).resolve()
     training = (
         {"max_num_epochs": 1, "batch_size": 1}
@@ -113,10 +113,10 @@ elif action == "check":
     if len(records) != 1:
         raise RuntimeError("Expected exactly one round-trip attempt.")
     record = records[0]
-    if record.cleanup_status == "complete":
-        assert record.computation_status == "success", record.model_dump_json()
+    if record.cleanup_status == "completed":
+        assert record.computation_status == "completed", record.model_dump_json()
         folder = manager.store.path(record)
-        with np.load(folder / "testing_outputs/test_000.npz") as predictions:
+        with np.load(folder / "testing_outputs/test.npz") as predictions:
             for key, shape in {
                 "energies": (1,),
                 "forces": (4, 3),
