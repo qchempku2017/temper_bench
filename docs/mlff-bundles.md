@@ -79,9 +79,8 @@ Explicitly abandoned attempts are excluded from these active checks; abandoning
 does not stop a remote job, so investigate it before allowing a replacement.
 See [abandoning unresolved attempts](remote-jobs.md#abandoning-an-unresolved-attempt).
 It does not treat packaged bundles inside attempts as new inputs.
-The attempt's local `bundle.json` is temporary: remote submission removes it
-after launch is confirmed, while local execution retains it until completion
-cleanup. The first submission saves its packaged file locations in the shared
+Each attempt retains its packaged `bundle.json` beside `results.json` for later
+analysis. The first submission also saves its packaged file locations in the shared
 parent bundle's `files` field for later status checks and result collection.
 Later attempts must use that same layout. Neither the bundle nor its file
 locations are repeated in `job.json`.
@@ -356,8 +355,7 @@ dataset remain required.
 
 Its deterministic ID includes all scientific settings, artifact keys, and
 artifact hashes. It excludes machine-local artifact paths. The field renaming
-changes the identity schema to `temper.mlff-spec.v3`; rebuild old specifications
-and their bundles. There are no legacy aliases. `LocalArtifactRef` now lives in
+uses the identity schema `temper.mlff-spec.v1`. `LocalArtifactRef` lives in
 `temper.schemas.artifact`.
 
 `MLFFTrainBundle` retains the original `TrainingUnit`, `MLFFSpec`, and their
@@ -367,8 +365,10 @@ and outputs, and any temporary evaluation model. Every recorded path starts at
 the directory containing bundle.json. Packaging does not change scientific
 identity or mutate the original local object. Original source paths describe
 where inputs came from; the runtime uses the copied paths exclusively.
-TrainingUnit loading validates metadata without accessing source files; local
-file access checks existence when needed.
+Normal TrainingUnit construction reads original datasets to calculate missing
+hashes or verify supplied hashes before finalizing identity. Remote loading and
+metadata inspection use `context={"verify_files": False}` to preserve recorded
+hashes and identities without accessing original source files.
 
 ## Submit-directory contract
 
@@ -386,6 +386,7 @@ The default layout over the course of a fine-tuning run is:
 bundle/
     bundle.json
     run.sh
+    results.json                # planned tests, then execution measurements
     pretrained_models/
         <pretrained model>
     training_inputs/
@@ -400,17 +401,14 @@ bundle/
         <adapted configuration, checkpoints, and other backend outputs>
         evaluation.pt2          # temporary DeepMD export
     testing_inputs/
-        test_000.extxyz         # one indexed dataset per test set
-        test_config.json
+        test_own.extxyz         # original test filenames and subdirectories
     testing_outputs/
-        test_000.npz
-        test_000.json
-        summary.json
+        test_own.npz
 ~~~
 
 Packaging writes bundle.json, the root launcher, copied weights and datasets.
-Runtime preparation writes native configs, the training script for CLI backends,
-and test_config.json using the copied inputs. Repeated preparation preserves
+Runtime preparation writes native training configs and the training script for
+CLI backends using the copied inputs. Repeated preparation preserves
 existing files, including manual edits, and restores missing configs. Execution
 produces the remaining outputs. A populated
 `files` field describes planned locations, not a claim that every file exists.
@@ -435,8 +433,8 @@ a GPU, run the following locally or on the execution host:
 temper_bench run_pipeline /path/to/submit/bundle.json --prepare-only
 ~~~
 
-Preparation writes native files and `training_inputs/run.sh` for CLI-based training,
-plus `testing_inputs/test_config.json` for evaluation. These are derived from
+Preparation writes native files and `training_inputs/run.sh` for CLI-based training.
+These are derived from
 `bundle.json`; preparation fills missing files without overwriting existing ones.
 TorchNEP training is called directly through Python and writes `training_outputs/training.log`;
 it does not generate a training script. Internal pipeline modules have no CLI
@@ -453,9 +451,7 @@ Directory defaults are configurable through the environment variables in
 [Default variables](default_variables.md), captured when the folder is written.
 Remote environment defaults do not override the serialized layout.
 
-Bundle schema version 2 introduces this layout and replaces the previous file
-fields. Regenerate version-1 bundles with the writer; they are not silently
-interpreted as version 2. Experiment IDs do not change merely because their
+Bundle schema version 1 defines this layout. Experiment IDs do not change merely because their
 file layout changes. Format versions and TEMPER
 release versions are separate. A TEMPER release mismatch emits a warning and
 continues; an unsupported schema version still fails validation.
@@ -493,10 +489,54 @@ test dataset:
 | `frame_indices` | `(n_frames,)` | original zero-based order |
 | `stresses` | `(n_frames, 3, 3)`, when labels support stress | eV/Angstrom^3 |
 
-Adjacent JSON files serialize `temper.schemas.MLFFTestResult`, recording source
-metadata, package versions, units, array counts and wall time. Use
-`MLFFTestResult.from_dict(json.loads(path.read_text()))` to load a result.
-The installed package supplies the result schema. `testing_outputs/summary.json` lists all evaluated datasets.
+The runner serializes a `MLFFExperimentManifest` into `results.json` at the calculation
+root. It records training state and duration, references `bundle.json`, and
+contains `MLFFTestManifest` entries with original names, states, paths, checksums,
+requested properties, units and evaluation durations. Package versions are
+recorded once in the experiment manifest. Each prediction NPZ contains only the
+numerical arrays listed above; no embedded JSON, object arrays or pickle are used.
+Frame and atom counts are obtained from the arrays when loading.
+There are no new per-dataset metadata, summary or training-timing JSON files.
+
+Test configurations and result manifests use schema
+version 1. Evaluation checks the recorded bundle identity and dataset hashes.
+Other schema versions are rejected; there are no format migration paths.
+
+`files.result_manifest` is `"results.json"` in new fine-tuning and zero-shot
+bundles. The runner creates it before preparation, saves
+`training_wall_time_seconds` immediately after `adapter.train()` succeeds,
+and updates it after every completed test. Training time includes loading,
+validation and saving inside that call, but excludes separate preparation,
+evaluation, scheduling and transfers. Failed training and zero-shot evaluation
+have no completed training duration. A later evaluation failure preserves the
+duration and all completed test entries.
+
+Managed collection downloads this file and its referenced `bundle.json` unchanged.
+It verifies settings and prediction checksums before cleanup. Local analysis reads
+reference labels from the original split datasets; no reference archive is created.
+Users must keep these datasets unchanged at their recorded original locations for
+as long as results need to be analyzed. Each original test filename remains
+separate, even when files have identical bytes. Callers retain their split-group
+records separately.
+
+```python
+from temper.schemas import MLFFExperimentManifest
+
+manifest = MLFFExperimentManifest.from_json_file("calculation/results.json")
+experiment = manifest.load_results(base_dir="calculation")
+for result in experiment.test_results:
+    print(result.manifest.source_filename, result.predictions["energies"])
+```
+
+`MLFFExperimentManifest` and its `MLFFTestManifest` entries inherit from `MSONableModel`.
+`from_json_file()` and `to_json_file()` use field dictionaries and the shared
+atomic JSON writer. `load_results()` returns a
+separate `MLFFExperimentResult` with the settings, measured training time and
+loaded scientific data. It never adds arrays to the manifest. The runner and
+collection code persist the manifest without assembling loaded experiment data.
+
+See [Result loading](results-loading.md) for loading all completed test datasets,
+moving result folders and retaining original reference datasets.
 
 ## Pinned integrations and remote device behavior
 
@@ -554,8 +594,9 @@ The populated `files` field describes these paths, all relative to the bundle ro
 | `pretrained_model` | Copied model used to start fine-tuning or to evaluate zero-shot |
 | `training_input_files` | `train`, optional `validation`, native `config`, CLI `script`, and any converted datasets |
 | `training_output_files` | `trained_model`, `training_log`, and backend-specific output files or directories |
-| `test_input_files` | `config` and datasets named `test_000`, `test_001`, etc. in TrainingUnit order |
-| `test_output_files` | `summary`, `test_000_predictions`, `test_000_metadata`, and corresponding entries for other datasets |
+| `test_input_files` | Original test filenames mapped to their copied paths under `testing_inputs/` |
+| `test_output_files` | The same original filenames mapped to corresponding NPZ paths under `testing_outputs/` |
+| `result_manifest` | `results.json` at the calculation root |
 | `evaluation_model` | Temporary model export, or None when no export is needed |
 
 Backend output entries include DeepMD's adapted configuration and learning curve;
@@ -608,9 +649,31 @@ TorchNEP trains directly through its Python API. Fine-tuned models are found at
 Evaluation uses one `build_calculator()` function in
 `temper.mlff.pipeline.calculators`. It imports only the selected backend.
 Adding a new calculator requires adding a branch to that function. The evaluator
-receives the bundle root explicitly, so placing test_config.json under
-testing_inputs/ does not change how its dataset and model paths are interpreted.
-Python callers use `run_test(config_path, bundle_root=bundle_directory)`.
+receives the bundle root explicitly, so changing the working directory does not
+change how dataset and model paths are interpreted. `temper.mlff.pipeline.runner.make_test_manifests(bundle, ...)`
+creates pending `MLFFTestManifest` entries containing execution input paths and reference checksums,
+requested properties, units, and planned prediction paths. For older local bundles
+without recorded dataset hashes, pass `bundle_root=bundle_directory` to calculate
+them from the copied inputs.
+
+The runner embeds these entries in an `MLFFExperimentManifest` and writes
+`results.json` before execution. It calls
+`run_test(manifest, bundle_root=bundle_directory)` after training. Evaluation reads
+shared calculator settings and model locations from the manifest's referenced
+bundle, uses each test manifest directly, and saves checksums, durations and status
+after each test. Completed tests and training measurements survive a later failure.
+Execution input and prediction paths are relative to `bundle_directory`. Local
+analysis instead reads original labels from
+`bundle.training_unit.root_path / test.source_domain / test.source_filename`.
+Packaging records the original split-data root as an absolute path, so result
+folders can move without changing where labels are read.
+
+There is no generated `test_config.json`. Change shared evaluation settings in
+the bundle's `mlff_spec.testing_parameters` before starting a run. The previous
+`make_test_config()` and `run_test(config_path, ...)` APIs have been replaced by
+the manifest APIs above. Manifests using removed reference-archive fields must be
+regenerated; there is no automatic migration.
+Old test-config files, if present in a previously prepared folder, are ignored.
 
 All applicable default random seeds are 42, including SevenNet and TorchNEP's
 Python API `run_seed`. MACE uses the supplied validation file when present;

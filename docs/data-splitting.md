@@ -211,7 +211,7 @@ At checkpoint index `i`, [`TrainValSplitTrajectory.get_train_set`](../src/temper
 
 ## Persistence and reconstruction
 
-[`SplitGroup`](../src/temper/schemas/split.py), [`SplitConfig`](../src/temper/schemas/split.py), and the other persisted schemas derive from [`MSONableModel`](../src/temper/schemas/base.py). Use Monty's `dumpfn` and `loadfn` to write and reconstruct them. A split result persists references, not `ase.Atoms` objects or computed descriptors.
+[`SplitGroup`](../src/temper/schemas/split.py), [`SplitConfig`](../src/temper/schemas/split.py), and the other persisted schemas derive from [`MSONableModel`](../src/temper/schemas/base.py). Use `model.to_json_file(path)` and `ModelClass.from_json_file(path)` for individual models. Use `monty.serialization.dumpfn` and `loadfn` for lists of records, as below. A split result persists references, not `ase.Atoms` objects or computed descriptors.
 
 ```python
 from monty.serialization import dumpfn, loadfn
@@ -249,7 +249,13 @@ The lower-level reconstruction helpers are [`load_frames_from_references`](../sr
 - Dataset shape determines the runtime `unit_type`: a non-`None` `train_set` is `finetune`, while `train_set=None` is `zeroshot`. Zero-shot requires zero train/validation counts and no validation file. The property is derived at runtime and is not serialized.
 - Each unit records frame totals in `train_n_frames`, `val_n_frames`, and `test_n_frames`, plus matching `train_n_atoms`, `val_n_atoms`, and `test_n_atoms` totals. Test totals aggregate every file in `test_sets`.
 - Each newly exported unit records its parent `split_id` and stores a deterministic UUIDv5 `training_unit_id`. `train_n_frames` is identity-defining, while the other derived counters and `root_path` are excluded from identity.
-- The identity schema remains `temper.training-unit.v2`: `train_set` and `train_n_frames` already distinguish the two shapes, so existing fine-tuning IDs remain stable. Valid version-2 manifests load as fine-tuning units without migration; version-1 manifests containing only `n_train` remain unsupported.
+- The identity schema is `temper.training-unit.v1`. `train_set` and `train_n_frames` distinguish fine-tuning and zero-shot units. Unit construction hashes the exported files before finalizing identity; checksums are included from the start. Shared datasets are hashed once per export operation.
+
+Keep the exported split datasets unchanged at their original locations for as long
+as you need to analyze MLFF results. Retaining these files is the user's
+responsibility. Result loading reads their ground-truth labels directly and checks
+their saved checksums; TEMPER does not create a separate reference-data archive.
+See [Result loading](results-loading.md).
 
 ## QUESTS backend
 
@@ -400,12 +406,13 @@ their stored values.
 
 ## Cross-test assignments
 
-Exported `TrainingUnit` records include hashes of every dataset's actual bytes.
-Normal loading verifies these hashes; an edited file requires explicitly
+`TrainingUnit` construction automatically hashes every referenced dataset when
+hashes are absent or empty, so exported records already contain their checksums.
+Normal loading verifies supplied hashes; an edited file requires explicitly
 rebuilding the unit instead of silently reusing its old identity. For a JSON list,
 use `temper.schemas.load_training_units(path)` to hash shared test datasets once
-within that load. `verify_files=False` is available for historical inspection
-without the source files. See [Remote jobs](remote-jobs.md#input-identity-and-upgrading-old-bundles)
+within that load. `verify_files=False` preserves recorded hashes without reading
+source files; it also leaves missing hashes absent. See [Remote jobs](remote-jobs.md#input-identity-and-refreshing-bundles)
 for legacy conversion, copying and submission rules.
 
 Each split result records `extra_tested_groups`. If the input grouped domain has `specify_cross_tests`, the splitter uses that explicit mapping regardless of `add_extra_cross_tests`, after removing each source group's self-reference and deduplicating its targets. Otherwise, when `add_extra_cross_tests` is `True`, every group is assigned every other group as an extra test group; when it is `False`, no extra cross tests are assigned. The automatically generated other-group target ordering is not guaranteed because it is derived from sets. Extra group datasets remain separate from `SplitGroup.test_set` and are reconstructed for export through `extra_tested_groups`. See [Data format and grouping](raw-data-format.md#implemented-cross-test-behavior) for the metadata details.

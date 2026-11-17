@@ -9,11 +9,12 @@ The workflow is available through both the CLI and Python API:
 1. Prepare a domain directory containing labeled `extxyz` files and a `metadata.json` file.
 2. Call [`partition_domain_into_groups`](src/temper/grouping/group.py) to load the metadata and produce one grouped domain per configured grouping strategy.
 3. Call [`split_grouped_domain`](src/temper/splitting/split.py) with a [`SplitConfig`](src/temper/schemas/split.py) to split every group for every configured repeat.
-4. Persist models with Monty serialization, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
+4. Persist individual models with `to_json_file()` and `from_json_file()`, or reconstruct and export datasets with [`FrameReferenceResolver`](src/temper/splitting/io.py) and [`write_all_sets_in_split_group_to_extxyz`](src/temper/splitting/io.py).
 5. Build a package-specific [`MLFFSpec`](src/temper/schemas/mlff_spec.py) with one of the six concrete spec builders.
 6. Pair each TrainingUnit with its specification using [`MLFFTrainBundle(training_unit=unit, mlff_spec=spec)`](src/temper/schemas/mlff_train_bundle.py) when preparing that unit for submission.
 7. Call `bundle.write_submit_folder()` to copy datasets, pretrained models, a versioned `bundle.json`, and a small `run.sh` launcher.
 8. Transfer the folder to a host with the same TEMPER version and the selected model backend installed, then run `temper_bench run_pipeline /path/to/bundle.json`. The runtime prepares native training files, fine-tunes when requested, and writes standardized ASE predictions.
+9. Read the serialized `MLFFExperimentManifest` from the retrieved calculation's root `results.json` using `MLFFExperimentManifest.from_json_file()`. It stores training status and duration plus references to experiment and test files. Call `experiment = manifest.load_results(base_dir=path.parent)`, where `path` is the location of `results.json`, to obtain a separate `MLFFExperimentResult` with settings, frames, predictions and reference labels. Original test filenames are preserved. **Keep the original split datasets unchanged at their recorded locations for later analysis; TEMPER does not archive reference labels.** Retain split-group records separately. See [Result loading](docs/results-loading.md).
 
 Alternatively, install `.[remote,preprocess]` and let TEMPER submit,
 monitor, collect and clean remote attempts:
@@ -179,12 +180,13 @@ Split records store frame references rather than embedded structures or descript
 
 Grouping, splitting, QUESTS-backed selection, split persistence, frame reconstruction, `extxyz` export, and the end-to-end split CLI are implemented. Exported `TrainingUnit` records describe either a fine-tuning checkpoint or a zero-shot evaluation. The local MLFF layer supports DPA-4, DPA-4C, MatterSim, MACE, SevenNet, and NEP-89 specifications and writes complete fine-tune-plus-test or zero-shot-test folders using ordinary file copies.
 
-The generated `run.sh` uses each package's native training workflow and a common ASE Calculator test runner, but TEMPER does not execute it as part of folder writing. Remote upload, hosts, schedulers, job monitoring, result download, retries, `MLFFTrainRun`, and benchmark metric calculation remain outside the implemented scope.
+The generated `run.sh` uses each package's native training workflow and a common ASE Calculator test runner. Folder writing does not execute it. Managed jobs support submission, monitoring, retries, verified result collection and cleanup. [Result loading](docs/results-loading.md) preserves test labels and original dataset names, records successful training-call duration, and reads saved predictions. Metrics, experiment comparisons, learning curves and data-efficiency analysis remain future work.
 
 ## Documentation
 
 - [Data format and grouping](docs/raw-data-format.md) — required domain layout and metadata, inventory autodetection, grouping strategies, and cross-test behavior.
 - [Data splitting](docs/data-splitting.md) — split configuration, result schemas, Python API, QUESTS configuration, reference-based reconstruction, and export.
 - [Local MLFF bundles](docs/mlff-bundles.md) — specifications, identities, pinned integrations, bundle writing, and standardized ASE prediction files.
+- [Result loading](docs/results-loading.md) — retained labels and dataset names, training time, portable results, and local data loading.
 - [Default variables](docs/default_variables.md) — every environment-configurable default and its import-time behavior.
 - [Roadmap](docs/roadmap.md) — clearly marked planned capabilities.

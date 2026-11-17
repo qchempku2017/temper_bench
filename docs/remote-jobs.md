@@ -27,10 +27,10 @@ in `src/temper/entrypoints/job.py` alongside `run_pipeline.py` and `split.py`:
 | `manager.py` | Submission, periodic monitoring, restart recovery, cancellation, and explicit retries. |
 | `schemas/records.py` | The `JobRecord` schema for one submission attempt. |
 | `schemas/resources.py` | Remote machine settings and MLFF-specific software environments. |
-| `store.py`, `storage_utils.py` | Local JSON history, attempt markers, atomic writes, and process locking. |
+| `store.py`, `temper.utils.file_writing` | Local JSON history, attempt markers, shared atomic writes, and process locking. |
 | `paths.py` | Bundle roots and readable bundle/attempt directory names. |
 | `input_utils.py` | Verification of packaged datasets and pretrained models. |
-| `collection.py` | Selection and verification of downloaded outputs and diagnostics. |
+| `download_utils.py` | Selection and verification of downloaded outputs and diagnostics. |
 | `local.py` | Detached local execution, durable receipts, and cancellation. |
 | `dispatcher.py` | SSH/Slurm/PBS and Bohrium operations through dpdispatcher. |
 
@@ -300,14 +300,17 @@ unknown after its heartbeat expires and requires investigation.
 
 ## Input identity and refreshing bundles
 
-Data splitting now records SHA-256 hashes of the actual exported training,
-optional validation, and test files. These hashes participate in training-unit
-identity and therefore bundle identity. Normal loading verifies those bytes;
+Normal `TrainingUnit(...)` construction calculates SHA-256 hashes of the actual
+training, optional validation, and test files when hashes are absent or empty.
+This happens before the unit's identity is finalized, including during split
+export. These hashes participate in training-unit identity and therefore bundle
+identity. When hashes are supplied, normal loading verifies those bytes;
 an edit of the same file, even with unchanged size and timestamp, is detected.
 The original record is not silently given a new identity.
 
-Older units without hashes remain readable and usable for existing local
-packaging. Remote submission requires their explicit conversion:
+Older units with identities calculated without hashes can be inspected using
+`context={"verify_files": False}`. Adding hashes changes their identity, so
+refresh those records explicitly before packaging or submission:
 
 ```console
 temper_bench job refresh_bundle_identity bundle.json
@@ -339,8 +342,11 @@ changing its data files. For changed MLFF parameters
 or pretrained weights, rebuild the MLFFSpec and bundle through their normal
 builders. Pretrained weights are checked against their stored hash while copying.
 
-In Python, `unit.copy_with_dataset_hashes()` returns a new hashed unit. It reads every
-distinct file once. Export, packaging and submission share short-lived hash
+In Python, normal construction needs no separate hashing call.
+`unit.copy_with_refreshed_dataset_hashes()` is an explicit refresh operation: it accepts
+current file bytes, discards the previous hashes and identity, and returns a new
+unit. Use it after deliberately changing data or to refresh a metadata-only
+record. It reads every distinct file once. Export, packaging and submission share short-lived hash
 caches within the operation; later independent loads read the files again.
 For a JSON list of units, `temper.schemas.load_training_units(path)` also shares
 hashes within that one load, so a test dataset used by many units is read once.
@@ -351,8 +357,8 @@ than loading an entire dataset into memory.
 Historical inspection without the original datasets is explicit:
 
 ```python
-bundle = MLFFTrainBundle.model_validate_json(
-    saved_text, context={"verify_files": False}
+bundle = MLFFTrainBundle.from_json_file(
+    "bundle.json", context={"verify_files": False}
 )
 ```
 
@@ -417,7 +423,8 @@ preview. Preview cannot be combined with `--keep-watching`. `--json` provides
 the same decisions in a machine-readable form.
 
 `create_bundles` stores absolute dataset and pretrained-weight paths. Keep those
-inputs available until submission packages them. Restarting from a different
+inputs available for submission and any later retries. Keep the original split
+datasets unchanged for later result analysis as well. Restarting from a different
 working directory works when the same bundle root is supplied.
 
 `--bundle-write-root` overrides `DEFAULT_BUNDLE_WRITE_ROOT`, whose fallback is
@@ -436,7 +443,8 @@ bundles/
       bundle__<grouping>__<group>__<split>__<mode>__n<N>__repeat<R>__<full_bundle_id>/
         bundle.json              # Bundle written by create_bundles
         attempt_001/
-          bundle.json            # Temporary packaged bundle used for launch
+          bundle.json            # Packaged settings retained for result loading
+          results.json           # Downloaded runner-written manifest
           job.json
           events.jsonl
           run.sh
@@ -445,7 +453,7 @@ bundles/
           testing_outputs/
           stdout.log
           stderr.log
-          success                 # Or failed / cancelled
+          completed               # Or failed / cancelled
         attempt_002/
 ```
 
@@ -521,9 +529,17 @@ Transient network errors do not turn a running calculation into a failed one.
 The next synchronization retries the pending communication operation. Failed
 calculations themselves are never relaunched by synchronization or watching.
 
+Successful computation and cleanup states are both `completed`. Collection
+uses `verified` after the downloaded files pass verification. Submission
+decisions use `completed` when the calculation has already succeeded and
+`operation_failed` when an operation such as submission, collection or cleanup
+fails. An operational failure does not change a completed calculation to
+`failed`. The submit CLI returns a nonzero exit code for `blocked` or
+`operation_failed` decisions.
+
 ## Retained results and remote deletion
 
-TEMPER retains the final trained model, test predictions, test metadata/summary,
+TEMPER retains the final trained model, test predictions, root `results.json`,
 training logs, available scheduler/task diagnostics, and selected generated
 configs, scripts and metrics. Adapter output declarations list exact relative
 filenames; wildcards and recursive native-output downloads are not supported.
@@ -532,17 +548,32 @@ Scheduler stdout/stderr use `scheduler.stdout.log` and `scheduler.stderr.log`
 scientific outputs are checked separately. Native checkpoint directories and
 unlisted model variants are never selected.
 Converted training datasets, pretrained copies and intermediate checkpoint
-directories are excluded. A successful job must have every expected prediction,
-metadata/summary and final-model file, and those files must be nonempty.
+directories are excluded. A successful new job must have every expected
+prediction, `results.json` and final-model file, and those files must be nonempty.
+The serialized MLFFExperimentManifest references the experiment settings and stores
+training status, training time when measured, and
+one named entry per test dataset with its properties, units and evaluation duration.
+Package versions are recorded once in the experiment manifest. Prediction NPZ
+files contain numerical arrays only. Result manifests use schema version 1,
+with no separate timing or per-dataset metadata JSON.
 
 SSH downloads are compared to remote SHA-256 digests. Bohrium result archives are
 read through ZIP CRC validation; only selected safe relative filenames are
 extracted. Downloads use partial files and then replace their final destinations.
 The record field `downloaded_file_hashes` stores SHA-256 values and is checked
-again before deletion.
+again before deletion. Collection keeps the downloaded `results.json` and
+`bundle.json` unchanged and verifies the settings and predictions before cleanup.
+It does not copy reference datasets or rewrite manifest paths. Users must keep
+their original split datasets unchanged; local analysis reads ground-truth labels
+from the split-data root recorded in the bundle and verifies their checksums.
+See [Result loading](results-loading.md) for the loading API.
 This verifies transfer completeness, not the scientific accuracy of predictions.
 
 A stopped failed job may legitimately have no final model or predictions.
+Its runner-written `results.json` is required for verified collection, including
+completed training time and tests that finished before the failure. If the
+manifest was not downloaded, collection records an error and preserves remote
+files and logs. It does not create a pending manifest or proceed to cleanup.
 Available diagnostics and selected outputs are still collected and verified,
 then the remote attempt is deleted. A transport failure or an unavailable Bohrium
 result archive is not evidence that files are absent: cleanup stays pending.
@@ -556,7 +587,7 @@ deletion endpoint and requires a successful response. dpdispatcher's context
 and does not invalidate verified successful results.
 
 `job.json` is authoritative. `failed` is created on confirmed calculation failure;
-`success` is created only after successful calculation **and verified results**.
+`completed` is created only after successful calculation **and verified results**.
 Synchronization repairs missing or incorrect marker files from the record.
 
 ## Safe retries, cancellation and interrupted submissions
@@ -779,22 +810,17 @@ Loading checks that the shared bundle has the attempt's bundle ID. A missing
 bundle or a different identity is an error. Keep the shared bundle with its
 attempts; moving their containing directory together preserves the reference.
 
-After a confirmed remote submission, TEMPER removes the local attempt's
-`bundle.json`. The uploaded copy remains available to the remote runner until
-remote cleanup. Interrupted or uncertain submissions retain the local copy
-until recovery confirms launch. Local execution retains it until the calculation
-has finished and completion cleanup runs, because the local runner reads this
-file after submission returns. Result collection, cancellation, and status
+Every attempt retains its small `bundle.json` settings file, including after
+completion cleanup, so downloaded results can be loaded without rewriting their
+manifest. Temporary dataset and model copies are still removed after upload or
+local completion. Result collection, cancellation, and status
 queries read the shared bundle, including its file locations. Neither the full
 bundle nor its file-location mapping is stored in `job.json`.
 
 Schema classes now live in `job_management.schemas`; the old `records` and
-`resources` modules retain compatibility imports. Version-3 job records use
-`relative_source_bundle_path` and `downloaded_file_hashes`. The `manifest` spelling remains
-accepted for download hashes. Older version-1/2 records containing embedded
-bundles or file-location mappings require conversion before use; they are
-rejected rather than silently losing the information they contain. This command
-does not automatically rewrite existing history.
+`resources` modules retain compatibility imports. Version-1 job records use
+`relative_source_bundle_path` and `downloaded_file_hashes`. Undeclared fields
+and unsupported schema versions are rejected; records are not migrated.
 Old saved Bohrium field names and frozen `environment`
 remain readable. New profile files should use the names documented above.
 Per-attempt `job.json` remains authoritative. Storage indexing is deferred pending

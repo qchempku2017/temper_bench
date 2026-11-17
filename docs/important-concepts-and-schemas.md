@@ -123,7 +123,7 @@ Every `SplitGroup` stores a system-managed `split_id`. This deterministic UUIDv5
 
 ## 4. Reference-based persistence and reconstruction
 
-The principal split schemas derive from [`MSONableModel`](../src/temper/schemas/base.py), which combines Pydantic validation with Monty-compatible dictionaries. Identity-bearing aggregate roots use its `ManagedIdentityModel` child, which centralizes stored-ID verification, assignment regeneration, and validated copying. Persist them with `monty.serialization.dumpfn` and restore them with `loadfn`. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
+The principal split schemas derive from [`MSONableModel`](../src/temper/schemas/base.py), which combines Pydantic validation with Monty-compatible dictionaries. Identity-bearing aggregate roots use its `ManagedIdentityModel` child, which centralizes stored-ID verification, assignment regeneration, and validated copying. Use the inherited `to_json_file(path)` and `from_json_file(path)` methods to save and load one model. JSON lists of models use `monty.serialization.dumpfn` and `loadfn`. Persisted grouping/split information is compact because it records metadata and references rather than embedding source structures or computed descriptors.
 
 ### Developing a `ManagedIdentityModel` subclass
 
@@ -170,16 +170,17 @@ Each returned [`TrainingUnit`](../src/temper/schemas/train_unit.py:11) is a pers
 For a `SplitGroup` with `N` requested training checkpoints, export returns the `N` fine-tuning units in checkpoint order followed by one zero-shot unit. All `N + 1` records share the split's own test file and any configured cross-group test files, including identical aggregate test counts. Zero-shot support creates no empty train/validation placeholders and performs no additional dataset export.
 
 The `training_unit_id` fingerprints the parent split identity and the persisted
-dataset contract. Newly exported units include `dataset_sha256`, a mapping from
-every dataset filename to its complete-byte SHA-256 digest, and use identity
-schema `temper.training-unit.v3`. Thus an in-place edit produces a different
+dataset contract. Normal construction populates `dataset_sha256`, a mapping from
+every dataset filename to its complete-byte SHA-256 digest, before finalizing
+the identity. Supplied hashes are verified instead of overwritten. Units use identity
+schema `temper.training-unit.v1`. Thus an in-place edit produces a different
 identity when explicitly rebuilding the unit. Normal loading detects the changed
-bytes and rejects the old record. Legacy metadata without hashes keeps its v2
-identity and requires explicit conversion before remote submission. Dataset shape
+bytes and rejects the changed record. Loading with `verify_files=False` preserves
+recorded hashes without reading datasets; missing hashes remain absent in that
+mode. Dataset shape
 already distinguishes fine-tuning from zero-shot through `train_set` and
 `train_n_frames`. `root_path` remains excluded, so an identical exported tree can
-move without changing identity. Version-1 manifests containing only `n_train`
-remain unsupported. Use `load_training_units(path)` to load a JSON list while
+move without changing identity. Use `load_training_units(path)` to load a JSON list while
 hashing shared datasets once within that operation.
 
 Generic `ManagedIdentityModel` tracks validated field assignments, not arbitrary
@@ -191,7 +192,7 @@ with `context={"verify_files": False}`. This is not authorization to run stale i
 
 ## 6. Local MLFF specifications and bundles
 
-An [`MLFFSpec`](../src/temper/schemas/mlff_spec.py) persists a plain-string MLFF family, pinned implementation versions, content-addressed local pretrained files, optional native `training_parameters`, flat Calculator `testing_parameters`, and a required `MLFFFileLayout` in `file_layout`, without containing TrainingUnit data. Builders copy their backend-specific filenames into this layout when constructing the specification. The bundle writer then uses the saved names to package inputs and populate `MLFFBundleFiles`, without looking up a builder or runtime adapter. Its version-3 deterministic identity excludes relocatable source paths and packaging filenames while including artifact keys and hashes. Local file references are defined in `temper.schemas.artifact`; per-dataset prediction metadata uses `temper.schemas.MLFFTestResult`.
+An [`MLFFSpec`](../src/temper/schemas/mlff_spec.py) persists a plain-string MLFF family, pinned implementation versions, content-addressed local pretrained files, optional native `training_parameters`, flat Calculator `testing_parameters`, and a required `MLFFFileLayout` in `file_layout`, without containing TrainingUnit data. Builders copy their backend-specific filenames into this layout when constructing the specification. The bundle writer then uses the saved names to package inputs and populate `MLFFBundleFiles`, without looking up a builder or runtime adapter. Its version-1 deterministic identity excludes relocatable source paths and packaging filenames while including artifact keys and hashes. Local file references are defined in `temper.schemas.artifact`; per-dataset prediction metadata uses `temper.schemas.MLFFTestManifest`.
 
 An [`MLFFTrainBundle`](../src/temper/schemas/mlff_train_bundle.py) pairs exactly one TrainingUnit with one MLFFSpec. Its `unit_type` is derived from the nested TrainingUnit rather than stored again. Constructing or serializing a bundle does not copy the potentially large exported datasets.
 
@@ -206,8 +207,39 @@ Packaging returns `(submit_directory, packaged_bundle)`. The second value matche
 temporary `evaluation_model`. Every path is relative to the bundle root, and an
 output's recorded location does not mean it already exists. The fine-tuned model
 is recorded as `training_output_files["trained_model"]`. DeepMD's temporary
-evaluation export is removed after evaluation. Bundle schema version 2 uses
-these fields; regenerate older bundles instead of reusing their old layout.
+evaluation export is removed after evaluation. Bundle schema version 1 uses
+these fields.
+
+## Shared utilities
+
+Shared helpers live in `temper.utils`, grouped by their purpose:
+
+| Module | Responsibility |
+| --- | --- |
+| `file_paths` | Validate relative filenames and resolve paths inside bundles |
+| `file_hashing` | Calculate SHA-256 hashes, cache them within an operation, and verify copied bytes |
+| `file_writing` | Write JSON atomically and coordinate writers with file locks |
+| `extxyz` | Read and validate extxyz metadata without loading complete datasets |
+| `dataset_sizes` | Convert requested training ratios into frame counts |
+| `cuda` | Check CUDA availability and obtain a PyTorch device name |
+| `defaults` | Read environment-configurable defaults |
+
+Import helpers directly from the relevant module:
+
+```python
+from temper.utils.file_paths import resolve_path_in_bundle
+from temper.utils.file_hashing import file_sha256
+```
+
+`temper.utils.__init__` does not re-export functions or import optional backends.
+The shared helpers do not import schemas, pipelines or job-management modules;
+those modules depend on the utilities. CUDA helpers import PyTorch only when
+called, so importing utilities does not require a GPU environment.
+
+Job-specific operations, including choosing downloaded outputs, locating a
+job's bundle and allocating attempt directories, remain in `job_management`.
+The former `schemas.utils`, `splitting.utils` and `mlff.pipeline.cuda_utils`
+modules have been removed; callers should use the modules listed above.
 
 ## Implemented scope versus roadmap
 
